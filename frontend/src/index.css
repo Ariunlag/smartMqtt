@@ -1,0 +1,274 @@
+/* ================================
+   index.css (the only global CSS)
+   ================================ */
+
+/* Theme & root variables */
+:root {
+  --primary-bg: #000;
+  --primary-text: #fff;
+  --accent: #FFD700;
+
+  --sidebar-bg: #1c1c1c;
+  --content-bg: #222;
+  --box-bg: #181818;
+  --border-color: #333;
+  --danger: #e63946;
+  --success: limegreen;
+
+  font-family: system-ui, Avenir, Helvetica, Arial, sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color-scheme: light dark;
+  color: var(--primary-text);
+  background-color: var(--primary-bg);
+}
+
+/* Base reset */
+body {
+  margin: 1rem;
+  width: 100%;
+  min-height: 100vh;
+  background-color: var(--primary-bg);
+  color: var(--primary-text);
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+}
+
+h1, h2, h3, h4, h5, h6 {
+  color: var(--accent);
+  margin: 0 0 0.5em 0;
+}
+
+a {
+  color: var(--accent);
+  text-decoration: none;
+}
+a:hover {
+  opacity: 0.8;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid var(--accent);
+  margin: 1em 0;
+}
+
+/* Buttons */
+button {
+  background-color: #111;
+  color: var(--primary-text);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  cursor: pointer;
+  transition: background-color 0.25s, border-color 0.25s;
+}
+button:hover {
+  background-color: #222;
+  border-color: var(--accent);
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+/* ================================
+   Panel Layout
+   ================================ */
+
+.panel-container {
+  display: flex;
+  min-height: 50vh;
+  background: var(--primary-bg);
+  max-width: 1500px;
+  margin: 0 auto;
+  border-radius: 8px;
+  color: var(--primary-text);
+  overflow: hidden;
+}
+
+.panel-sidebar {
+  flex: 0 0 400px;
+  background: var(--sidebar-bg);
+  border-right: 2px solid var(--accent); /* vertical thin yellow line */
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  min-height: 0;
+}
+
+.panel-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  background: var(--content-bg);
+  padding: 1rem;
+  min-height: 0;
+  min-width: 0;
+}
+
+.panel-header {
+  margin: 0 0 0.5rem 0;
+  color: var(--accent);
+}
+
+/* ================================
+   Sidebar elements
+   ================================ */
+
+.panel-input {
+  padding: 0.5rem;
+  margin-bottom: 1rem;
+  border-radius: 4px;
+  border: 1px solid var(--border-color);
+  background: var(--content-bg);
+  color: var(--primary-text);
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.panel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.list-item {
+  padding: 6px 10px;
+  background: var(--box-bg);
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 0.9rem;
+  word-break: break-all;
+}
+
+.list-item button {
+  background: none;
+  border: none;
+  color: var(--danger);
+  margin-left: 8px;
+  font-weight: bold;
+  cursor: pointer;
+}
+
+/* ================================
+   Graphs & Logs
+   ================================ */
+
+.graph-box {
+  background: var(--box-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.5rem;
+  box-sizing: border-box;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+}
+
+.graph-box h5 {
+  margin: 0 0 0.5rem 0;
+  color: var(--accent);
+  font-size: 0.95rem;
+}
+
+.graph-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 1rem;
+}
+
+.message-log-wrapper {
+  flex: 1;                     
+  background: var(--box-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 0.75rem;
+  font-family: monospace;
+  font-size: 0.85rem;
+  overflow-y: auto;
+  max-height: 350px;
+}
+
+/* ================================
+   Scrollbar
+   ================================ */
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background-color: var(--accent);
+  border-radius: 4px;
+  border: 2px solid #111;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--accent) transparent;
+}
+
+
+/* Dupe actions row */
+.dupe-item {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  cursor: pointer;
+  border: 1px solid transparent;
+}
+
+.dupe-item.selected {
+  border: 1px solid var(--accent);
+}
+
+.dupe-actions {
+  display: flex;
+  gap: 1rem;
+  margin-top: 0.75rem;
+}
+
+.dupe-actions button {
+  flex: 1;
+  padding: 0.5rem;
+  border-radius: 6px;
+  font-weight: bold;
+}
+
+.dupe-actions .danger {
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  background: transparent;
+}
+.dupe-actions .danger:hover {
+  background: #330;
+}
+
+.dupe-actions .success {
+  border: 1px solid var(--success);
+  color: var(--success);
+  background: transparent;
+}
+.dupe-actions .success:hover {
+  background: #030;
+}
+
+/* Score label inside list */
+.list-item .score {
+  font-size: 0.8rem;
+  color: #aaa;
+  margin-left: auto;
+}
+
+.narrow-list-item .score {
+  font-size: 0.5rem;
+  color: #aaa;
+  margin-left: auto;
+}

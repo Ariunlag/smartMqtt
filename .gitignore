@@ -1,0 +1,70 @@
+# -----------------------
+# Python / Backend
+# -----------------------
+__pycache__/
+*.py[cod]
+*.egg-info/
+.Python
+
+# Virtual environments
+.venv/
+backend/.venv/
+env/
+venv/
+ENV/
+ENV.bak/
+
+*.sqlite3
+
+# Environment configs
+.env
+.env.*
+
+# Pip logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Logs & temp
+*.log
+*.out
+*.tmp
+
+# -----------------------
+# Node.js / Frontend
+# -----------------------
+frontend/node_modules/
+frontend/dist/
+frontend/build/
+frontend/.cache/
+frontend/.npm/
+
+# -----------------------
+# Jupyter & IPython
+# -----------------------
+.ipynb_checkpoints/
+*.ipynb
+.history/
+
+# -----------------------
+# Project-specific
+# -----------------------
+backend/data/*.json
+*.db
+*.csv
+*.tsv
+
+# ML/AI models
+*.pkl
+*.h5
+*.pt
+*.onnx
+
+# -----------------------
+# OS & Editor
+# -----------------------
+.DS_Store
+Thumbs.db
+*.bak
+*.swp
+.idea/
+.vscode/
