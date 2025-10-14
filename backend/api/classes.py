@@ -17,7 +17,7 @@ async def create_class(req: CreateClassRequest):
 
 @router.put("/{name}", response_model=ClassRecord)
 async def update_class(name: str, req: UpdateClassRequest):
-    updated = class_manager.update(name, req.topics)
+    updated = class_manager.update_class(name, req.topics)
     if not updated:
         raise HTTPException(status_code=404, detail="Class not found")
     return updated
@@ -25,7 +25,7 @@ async def update_class(name: str, req: UpdateClassRequest):
 
 @router.delete("/{name}")
 async def delete_class(name: str):
-    ok = class_manager.delete(name)
+    ok = class_manager.delete_class(name)
     if not ok:
         raise HTTPException(status_code=404, detail="Class not found")
     return {"status": "deleted", "name": name}

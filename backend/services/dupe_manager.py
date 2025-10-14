@@ -1,5 +1,6 @@
 import asyncio
 from typing import List, Optional
+from api import topic
 from config import config
 from services.store.embedding_store import topic_embedding_store
 from services.store.relation_store import dupe_store
@@ -22,8 +23,7 @@ class DupeManager:
         asyncio.create_task(self._delayed_check(topic, embedding))
 
     async def _delayed_check(self, topic: str, embedding: List[float]):
-        """Run delayed checks until a duplicate is confirmed or skipped."""
-        while True:
+        for _ in range(3):  # check up to 3 times (every 2 min)
             await asyncio.sleep(self.delay)
 
             candidates = topic_embedding_store.get_all()
@@ -39,7 +39,10 @@ class DupeManager:
                         "event_type": "duplicate",
                         "data": record
                     })
-                    return
+                    return  
+
+        print(f"[DupeManager] No duplicates found for {topic} after retries.")
+
 
     def add_candidate(self, topic_a: str, topic_b: str, score: float) -> dict:
         """Add a duplicate candidate if not already stored."""
@@ -62,7 +65,7 @@ class DupeManager:
             return None
 
         rec["status"] = "CONFIRMED_DUPLICATE"
-        topic_manager.unsubscribe_topic(topic_b)
+        topic_manager.unsubscribe(topic_b)
         return rec
 
     def keep_both(self, topic_a: str, topic_b: str) -> Optional[dict]:

@@ -42,9 +42,9 @@ class EmbeddingManager:
 
         return vector
 
-    async def embed_tags(self, tags: dict):
+    async def embed_tags(self, topic: str, tags: dict):
         """Embed individual tag values separately and register them in TagManager."""
-        print(f"[DEBUG] Starting embed_tags with tags={tags}")
+        print(f"[DEBUG] Starting embed_tags for topic={topic}, tags={tags}")
         tag_texts = [self._normalize_tag_value(v) for v in tags.values() if v]
         print(f"[DEBUG] Normalized tag values: {tag_texts}")
 
@@ -64,14 +64,15 @@ class EmbeddingManager:
         print(f"[DEBUG] Converted tag vectors, count={len(vectors)}")
 
         for raw_value, vec in zip(tags.values(), vectors):
-            if raw_value:  # avoid None/empty
+            if raw_value:
                 try:
-                    tag_manager.process_tag(str(raw_value), vec)
+                    tag_manager.process_tag(str(raw_value), vec, topic)
                     print(f"[DEBUG] Processed tag={raw_value}, vec_dim={vec.shape}")
                 except Exception as e:
                     print(f"[ERROR] TagManager failed for tag={raw_value}, error: {e}")
 
         return vectors
+
 
     async def process_new_topic(self, topic: str, tags: dict):
         """Full embedding pipeline for a new topic."""
@@ -79,7 +80,7 @@ class EmbeddingManager:
         flat_vec = await self.embed_flattened_topic(topic, tags)
         print("[DEBUG] topic embed done")
 
-        tag_vecs = await self.embed_tags(tags)
+        tag_vecs = await self.embed_tags(topic, tags)
         print("[DEBUG] tag embed done")
 
         # convert vectors to lists before sending to managers
@@ -110,4 +111,5 @@ class EmbeddingManager:
         return str(value).strip().lower().replace("_", " ")
 
 
-embedding_manager = EmbeddingManager(STEmbeddingModel("all-MiniLM-L6-v2"))
+from config import config
+embedding_manager = EmbeddingManager(STEmbeddingModel(config.EMBEDDING_MODEL))

@@ -11,10 +11,13 @@ async def list_groups():
     return GroupListResponse(sets=sets)
 
 
-@router.get("/{set_id}/topics")
+@router.get("/groups/{set_id}/topics")
 async def get_group_topics(set_id: str):
-    """Return all topics belonging to the given group (set_id)."""
+    print("[DEBUG] get_group_topics called with set_id:", set_id)
     topics = groups_manager.get_topics_for_set(set_id)
-    if topics is None:
-        raise HTTPException(status_code=404, detail=f"Group {set_id} not found")
-    return {"set_id": set_id, "topics": topics}
+    print("[DEBUG] Requested:", set_id)
+    print("[DEBUG] Result:", topics)
+    if not topics:
+        return {"id": set_id, "topics": []}
+    return {"id": set_id, "topics": topics}
+

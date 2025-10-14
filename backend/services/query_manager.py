@@ -2,6 +2,7 @@ from services.influx.client import influx_client
 from config import config
 from models.api_models import TopicListResponse, MeasurementSeriesResponse, MeasurementPoint
 
+
 class QueryManager:
     def __init__(self):
         self.client = influx_client
@@ -62,6 +63,25 @@ class QueryManager:
         '''
         return await self._run(flux)
 
+    async def get_last_points(self, topic: str, limit: int = 100):
+        """
+        Return the last N numeric points for a specific measurement (topic).
+        Used for cosine/correlation similarity checks.
+        """
+        flux = f'''
+        from(bucket: "{config.INFLUX_BUCKET}")
+          |> range(start: -24h)
+          |> filter(fn: (r) => r._measurement == "{topic}")
+          |> sort(columns: ["_time"], desc: true)
+          |> limit(n: {limit})
+        '''
+        rows = await self._run(flux)
+        # Return only numeric values in consistent dict format
+        return [
+            {"time": r["time"], "value": r["value"]}
+            for r in rows
+            if isinstance(r["value"], (int, float))
+        ]
 
     async def _run(self, flux: str):
         """Internal helper to execute Flux queries and return structured results."""

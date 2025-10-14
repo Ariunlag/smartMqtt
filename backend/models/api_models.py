@@ -55,7 +55,6 @@ class DupeRecord(BaseModel):
     topics: List[str]
     score: float
     status: DupeStatus
-    resolution: Optional[str]
 
 class DupeListResponse(BaseModel):
     duplicates: List[DupeRecord]
@@ -104,3 +103,8 @@ class TagSetRecord(BaseModel):
 
 class GroupListResponse(BaseModel):
     sets: List[TagSetRecord]
+
+
+class GroupTopicResponse(BaseModel):
+    id: str
+    topics: List[str]

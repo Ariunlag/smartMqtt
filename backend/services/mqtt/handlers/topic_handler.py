@@ -5,6 +5,8 @@ from services.socket_manager import ws_manager
 
 class TopicHandler(BaseHandler):
     async def handle_message(self, message):
+        print(f"[TopicHandler] Incoming topic: {message.topic}")
+        
         topic = message.topic
 
         if topic in ignored_topic_store.get_all():

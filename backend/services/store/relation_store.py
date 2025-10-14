@@ -5,8 +5,7 @@ from .base_store import DictStore
 class ClassStore(DictStore):
     def __init__(self):
         filepath = os.path.join(config.DATA_DIR, "class_store.json")
-        super().__init__(filepath)
-
+        super().__init__(filepath, key_field="name")
 # Example entry:
 # {
 #   "name": "sensor",

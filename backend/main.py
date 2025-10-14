@@ -10,7 +10,6 @@ from services.service_manager import service_manager
 
 from api import health, socket, topic, duplicates, classes, groups, data
 
-
 app = FastAPI()
 app.add_middleware(
     CORSMiddleware,
