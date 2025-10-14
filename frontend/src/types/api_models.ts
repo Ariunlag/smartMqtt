@@ -50,7 +50,6 @@ export interface DupeRecord {
   topics: string[];
   score: number;
   status: DupeStatus;
-  resolution?: string | null;
 }
 
 export interface DupeListResponse {
@@ -96,4 +95,10 @@ export type TagSetRecord = {
 
 export type GroupListResponse = {
   sets: TagSetRecord[];
+};
+
+
+export type GroupTopicsResponse = {
+  id: string;
+  topics: string[];
 };

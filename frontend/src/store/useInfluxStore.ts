@@ -1,92 +1,84 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import * as dataApi from "../services/dataApi";     // for measurements + timeseries
-import * as influxApi from "../services/influxApi"; // for classes
+import * as dataApi from "../services/dataApi";
+import * as influxApi from "../services/influxApi";
 import type {
   MeasurementSeriesResponse,
   ClassRecord,
   ClassListResponse,
 } from "../types/api_models";
 
-// ---- Types ----
 export type TimeseriesData = MeasurementSeriesResponse;
 type Aggregation = "mean" | "max" | "min" | "sum";
 
 interface InfluxStore {
-  // Builder state
+  // === Core data ===
   measurements: string[];
   selectedMeasurements: string[];
   builderTimeseriesData: TimeseriesData[];
   classNameInput: string;
 
-  // Saved classes
+  // === Saved classes ===
   classes: ClassRecord[];
   selectedClass: ClassRecord | null;
   savedClassTimeseriesData: TimeseriesData[];
 
-  // Settings
   selectedAggregation: Aggregation;
   startTime: string;
   endTime: string;
 
-  // Builder actions
+  // === Builder actions ===
   getMeasurements: () => Promise<void>;
   addMeasurement: (m: string) => Promise<void>;
   removeMeasurement: (m: string) => Promise<void>;
+  setSelectedMeasurements: (topics: string[]) => Promise<void>;
   fetchBuilderTimeseriesData: () => Promise<void>;
+
+  // === Class actions ===
   setClassNameInput: (name: string) => void;
   saveClass: () => Promise<void>;
-
-  // Saved class actions
   getClasses: () => Promise<void>;
   setSelectedClass: (cls: ClassRecord) => void;
-  fetchSavedClassTimeseriesData: () => Promise<void>;
   clearSelectedClass: () => void;
   deleteClass: (name?: string) => Promise<void>;
+  fetchSavedClassTimeseriesData: (topics: string[]) => Promise<void>;
 
-  // Realtime append
+  // === Realtime updates ===
   appendRealTimePoint: (topic: string, value: number, timestamp: string) => void;
+  addDetectedMeasurement: (m: string) => void;
 }
 
 export const useInfluxStore = create<InfluxStore>()(
   persist(
-    (set, get) => ({
-      // ---- Initial state ----
-      measurements: [],
-      selectedMeasurements: [],
-      builderTimeseriesData: [],
-      classNameInput: "",
+    (set, get) => {
+      // === Stable function definitions (no re-creation after set()) ===
 
-      classes: [],
-      selectedClass: null,
-      savedClassTimeseriesData: [],
-
-      selectedAggregation: "mean",
-      startTime: "-6h",
-      endTime: "now()",
-
-      // ---- Builder ----
-      getMeasurements: async () => {
+      const getMeasurements = async () => {
         const data = await dataApi.getMeasurements();
-        set({ measurements: data.topics }); 
-      },
+        set({ measurements: data.topics });
+      };
 
-      addMeasurement: async (m) => {
+      const addMeasurement = async (m: string) => {
         const current = get().selectedMeasurements;
         if (!current.includes(m)) {
-          set({ selectedMeasurements: [...current, m] });
+          const updated = [...current, m];
+          set({ selectedMeasurements: updated });
           await get().fetchBuilderTimeseriesData();
         }
-      },
+      };
 
-      removeMeasurement: async (m) => {
-        set({
-          selectedMeasurements: get().selectedMeasurements.filter((x) => x !== m),
-        });
+      const removeMeasurement = async (m: string) => {
+        const updated = get().selectedMeasurements.filter((x) => x !== m);
+        set({ selectedMeasurements: updated });
         await get().fetchBuilderTimeseriesData();
-      },
+      };
 
-      fetchBuilderTimeseriesData: async () => {
+      const setSelectedMeasurements = async (topics: string[]) => {
+        set({ selectedMeasurements: topics });
+        await get().fetchBuilderTimeseriesData();
+      };
+
+      const fetchBuilderTimeseriesData = async () => {
         const { selectedMeasurements } = get();
         if (selectedMeasurements.length === 0) {
           set({ builderTimeseriesData: [] });
@@ -94,11 +86,11 @@ export const useInfluxStore = create<InfluxStore>()(
         }
         const data = await dataApi.getTimeseries(selectedMeasurements);
         set({ builderTimeseriesData: data });
-      },
+      };
 
-      setClassNameInput: (name) => set({ classNameInput: name }),
+      const setClassNameInput = (name: string) => set({ classNameInput: name });
 
-      saveClass: async () => {
+      const saveClass = async () => {
         const { classNameInput, selectedMeasurements, classes } = get();
         if (!classNameInput || selectedMeasurements.length === 0) return;
 
@@ -113,32 +105,23 @@ export const useInfluxStore = create<InfluxStore>()(
           selectedMeasurements: [],
           builderTimeseriesData: [],
         });
-      },
+      };
 
-      // ---- Saved Classes ----
-      getClasses: async () => {
+      const getClasses = async () => {
         const data: ClassListResponse = await influxApi.listClasses();
         set({ classes: data.classes });
-      },
+      };
 
-      setSelectedClass: (cls) => {
+      const setSelectedClass = (cls: ClassRecord) => {
         set({ selectedClass: cls });
-        get().fetchSavedClassTimeseriesData();
-      },
+        get().fetchSavedClassTimeseriesData(cls.topics);
+      };
 
-      fetchSavedClassTimeseriesData: async () => {
-        const { selectedClass } = get();
-        if (!selectedClass) {
-          set({ savedClassTimeseriesData: [] });
-          return;
-        }
-        const data = await dataApi.getTimeseries(selectedClass.topics);
-        set({ savedClassTimeseriesData: data });
-      },
+      const clearSelectedClass = () => {
+        set({ selectedClass: null, savedClassTimeseriesData: [] });
+      };
 
-      clearSelectedClass: () => set({ selectedClass: null, savedClassTimeseriesData: [] }),
-
-      deleteClass: async (name) => {
+      const deleteClass = async (name?: string) => {
         const target = name || get().selectedClass?.name;
         if (!target) return;
 
@@ -149,12 +132,21 @@ export const useInfluxStore = create<InfluxStore>()(
           savedClassTimeseriesData:
             s.selectedClass?.name === target ? [] : s.savedClassTimeseriesData,
         }));
-      },
+      };
 
-      // ---- Realtime append ----
-      appendRealTimePoint: (topic, value, timestamp) => {
+      const fetchSavedClassTimeseriesData = async (topics: string[]) => {
+        if (!topics || topics.length === 0) {
+          set({ savedClassTimeseriesData: [] });
+          return;
+        }
+        const data = await dataApi.getTimeseries(topics);
+        set({ savedClassTimeseriesData: data });
+      };
+
+      const appendRealTimePoint = (topic: string, value: number, timestamp: string) => {
         const updates: Partial<InfluxStore> = {};
 
+        // Update builder graphs
         if (get().selectedMeasurements.includes(topic)) {
           updates.builderTimeseriesData = get().builderTimeseriesData.map((ts) =>
             ts.measurement === topic
@@ -163,6 +155,7 @@ export const useInfluxStore = create<InfluxStore>()(
           );
         }
 
+        // Update saved class graphs
         if (get().selectedClass?.topics.includes(topic)) {
           updates.savedClassTimeseriesData = get().savedClassTimeseriesData.map((ts) =>
             ts.measurement === topic
@@ -171,11 +164,54 @@ export const useInfluxStore = create<InfluxStore>()(
           );
         }
 
-        if (Object.keys(updates).length > 0) {
-          set(updates);
-        }
+        if (Object.keys(updates).length > 0) set(updates);
+      };
+
+      const addDetectedMeasurement = (m: string) => {
+        set((s) => {
+          if (s.measurements.includes(m)) return s; // avoid duplicates
+          console.log("[InfluxStore] New measurement detected via WS:", m);
+          return { measurements: [...s.measurements, m] };
+        });
+      };
+
+
+      // === Initial state ===
+      return {
+        measurements: [],
+        selectedMeasurements: [],
+        builderTimeseriesData: [],
+        classNameInput: "",
+        classes: [],
+        selectedClass: null,
+        savedClassTimeseriesData: [],
+        selectedAggregation: "mean",
+        startTime: "-6h",
+        endTime: "now()",
+
+        getMeasurements,
+        addMeasurement,
+        removeMeasurement,
+        setSelectedMeasurements,
+        fetchBuilderTimeseriesData,
+
+        setClassNameInput,
+        saveClass,
+        getClasses,
+        setSelectedClass,
+        clearSelectedClass,
+        deleteClass,
+        fetchSavedClassTimeseriesData,
+
+        appendRealTimePoint,
+        addDetectedMeasurement,
+      };
+    },
+    {
+      name: "influx-storage",
+      onRehydrateStorage: () => (state) => {
+        console.log("[InfluxStore] rehydrated");
       },
-    }),
-    { name: "influx-storage" }
+    }
   )
 );

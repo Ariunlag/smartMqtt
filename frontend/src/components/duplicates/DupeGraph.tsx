@@ -16,13 +16,11 @@ export default function DupeGraph() {
     return <p style={{ color: "#aaa" }}>Select a duplicate to visualize</p>;
   }
 
+  const topics = selectedPair.topics || [];
+
   return (
-    <GraphBox>
-      <RealtimeGraph
-        measurements={selectedPair.topics}
-        initialData={series}
-        wsTopic="mqtt"
-      />
+    <GraphBox height="260px" title="Duplicate Pair (Combined)">
+      <RealtimeGraph topics={topics} initialData={series} />
     </GraphBox>
   );
 }

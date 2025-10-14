@@ -1,72 +1,50 @@
 import { useEffect } from "react";
-import { useMqttStore } from "../store/useMqttStore";
 import { useInfluxStore } from "../store/useInfluxStore";
 import { useDuplicateStore } from "../store/useDuplicateStore";
+import { useMqttStore } from "../store/useMqttStore";
 import { useGroupStore } from "../store/useGroupStore";
 
-import type { MqttMessage } from "../types/mqtt";
-
-// Define a type for incoming WS events
-interface WsEvent<T = any> {
-  event_type: "mqtt_message" | "topic" | "duplicate" | "group";
-  data: T;
-}
-
 export const useWebSocket = (enabled: boolean) => {
-  const addMqttMessage = useMqttStore((s) => s.addMessage);
-  const getMeasurements = useInfluxStore((s) => s.getMeasurements);
-  const addDuplicate = useDuplicateStore((s) => s.addDuplicate);
-  const setGroups = useGroupStore((s) => s.setGroups);
-
   useEffect(() => {
     if (!enabled) return;
 
     const ws = new WebSocket("ws://localhost:8000/ws");
 
-    ws.onopen = () => {
-      console.log("[WebSocket] Connected");
-    };
-
-    ws.onclose = (event) => {
-      console.log("[WebSocket] Disconnected", event.reason);
-    };
-
-    ws.onerror = (error) => {
-      console.error("[WebSocket] Error:", error);
-    };
+    ws.onopen = () => console.log("[WebSocket] Connected");
+    ws.onclose = () => console.log("[WebSocket] Disconnected");
 
     ws.onmessage = (event) => {
       try {
-        const message: WsEvent = JSON.parse(event.data);
+        const msg = JSON.parse(event.data);
+        console.log("[WS EVENT]", msg);
 
-        switch (message.event_type) {
+        // 🔥 Access fresh store instances dynamically
+        const influx = useInfluxStore.getState();
+        const dupes = useDuplicateStore.getState();
+        const mqtt = useMqttStore.getState();
+        const groups = useGroupStore.getState();
+
+        switch (msg.event_type) {
           case "mqtt_message":
-            addMqttMessage(message.data as MqttMessage);
+            mqtt.addMessage(msg.data);
             break;
-
           case "topic":
-            getMeasurements(); // refresh influx store
+            influx.addDetectedMeasurement(msg.data.measurement);
             break;
-
           case "duplicate":
-            addDuplicate(message.data);
+            dupes.addDuplicate(msg.data);
             break;
-
           case "group":
-            setGroups(message.data.sets);
+            groups.setGroups(msg.data.sets);
             break;
-
           default:
-            console.warn("[WebSocket] Unknown event:", message);
+            console.warn("[WebSocket] Unknown event:", msg);
         }
       } catch (err) {
-        console.error("[WebSocket] Failed to parse:", err, event.data);
+        console.error("[WebSocket] Parse failed:", err, event.data);
       }
     };
 
-    return () => {
-      console.log("[WebSocket] Cleaning up");
-      ws.close();
-    };
-  }, [enabled, addMqttMessage, getMeasurements, addDuplicate, setGroups]);
+    return () => ws.close();
+  }, [enabled]);
 };

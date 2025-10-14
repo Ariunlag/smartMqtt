@@ -19,12 +19,12 @@ type DuplicateState = {
 
   // UI helpers
   removeDuplicate: (topics: [string, string]) => void;
-  selectPair: (pair: DupeRecord) => void;
+  selectPair: (pair: DupeRecord) => Promise<void>;
   clearSelection: () => void;
 
   // Timeseries handling
   loadPairTimeseries: (topics: string[]) => Promise<void>;
-  appendPoint: (measurement: string, point: { time: string | number; value: number }) => void;
+  appendPoint: (measurement: string, point: { timestamp: string | number; value: number }) => void;
 };
 
 export const useDuplicateStore = create<DuplicateState>()(
@@ -34,6 +34,7 @@ export const useDuplicateStore = create<DuplicateState>()(
       selectedPair: null,
       series: [],
 
+      // === Fetch duplicates ===
       getDuplicates: async () => {
         try {
           const { data } = await duplicateApi.getDuplicates();
@@ -43,6 +44,7 @@ export const useDuplicateStore = create<DuplicateState>()(
         }
       },
 
+      // === Confirm duplicate pair ===
       confirmDuplicate: async (req: ConfirmDupeRequest) => {
         try {
           const { data } = await duplicateApi.confirmDuplicate(req);
@@ -56,6 +58,7 @@ export const useDuplicateStore = create<DuplicateState>()(
         }
       },
 
+      // === Add new duplicate record via WS ===
       addDuplicate: (dup: DupeRecord) =>
         set((s) => {
           const exists = s.duplicates.some(
@@ -65,6 +68,7 @@ export const useDuplicateStore = create<DuplicateState>()(
           return { duplicates: [...s.duplicates, dup] };
         }),
 
+      // === Remove duplicate record from list ===
       removeDuplicate: (topics: [string, string]) =>
         set((s) => ({
           duplicates: s.duplicates.filter(
@@ -72,29 +76,28 @@ export const useDuplicateStore = create<DuplicateState>()(
           ),
         })),
 
-      selectPair: (pair) => set({ selectedPair: pair }),
+      // === Select a pair and auto-load data ===
+      selectPair: async (pair) => {
+        set({ selectedPair: pair, series: [] });
+        await get().loadPairTimeseries(pair.topics);
+      },
 
+      // === Clear selection ===
       clearSelection: () => set({ selectedPair: null, series: [] }),
 
-      // New: fetch backend history
+      // === Fetch historical timeseries for selected pair ===
       loadPairTimeseries: async (topics) => {
         try {
-          const res = await dataApi.getTimeseries(topics);
-          const formatted: TimeseriesData[] = res.map((m) => ({
-            measurement: m.measurement,
-            points: m.points.map((p) => ({
-              time: p.timestamp,
-              value: p.value,
-            })),
-          }));
-          set({ series: formatted });
+          const data = await dataApi.getTimeseries(topics);
+          // ⚡ No reformatting — backend already returns usable structure
+          set({ series: data });
         } catch (err) {
           console.error("[Duplicates] Failed to fetch timeseries:", err);
           set({ series: [] });
         }
       },
 
-      // New: append live WS points
+      // === Append live points (via WS) ===
       appendPoint: (measurement, point) =>
         set((s) => ({
           series: s.series.map((ts) =>

@@ -4,45 +4,53 @@ import { useMqttStore } from "../../store/useMqttStore";
 import { createLineChartConfig } from "../../services/lineChartService";
 
 type Props = {
-  topics: string[]; // e.g. ["topicA", "topicB"]
+  topics: string[];
+  initialData?: any[];
 };
 
-export default function RealtimeGraph({ topics }: Props) {
+export default function RealtimeGraph({ topics = [], initialData = [] }: Props) {
   const chartRef = useRef<any>(null);
   const messages = useMqttStore((s) => s.messages);
 
-  // Start with empty datasets
-  const { data, options } = createLineChartConfig([]);
+  const { data, options } = createLineChartConfig(initialData);
 
   useEffect(() => {
     const chart = chartRef.current;
     if (!chart) return;
 
     messages.forEach((msg) => {
-      // filter: only show if msg.topic in props
       if (!topics.includes(msg.topic)) return;
 
-      Object.entries(msg.fields).forEach(([field, value]) => {
-        const label = `${msg.topic}:${field}`;
-        let dataset = chart.data.datasets.find((d: any) => d.label === label);
+      // ✅ Extract single numeric value
+      const value =
+        msg.fields?.value ??
+        msg.value ??
+        msg.payload ??
+        Object.values(msg.fields || {})[0] ??
+        null;
 
-        const point = { x: Date.parse(msg.timestamp), y: Number(value) };
+      if (value == null) return; // skip if invalid
 
-        if (dataset) {
-          dataset.data.push(point);
-          if (dataset.data.length > 500) dataset.data.shift();
-        } else {
-          chart.data.datasets.push({
-            label,
-            data: [point],
-            borderColor: "#36a2eb",
-            borderWidth: 2,
-            fill: false,
-            pointRadius: 1,
-            tension: 0.1,
-          });
-        }
-      });
+      const label = msg.topic;
+      const point = { x: Date.parse(msg.timestamp), y: Number(value) };
+
+      // Find or create dataset for this topic
+      let dataset = chart.data.datasets.find((d: any) => d.label === label);
+
+      if (dataset) {
+        dataset.data.push(point);
+        if (dataset.data.length > 500) dataset.data.shift(); // cap data points
+      } else {
+        chart.data.datasets.push({
+          label,
+          data: [point],
+          borderColor: "#36a2eb",
+          borderWidth: 2,
+          fill: false,
+          pointRadius: 1,
+          tension: 0.1,
+        });
+      }
     });
 
     chart.update("none");

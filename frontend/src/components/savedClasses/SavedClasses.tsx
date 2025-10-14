@@ -1,9 +1,9 @@
+import { useEffect } from "react";
 import SplitLayout from "../layout/SplitLayout";
 import { useInfluxStore } from "../../store/useInfluxStore";
 import GraphBox from "../graphs/GraphBox";
-import GraphGrid from "../graphs/GraphGrid";  
+import GraphGrid from "../graphs/GraphGrid";
 import RealtimeGraph from "../graphs/RealtimeGraph";
-
 
 export default function SavedClasses() {
   const classes = useInfluxStore((s) => s.classes);
@@ -13,12 +13,14 @@ export default function SavedClasses() {
   const deleteClass = useInfluxStore((s) => s.deleteClass);
   const savedClassTimeseriesData = useInfluxStore((s) => s.savedClassTimeseriesData);
 
-  const handleDelete = async () => {
-    if (!selectedClass) return;
-    const ok = window.confirm(`Delete class "${selectedClass.name}"?`);
+ 
+  const handleDelete = async (cls: string) => {
+    const ok = window.confirm(`Delete class "${cls}"?`);
     if (!ok) return;
-    await deleteClass(selectedClass.name);
+    await deleteClass(cls);
+    if (selectedClass?.name === cls) {
     clearSelectedClass();
+  }
   };
 
   return (
@@ -26,6 +28,7 @@ export default function SavedClasses() {
       left={
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
           <h3 className="panel-header">Saved Classes</h3>
+
           {classes.length === 0 ? (
             <p style={{ color: "#aaa" }}>No saved classes yet.</p>
           ) : (
@@ -42,12 +45,21 @@ export default function SavedClasses() {
                 >
                   {cls.name}
                   {selectedClass?.name === cls.name && (
-                    <button onClick={handleDelete}>x</button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleDelete(cls.name);
+                      }}
+                    >
+                      ✕
+                    </button>
                   )}
                 </li>
               ))}
             </ul>
+
           )}
+
           {selectedClass && (
             <button onClick={clearSelectedClass} style={{ marginTop: "0.5rem" }}>
               Clear Selection
@@ -58,14 +70,18 @@ export default function SavedClasses() {
       right={
         <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
           <h3 className="panel-header">Class Graph</h3>
+
           {savedClassTimeseriesData.length > 0 ? (
             <>
-              {/* Big combined graph */}
-              <GraphBox height="260px" title={`Class: ${selectedClass?.name}`}>
-                <RealtimeGraph topics={selectedClass?.topics ?? []} />
+              <GraphBox height="260px" title={`Class name: ${selectedClass?.name}`}>
+                <RealtimeGraph
+                  topics={selectedClass?.topics || []}
+                  initialData={savedClassTimeseriesData}
+                />
               </GraphBox>
 
-              {/* Smaller individual graphs */}
+
+              {/* Individual topic graphs */}
               {savedClassTimeseriesData.length > 1 && (
                 <GraphGrid rowHeight={220}>
                   {savedClassTimeseriesData.map((ts) => (
@@ -79,7 +95,6 @@ export default function SavedClasses() {
           ) : (
             <p style={{ color: "#aaa" }}>Select a class to preview its graph.</p>
           )}
-
         </div>
       }
     />
