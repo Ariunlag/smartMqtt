@@ -9,36 +9,42 @@ class GroupManager:
         self.threshold = threshold
 
     async def update_for_topic(self, topic: str, tags: dict, embeddings: List[List[float]]):
-        updated_sets = []
-        valid_sets = []  # will hold sets that have >= 2 topics
-
+        """
+        Called whenever a new topic's tags are embedded.
+        Creates/updates tag sets and broadcasts all sets that have >= 2 topics.
+        """
+        # --- step 1: update or create sets ---
         for tag, vec in zip(tags.values(), embeddings):
-            set_id = tagset_store.find_or_create_set(tag, vec, self.threshold, topic)
-            topics_in_set = tagset_store.get_topics(set_id)
+            tagset_store.find_or_create_set(tag, vec, self.threshold, topic)
 
-            # Only include sets that have 2+ topics
-            if len(topics_in_set) >= 2:
-                updated_sets.append({"tag": tag, "set": set_id, "topic": topic})
-                valid_sets.append({
-                    "set_id": set_id,
-                    "topics": topics_in_set
-                })
+        # --- step 2: collect all valid sets for broadcast ---
+        valid_sets = []
+        for s in tagset_store._data:
+            topics = s.get("topics", [])
+            if len(topics) >= 2:
+                valid_sets.append({"id": s["id"], "tags": s["tags"]})
 
-        # Broadcast only if at least one set qualifies
-        if updated_sets:
+        # --- step 3: broadcast full valid state once ---
+        if valid_sets:
+            print(f"[DEBUG] Broadcasting {len(valid_sets)} valid tag sets")
             await ws_manager.broadcast({
                 "event_type": "group",
-                "data": {
-                    "topic": topic,
-                    "updated": updated_sets,
-                    "sets": valid_sets
-                }
+                "data": {"sets": valid_sets}
             })
 
-        return updated_sets
 
     def list_sets(self):
-        return tagset_store.get_all()
+        """
+        Return all tag sets that have at least 2 topics.
+        Each entry includes only id and tags (for UI and API).
+        """
+        valid_sets = [
+            {"id": s["id"], "tags": s["tags"]}
+            for s in tagset_store._data
+            if len(s.get("topics", [])) >= 2
+        ]
+        return valid_sets
+
 
     def get_topics_for_set(self, set_id: str):
         return tagset_store.get_topics(set_id)

@@ -26,7 +26,7 @@ class Config:
 
 
         # Duplicate check delay (in seconds)
-        self.DUPE_CHECK_DELAY = int(os.getenv("DUPE_CHECK_DELAY", 120))  # default 2 минут
+        self.DUPE_CHECK_DELAY = int(os.getenv("DUPE_CHECK_DELAY", 60))  # default 1 минут
 
 
         # Data directory (for JSON stores)
