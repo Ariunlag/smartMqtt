@@ -14,9 +14,9 @@ class Config:
         self.INFLUX_URL = os.getenv("INFLUX_URL", "http://localhost:8086")
         self.INFLUX_BUCKET = os.getenv("INFLUX_BUCKET", "smartHub")
         self.INFLUX_ORG = os.getenv("INFLUX_ORG", "Test1")
-        self.INFLUX_TOKEN = os.getenv("INFLUX_TOKEN", "V-hSx_wHxSVlhmM43iOSWmBFHy73LF2BsQ-JuASCORSgGwWxO7f9ysBI--A_O8y1dh07YK6khE3t3Bt40pxD7A==")
+        self.INFLUX_TOKEN = os.getenv("INFLUX_TOKEN",)
 
-        # Embedding model config (🧠 NEW)
+        # Embedding model config ( NEW)
         self.EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
         self.EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "cpu")
 
@@ -26,7 +26,10 @@ class Config:
 
 
         # Duplicate check delay (in seconds)
-        self.DUPE_CHECK_DELAY = int(os.getenv("DUPE_CHECK_DELAY", 60))  # default 1 минут
+        self.DUPE_CHECK_DELAY = int(os.getenv("DUPE_CHECK_DELAY", 60))  # default 1 minute
+
+        # threshold for group tags similarity (between 0 and 1)
+        self.GROUP_TAG_THRESH = float(os.getenv("GROUP_TAG_THRESH", 0.85))
 
 
         # Data directory (for JSON stores)

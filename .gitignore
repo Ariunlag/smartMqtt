@@ -19,6 +19,8 @@ ENV.bak/
 # Environment configs
 .env
 .env.*
+backend/.env
+backend/.env.*
 
 # Pip logs
 pip-log.txt

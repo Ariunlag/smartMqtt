@@ -5,13 +5,6 @@ import random
 import math
 import paho.mqtt.client as mqtt
 
-# ============================================================
-# 🧩 TEST CONFIGURATION
-#   - 2 Duplicate groups (should be detected by DupeManager)
-#   - 3 Non-duplicate but semantically related topics
-#   - Uses prefix "smartHub/" for safe namespace separation
-# ============================================================
-
 
 TOPICS = [
     # ---------- DUPLICATE GROUP 1: Temperature sensors ----------

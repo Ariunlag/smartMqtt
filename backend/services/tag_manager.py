@@ -2,6 +2,8 @@ from typing import List
 import numpy as np
 from utils.similarity import cosine_similarity
 from .store.embedding_store import tagset_store
+from config import config
+
 
 
 class TagManager:
@@ -63,4 +65,4 @@ class TagManager:
 
 
 
-tag_manager = TagManager()
+tag_manager = TagManager(threshold=config.GROUP_TAG_THRESH)

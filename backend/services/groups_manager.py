@@ -2,6 +2,7 @@ from services.store.embedding_store import tagset_store
 from services.socket_manager import ws_manager
 import numpy as np
 from typing import List
+from config import config
 
 
 class GroupManager:
@@ -51,4 +52,4 @@ class GroupManager:
 
 
 # Singleton
-groups_manager = GroupManager()
+groups_manager = GroupManager(threshold=config.GROUP_TAG_THRESH)

@@ -1,0 +1,7 @@
+windy city, chicago
+big apple, new york
+humid, damp
+garage humidity, moisture level in garage
+high CO2, elevated carbon dioxide
+21 °C, 21 celsius
+1st floor, floor one

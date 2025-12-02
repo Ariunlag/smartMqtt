@@ -1,0 +1,15 @@
+# topic, tag pairs...
+# IoT-focused semantic tag variants (city and room/location)
+
+# --- DUPLICATE SET 1: Warehouse temperature sensors ---
+warehouse/a1/temp_main,   device=thermometer,      location=New York City,    zone=storage_rack,         unit=celsius
+warehouse/a1/temp_backup, device=temp_probe,       location=NYC,              zone=storage rack area,    unit=°C
+
+# --- DUPLICATE SET 2: Server room CO2 sensors ---
+serverroom/alpha/co2_sensor1, device=co2_monitor,       location=Boston,                zone=AlphaRoom main,        unit=ppm
+serverroom/alpha/co2_sensor2, device=air_quality_probe, location=Boston City Center,    zone=Alpha Room,            unit=parts_per_million
+
+# --- NON-DUPES: Similar tags but different places/patterns ---
+building/b4/humidity,  device=humidity_node,  location=Chicago,        zone=floor2,        unit=%
+warehouse/d2/humidity, device=humidity_probe, location=Los Angeles,    zone=loading_dock,  unit=%
+weather/west/temp,     device=weather_node,   location=LA,             zone=outdoor,       unit=fahrenheit
