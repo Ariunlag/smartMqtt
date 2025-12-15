@@ -23,11 +23,10 @@ export default function ClassBuilder() {
             overflow: "hidden",
           }}
         >
-          <h4>Available Measurements</h4>
+          <h2>Class Builder</h2>
           <div style={{ flex: 1, overflowY: "auto" }}>
             <MeasurementsList />
           </div>
-          <h4>Selected</h4>
           <div style={{ flex: 1, overflowY: "auto" }}>
             <SelectedMeasurements />
           </div>

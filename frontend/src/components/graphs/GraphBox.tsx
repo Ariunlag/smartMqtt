@@ -14,12 +14,7 @@ export default function GraphBox({
       className="graph-box"
       style={{
         height,
-        background: "#181818",
-        border: "1px solid #333",
-        borderRadius: "8px",
-        padding: "0.5rem",
-        display: "flex",
-        flexDirection: "column",
+        
       }}
     >
       {title && (

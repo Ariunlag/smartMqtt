@@ -6,7 +6,7 @@ export default function GroupTopics() {
 
   return (
     <div>
-      <h3 className="panel-header">Selected Topics</h3>
+      <h3 className="panel-header">Topics for the selected set</h3>
       {selectedTopics.length === 0 ? (
         <p style={{ color: "#777" }}>No topics selected</p>
       ) : (

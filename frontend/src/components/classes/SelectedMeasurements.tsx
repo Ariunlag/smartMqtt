@@ -6,6 +6,7 @@ export default function SelectedMeasurements() {
 
   return (
     <div>
+      <h4>Selected Measurements</h4>
       <ul className="panel-list">
         {selected.length === 0 ? (
           <li style={{ color: "#aaa" }}>None selected</li>

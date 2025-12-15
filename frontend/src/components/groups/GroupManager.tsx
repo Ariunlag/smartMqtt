@@ -8,7 +8,7 @@ export default function GroupManager() {
   return (
     <SplitLayout
       left={
-        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
           {/* Scrollable shorter GroupList */}
           <div
             style={{

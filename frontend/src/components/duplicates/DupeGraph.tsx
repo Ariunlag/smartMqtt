@@ -19,7 +19,7 @@ export default function DupeGraph() {
   const topics = selectedPair.topics || [];
 
   return (
-    <GraphBox height="260px" title="Duplicate Pair (Combined)">
+    <GraphBox height="260px" >
       <RealtimeGraph topics={topics} initialData={series} />
     </GraphBox>
   );

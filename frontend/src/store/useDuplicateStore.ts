@@ -45,18 +45,30 @@ export const useDuplicateStore = create<DuplicateState>()(
       },
 
       // === Confirm duplicate pair ===
-      confirmDuplicate: async (req: ConfirmDupeRequest) => {
+      confirmDuplicate: async (req) => {
         try {
           const { data } = await duplicateApi.confirmDuplicate(req);
-          set((s) => ({
-            duplicates: s.duplicates.map((d) =>
-              JSON.stringify(d.topics.sort()) === JSON.stringify(req.topics.sort()) ? data : d
-            ),
-          }));
+
+          set((s) => {
+            const samePair = (a: [string, string], b: [string, string]) =>
+              JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
+
+            const updatedDuplicates = s.duplicates.map((d) =>
+              samePair(d.topics, req.topics) ? data : d
+            );
+
+            // Always clear selection after an action
+            return {
+              duplicates: updatedDuplicates,
+              selectedPair: null,
+              series: [],
+            };
+          });
         } catch (err) {
           console.error("[Duplicates] Confirm failed:", err);
         }
       },
+
 
       // === Add new duplicate record via WS ===
       addDuplicate: (dup: DupeRecord) =>

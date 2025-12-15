@@ -27,11 +27,13 @@ export default function SavedClasses() {
     <SplitLayout
       left={
         <div style={{ display: "flex", flexDirection: "column", gap: "1rem" }}>
-          <h3 className="panel-header">Saved Classes</h3>
+          <h2 className="panel-header">Saved Classes</h2>
 
           {classes.length === 0 ? (
-            <p style={{ color: "#aaa" }}>No saved classes yet.</p>
-          ) : (
+            <p style={{ color: "var(--primary-text)", opacity: 0.65 }}>
+              No saved classes yet.
+            </p>          
+            ) : (
             <ul className="panel-list">
               {classes.map((cls) => (
                 <li
@@ -44,16 +46,6 @@ export default function SavedClasses() {
                   onClick={() => setSelectedClass(cls)}
                 >
                   {cls.name}
-                  {selectedClass?.name === cls.name && (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        handleDelete(cls.name);
-                      }}
-                    >
-                      ✕
-                    </button>
-                  )}
                 </li>
               ))}
             </ul>
@@ -61,14 +53,20 @@ export default function SavedClasses() {
           )}
 
           {selectedClass && (
-            <button onClick={clearSelectedClass} style={{ marginTop: "0.5rem" }}>
-              Clear Selection
+            <button
+              className="danger"
+              style={{ marginTop: "0.5rem" }}
+              onDoubleClick={() => handleDelete(selectedClass.name)}
+              title='Double-click to delete this class'
+            >
+              Delete (double-click)
             </button>
           )}
+
         </div>
       }
       right={
-        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <div style={{ display: "flex", flexDirection: "column", minHeight: 0}}>
           <h3 className="panel-header">Class Graph</h3>
 
           {savedClassTimeseriesData.length > 0 ? (

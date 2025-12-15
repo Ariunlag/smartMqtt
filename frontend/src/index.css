@@ -4,14 +4,31 @@
 
 /* Theme & root variables */
 :root {
-  --primary-bg: #000;
+  /* --primary-bg: #000;
   --primary-text: #fff;
   --accent: #FFD700;
 
   --sidebar-bg: #1c1c1c;
   --content-bg: #222;
   --box-bg: #181818;
-  --border-color: #333;
+  --border-color: #333; */
+   /* Base */
+  --primary-bg: #ffffff;
+  --primary-text: #1f2933;     /* dark charcoal */
+
+  /* Panels */
+  --sidebar-bg: #ffffff;
+  --content-bg: #ffffff;
+  --box-bg: #ffffff;
+
+  /* Borders / dividers */
+  --border-color: #d9e1e8;     /* soft cool gray */
+
+  /* Accent (teal family – screenshot-тай таарна) */
+  --accent: #2fa4c7;           /* main teal */
+  --accent-soft: #9fd3e2;
+  --accent-dark: #1f6f8b; 
+
   --danger: #e63946;
   --success: limegreen;
 
@@ -26,7 +43,6 @@
 /* Base reset */
 body {
   margin: 1rem;
-  width: 100%;
   min-height: 100vh;
   background-color: var(--primary-bg);
   color: var(--primary-text);
@@ -56,7 +72,7 @@ hr {
 
 /* Buttons */
 button {
-  background-color: #111;
+  background-color: var(--box-bg);
   color: var(--primary-text);
   border: 1px solid var(--accent);
   border-radius: 8px;
@@ -66,7 +82,7 @@ button {
   transition: background-color 0.25s, border-color 0.25s;
 }
 button:hover {
-  background-color: #222;
+  background-color:var(--accent);
   border-color: var(--accent);
 }
 button:focus,
@@ -144,8 +160,16 @@ button:focus-visible {
   align-items: center;
   justify-content: space-between;
   font-size: 0.9rem;
-  word-break: break-all;
+  word-break: break-normal;
 }
+
+.list-item span {
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 
 .list-item button {
   background: none;
@@ -192,6 +216,7 @@ button:focus-visible {
   font-size: 0.85rem;
   overflow-y: auto;
   max-height: 350px;
+  overflow-wrap: anywhere; 
 }
 
 /* ================================
@@ -243,21 +268,23 @@ button:focus-visible {
 }
 
 .dupe-actions .danger {
-  border: 1px solid var(--danger);
-  color: var(--danger);
+  border: 1px solid var(--box-bg);
+  color: var(--primary-text);
+  border: 1px solid var(--accent);
   background: transparent;
 }
 .dupe-actions .danger:hover {
-  background: #330;
+  background: var(--accent-soft);
 }
 
 .dupe-actions .success {
-  border: 1px solid var(--success);
-  color: var(--success);
+  border: 1px solid var(--box-bg);
+  color: var(--primary-text);
   background: transparent;
+  border: 1px solid var(--accent-dark);
 }
 .dupe-actions .success:hover {
-  background: #030;
+  background: var(--accent-dark);
 }
 
 /* Score label inside list */
@@ -271,4 +298,68 @@ button:focus-visible {
   font-size: 0.5rem;
   color: #aaa;
   margin-left: auto;
+}
+
+
+@media print {
+  :root {
+    --primary-bg: #fff;
+    --primary-text: #000;
+    --accent: #000;
+
+    --sidebar-bg: #fff;
+    --content-bg: #fff;
+    --box-bg: #fff;
+    --border-color: #000;
+    --danger: #000;
+    --success: #000;
+  }
+
+  * {
+    background: transparent !important;
+    color: #000 !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+
+  .panel-container,
+  .graph-box,
+  .message-log-wrapper,
+  .list-item {
+    border: 1px solid #000 !important;
+  }
+
+  .panel-sidebar {
+    border-right: 2px solid #000 !important;
+  }
+}
+
+.split-layout { 
+  display:flex; 
+  border-radius:8px; 
+  overflow:hidden; 
+  margin:1rem 0; 
+}
+
+.split-layout .left { 
+  flex:0 1 380px; 
+  min-width:300px; 
+  background:var(--sidebar-bg); 
+  border-right:2px solid var(--accent); 
+  padding:1rem; 
+  min-height:0; 
+  min-width:0;
+}
+
+.split-layout .right { 
+  flex:1 1 auto; 
+  background:var(--content-bg); 
+  padding:1rem; 
+  min-height:0; 
+  min-width:0;
+} 
+
+@media (max-width: 900px){
+  .split-layout{ flex-direction:column; }
+  .split-layout .left{ border-right:none; border-bottom:2px solid var(--accent); }
 }

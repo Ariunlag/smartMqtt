@@ -7,7 +7,7 @@ import paho.mqtt.client as mqtt
 
 
 TOPICS = [
-    # ---------- DUPLICATE GROUP 1: Temperature sensors ----------
+    # DUPLICATE GROUP 1: Temperature sensors
     ("building/nyc/temperature", {
         "location": "New York City",
         "zone": "office_floor_1",
@@ -16,12 +16,12 @@ TOPICS = [
     }),
     ("sensors/manhattan/temp_sensor", {
         "location": "Manhattan",
-        "zone": "office_floor_1",
+        "zone": "office_floor1",           # small change
         "sensor_type": "temp",
         "unit": "°C"
     }),
 
-    # ---------- DUPLICATE GROUP 2: CO2 sensors ----------
+    # DUPLICATE GROUP 2: CO2 sensors
     ("air_quality/lab/co2_level", {
         "location": "Boston Lab",
         "zone": "lab_A",
@@ -30,12 +30,12 @@ TOPICS = [
     }),
     ("environment/boston/carbon_dioxide", {
         "location": "Boston City Center",
-        "zone": "lab_A",
+        "zone": "labA",                    # small change
         "sensor_type": "carbon_dioxide",
         "unit": "parts_per_million"
     }),
 
-    # ---------- NON-DUPES but with similar tags ----------
+    # NON-DUPES but with similar tags
     ("building/nyc/humidity", {
         "location": "New York City",
         "zone": "office_floor_2",
@@ -57,118 +57,133 @@ TOPICS = [
 ]
 
 
-# ============================================================
-# 🚀 MQTT Publisher Class
-# ============================================================
 class MQTTPublisher:
     def __init__(self, broker: str, port: int):
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         self.broker = broker
         self.port = port
 
+        # Stable per-topic biases so duplicates are close but not identical
+        self.topic_bias = {
+            "building/nyc/temperature": random.uniform(-0.08, 0.08),
+            "sensors/manhattan/temp_sensor": random.uniform(-0.08, 0.08),
+            "air_quality/lab/co2_level": random.uniform(-6, 6),
+            "environment/boston/carbon_dioxide": random.uniform(-6, 6),
+            "building/nyc/humidity": random.uniform(-1.0, 1.0),
+            "building/boston/humidity": random.uniform(-1.0, 1.0),
+            "weather/los_angeles/temperature": random.uniform(-0.6, 0.6),
+        }
+
     def connect(self):
-        """Connect to MQTT broker."""
         self.client.connect(self.broker, self.port)
-        print(f"✅ Connected to MQTT broker at {self.broker}:{self.port}\n")
+        print(f"Connected to MQTT broker at {self.broker}:{self.port}")
 
     @staticmethod
     def make_payload(value: float, tags: dict) -> str:
-        """Build JSON payload for Influx line structure."""
         return json.dumps({
-            "fields": {"value": round(value, 3)},
+            "fields": {"value": round(float(value), 3)},
             "tags": tags,
             "timestamp": int(time.time() * 1000)
         })
 
-    def generate_values(self, step: int) -> dict:
-        """Generate realistic correlated and independent sensor data."""
-        base_time = step * 0.15  # smooth variation per loop
+    def generate_true_signals(self, step: int) -> dict:
+        t = step * 0.15
 
-        # Temperature group: correlated 18–26°C
-        temp_base = 22.0 + 3 * math.sin(base_time) + random.uniform(-0.3, 0.3)
+        # True temperature in Celsius (shared by temperature duplicates)
+        true_temp_c = 22.0 + 3.0 * math.sin(t) + random.uniform(-0.15, 0.15)
 
-        # CO2 group: correlated 400–800 ppm
-        co2_base = 550.0 + 120 * math.sin(base_time + 2) + random.uniform(-10, 10)
+        # True CO2 in ppm (shared by CO2 duplicates)
+        true_co2_ppm = 550.0 + 120.0 * math.sin(t + 2.0) + random.uniform(-6, 6)
 
-        # Humidity group: similar tags but different patterns
-        humid_nyc = 45.0 + 10 * math.sin(base_time * 0.8 + 1) + random.uniform(-3, 3)
-        humid_boston = 60.0 + 8 * math.sin(base_time * 1.1 + 2) + random.uniform(-3, 3)
+        # Non-dupe humidity patterns
+        humid_nyc = 45.0 + 10.0 * math.sin(t * 0.8 + 1.0) + random.uniform(-2.0, 2.0)
+        humid_boston = 60.0 + 8.0 * math.sin(t * 1.1 + 2.0) + random.uniform(-2.0, 2.0)
 
-        # Independent LA temp — different scale (Fahrenheit)
-        temp_la = 70.0 + 10 * math.sin(base_time * 0.5) + random.uniform(-2, 2)
+        # Independent LA temperature in Fahrenheit
+        true_temp_la_f = 70.0 + 10.0 * math.sin(t * 0.5) + random.uniform(-1.5, 1.5)
 
         return {
-            "temperature": temp_base,
-            "temp": temp_base + random.uniform(-0.1, 0.1),  # nearly identical (duplicate)
-            "co2": co2_base,
-            "carbon_dioxide": co2_base + random.uniform(-5, 5),  # nearly duplicate
-            "humidity_nyc": humid_nyc,
-            "humidity_boston": humid_boston,
-            "temperature_f": temp_la
+            "true_temp_c": true_temp_c,
+            "true_co2_ppm": true_co2_ppm,
+            "humid_nyc": humid_nyc,
+            "humid_boston": humid_boston,
+            "temp_la_f": true_temp_la_f,
         }
 
+    def value_for_topic(self, topic: str, tags: dict, signals: dict) -> float:
+        unit = (tags.get("unit", "") or "").lower()
+
+        # Temperature duplicate pair: both derived from the same true Celsius signal
+        if topic == "building/nyc/temperature":
+            base = signals["true_temp_c"]
+            noise = random.uniform(-0.08, 0.08)
+            return base + self.topic_bias[topic] + noise
+
+        if topic == "sensors/manhattan/temp_sensor":
+            base = signals["true_temp_c"]
+            noise = random.uniform(-0.12, 0.12)
+            return base + self.topic_bias[topic] + noise
+
+        # CO2 duplicate pair: both derived from the same true ppm signal
+        if topic == "air_quality/lab/co2_level":
+            base = signals["true_co2_ppm"]
+            noise = random.uniform(-4, 4)
+            return base + self.topic_bias[topic] + noise
+
+        if topic == "environment/boston/carbon_dioxide":
+            base = signals["true_co2_ppm"]
+            noise = random.uniform(-7, 7)
+            return base + self.topic_bias[topic] + noise
+
+        # Non-dupes
+        if topic == "building/nyc/humidity":
+            return signals["humid_nyc"] + self.topic_bias[topic]
+
+        if topic == "building/boston/humidity":
+            return signals["humid_boston"] + self.topic_bias[topic]
+
+        if topic == "weather/los_angeles/temperature" and "fahrenheit" in unit:
+            return signals["temp_la_f"] + self.topic_bias[topic]
+
+        return random.uniform(0, 100)
+
     def publish_loop(self, interval_s: float = 2.0):
-        """Continuously publish simulated IoT data."""
-        print(f"📡 Publishing {len(TOPICS)} IoT topics every {interval_s}s...")
-        print("\n🧠 Expected duplicate detections:")
-        print("  - building/nyc/temperature ↔ sensors/manhattan/temp_sensor")
-        print("  - air_quality/lab/co2_level ↔ environment/boston/carbon_dioxide")
-        print("\n💡 Non-duplicates (similar tags but distinct):")
-        print("  - building/nyc/humidity ↔ building/boston/humidity")
-        print("  - weather/los_angeles/temperature\n")
-        print("===========================================================\n")
+        print(f"Publishing {len(TOPICS)} topics every {interval_s}s")
+        print("Expected duplicate detections:")
+        print("  - building/nyc/temperature <-> sensors/manhattan/temp_sensor")
+        print("  - air_quality/lab/co2_level <-> environment/boston/carbon_dioxide")
+        print("Non-duplicates:")
+        print("  - building/nyc/humidity <-> building/boston/humidity")
+        print("  - weather/los_angeles/temperature")
+        print("")
 
         step = 0
         while True:
-            values = self.generate_values(step)
+            signals = self.generate_true_signals(step)
 
             for topic, tags in TOPICS:
-                sensor_type = tags.get("sensor_type", "")
-                zone = tags.get("zone", "unknown")
-
-                # Select appropriate value pattern
-                if "temp" in sensor_type:
-                    val = values.get("temp", 0)
-                elif "temperature" in sensor_type and "fahrenheit" in tags.get("unit", "").lower():
-                    val = values.get("temperature_f", 0)
-                elif "temperature" in sensor_type:
-                    val = values.get("temperature", 0)
-                elif "co2" in sensor_type:
-                    val = values.get("co2", 0)
-                elif "carbon_dioxide" in sensor_type:
-                    val = values.get("carbon_dioxide", 0)
-                elif "humidity" in sensor_type and "nyc" in zone:
-                    val = values.get("humidity_nyc", 0)
-                elif "humidity" in sensor_type and "boston" in zone:
-                    val = values.get("humidity_boston", 0)
-                else:
-                    val = random.uniform(0, 100)
-
+                val = self.value_for_topic(topic, tags, signals)
                 payload = self.make_payload(val, tags)
-                full_topic = f"{topic}"
-                self.client.publish(full_topic, payload)
-                print(f"{full_topic:<55} → {val:7.2f} {tags['unit']}  [{tags['location']}]")
 
-            # Debug progress print every 10 steps
+                self.client.publish(topic, payload)
+                print(f"{topic:<55} -> {val:7.2f} {tags['unit']}  [{tags['location']}]")
+
             if step % 10 == 0 and step > 0:
-                print(f"[DEBUG] Published {step * len(TOPICS)} messages so far...\n")
+                print(f"[DEBUG] Published {step * len(TOPICS)} messages so far")
 
-            print(f"--- Step {step} complete ---\n")
+            print(f"--- Step {step} complete ---")
+            print("")
             step += 1
             time.sleep(interval_s)
 
     def start(self):
-        """Start publishing after connection."""
         self.connect()
         self.publish_loop()
 
 
-# ============================================================
-# 🧪 ENTRY POINT
-# ============================================================
 if __name__ == "__main__":
     pub = MQTTPublisher("test.mosquitto.org", 1883)
     try:
         pub.start()
     except KeyboardInterrupt:
-        print("\n🛑 Publisher stopped by user.")
+        print("Publisher stopped")

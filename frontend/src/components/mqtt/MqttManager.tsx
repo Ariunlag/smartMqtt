@@ -11,10 +11,12 @@ export default function MqttManager() {
       style={{
         display: "flex",
         flexDirection: "column",
-        height: "100%",       // fill full height of the left panel
-        overflow: "hidden",   // prevent spilling
+        height: "100%",       
+        overflow: "hidden", 
+        minHeight: 0,  
       }}
-    >
+    > 
+      <h2 className="panel-header">MQTT Topics</h2>
       <SubscribeInput />
 
       {/* make the topics list scrollable */}

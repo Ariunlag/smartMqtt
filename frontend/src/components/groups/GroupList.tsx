@@ -8,7 +8,7 @@ export default function GroupList() {
 
   return (
     <div>
-      <h3 className="panel-header">Tag Sets</h3>
+      <h2 className="panel-header">Detected tag based sets</h2>
       <ul className="panel-list">
         {groups.length === 0 && (
           <li style={{ color: "#aaa" }}>No tag sets available</li>

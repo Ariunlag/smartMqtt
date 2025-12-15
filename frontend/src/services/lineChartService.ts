@@ -16,6 +16,13 @@ import type { ChartData, ChartOptions } from "chart.js";
 import type { MeasurementSeriesResponse, MeasurementPoint } from "../types/api_models";
 
 // --------------------------- One-time registration ---------------------------
+
+function cssVar(name: string, fallback: string) {
+  if (typeof window === "undefined") return fallback;
+  const v = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return v || fallback;
+}
+
 let __chartsRegistered = false;
 function ensureChartRegistration() {
   if (__chartsRegistered) return;
@@ -50,13 +57,12 @@ function chooseTimeUnit(minX: number, maxX: number): TimeUnit {
 export function createLineChartConfig(
   seriesList: MeasurementSeriesResponse[],
   colors: string[] = [
-    "#36a2eb",
-    "#ff6384",
-    "#ffcd56",
-    "#4bc0c0",
-    "#9966ff",
-    "#ff9f40",
-  ]
+  cssVar("--accent", "#2fa4c7"),
+  cssVar("--accent-dark", "#1f6f8b"),
+  cssVar("--accent-soft", "#9fd3e2"),
+  cssVar("--primary-text", "#1f2933"),
+  cssVar("--border-color", "#d9e1e8"),
+]
 ): { data: ChartData<"line">; options: ChartOptions<"line"> } {
   ensureChartRegistration();
 
@@ -108,8 +114,6 @@ export function createLineChartConfig(
     scales: {
       x: {
         type: "time",
-        min: minX,
-        max: maxX,
         time: { unit },
         ticks: { color: "#bbb" },
       },
