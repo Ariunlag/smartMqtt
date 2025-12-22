@@ -315,7 +315,46 @@ python test/test_tag_groups_from_topics.py
 
 ---
 
+## 9. Further notes on Importing and Exporting data sets
 
+There are two sources: Telemetry(from influxDB) and Non-Telemetry (from locally stored files)
+
+Telemetry storage:
+All saved measurements and historical sensor data come exclusively from InfluxDB, SMQTT does not store or cache telemetry data locally (in any local files). All charts, analytics, and backend processing query InfluxDB dynamically. Based on the current implementation, the system uses the following time windows:
+
+-Recent message feed (UI activity panel): queries the last 1 hour of data, limited to the most recent 200 messages across all topics.
+
+-Duplicate detection (numeric correlation check): queries the last 24 hours of numeric data for a topic, limited to the most recent 100 points.
+
+
+Local persistence (non-telemetry)
+
+For system continuity and semantic processing, the backend persists a small amount of metadata locally (JSON-based stores), including: Topic embeddings (vectors) for semantic duplicate detection, Detected duplicate pairs and their confirmation status, Semantic tag groups, User-defined “classes” (saved topic collections), and A lightweight registry of known topics to support automatic re-subscription on restart
+
+These local files do not store measurements and are not used for historical queries, they exist only to preserve semantic state, user decisions, and restart behavior. If InfluxDB is cleared, all historical sensor measurements are lost. On restart, SMQTT reloads only semantic metadata and topic state from local files. All measurement visualization and analysis relies on fresh, time-range queries against InfluxDB.
+
+For the Local persistence (non-telemetry) local file, please let me know the name/path of each of such local file(s) and what information such file stores. Below are the local (non-telemetry) persistence files used by SMQTT and are located under the local data/ directory and store system state and semantic metadata:
+
+-topic_store.json: Stores topics explicitly subscribed by the user, including wildcard subscriptions, and used to restore user subscriptions on restart.
+-detected_topic_store.json: Stores all concrete topics detected at runtime, including topics resolved from wildcard subscriptions, and used to track which real topics have already been processed.
+-topic_embedding_store.json: Stores embedding vectors generated from topic names and tags, and is used for semantic similarity, duplicate detection, and grouping.
+-dupe_store.json: Stores detected duplicate topic pairs, similarity score, and status (pending / approved / rejected).
+-tagset_store.json: Stores semantic tag groups, including tag values, centroid embeddings, and related topics.
+-class_store.json: Stores user-defined saved classes (named collections of topics).
+
+
+
+If both InfluxDB and these local files are cleared and new data is loaded directly into InfluxDB, SMQTT will not automatically rebuild the local files. This is because the local metadata (topics, embeddings, duplicates, tags) is created during the MQTT ingestion pipeline. If new data arrives through MQTT, the system will automatically recreate the local files as messages arrive. If data is backfilled directly into InfluxDB, an additional step is needed (for example, re-publishing topics via MQTT or running a small bootstrap/reindex process).
+
+---
+
+## 10. Future work
+
+- testing with real benchmark and testing the performance of the different LLMs
+- For a tag pair (e.g., "Locaiton":"Chicago"), the classification considers the values, not the keys as well.
+- the embedded is computed on the first data point published on the topic, and does not consider the next data points
+
+---
 
 ## 9. Contact Us
 
