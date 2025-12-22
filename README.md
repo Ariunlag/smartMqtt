@@ -322,9 +322,9 @@ There are two sources: Telemetry(from influxDB) and Non-Telemetry (from locally 
 Telemetry storage:
 All saved measurements and historical sensor data come exclusively from InfluxDB, SMQTT does not store or cache telemetry data locally (in any local files). All charts, analytics, and backend processing query InfluxDB dynamically. Based on the current implementation, the system uses the following time windows:
 
--Recent message feed (UI activity panel): queries the last 1 hour of data, limited to the most recent 200 messages across all topics.
+- Recent message feed (UI activity panel): queries the last 1 hour of data, limited to the most recent 200 messages across all topics.
 
--Duplicate detection (numeric correlation check): queries the last 24 hours of numeric data for a topic, limited to the most recent 100 points.
+- Duplicate detection (numeric correlation check): queries the last 24 hours of numeric data for a topic, limited to the most recent 100 points.
 
 
 Local persistence (non-telemetry)
@@ -335,12 +335,12 @@ These local files do not store measurements and are not used for historical quer
 
 For the Local persistence (non-telemetry) local file, please let me know the name/path of each of such local file(s) and what information such file stores. Below are the local (non-telemetry) persistence files used by SMQTT and are located under the local data/ directory and store system state and semantic metadata:
 
--topic_store.json: Stores topics explicitly subscribed by the user, including wildcard subscriptions, and used to restore user subscriptions on restart.
--detected_topic_store.json: Stores all concrete topics detected at runtime, including topics resolved from wildcard subscriptions, and used to track which real topics have already been processed.
--topic_embedding_store.json: Stores embedding vectors generated from topic names and tags, and is used for semantic similarity, duplicate detection, and grouping.
--dupe_store.json: Stores detected duplicate topic pairs, similarity score, and status (pending / approved / rejected).
--tagset_store.json: Stores semantic tag groups, including tag values, centroid embeddings, and related topics.
--class_store.json: Stores user-defined saved classes (named collections of topics).
+- topic_store.json: Stores topics explicitly subscribed by the user, including wildcard subscriptions, and used to restore user subscriptions on restart.
+- detected_topic_store.json: Stores all concrete topics detected at runtime, including topics resolved from wildcard subscriptions, and used to track which real topics have already been processed.
+- topic_embedding_store.json: Stores embedding vectors generated from topic names and tags, and is used for semantic similarity, duplicate detection, and grouping.
+- dupe_store.json: Stores detected duplicate topic pairs, similarity score, and status (pending / approved / rejected).
+- tagset_store.json: Stores semantic tag groups, including tag values, centroid embeddings, and related topics.
+- class_store.json: Stores user-defined saved classes (named collections of topics).
 
 
 
