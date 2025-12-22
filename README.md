@@ -358,10 +358,10 @@ If both InfluxDB and these local files are cleared and new data is loaded direct
 
 ## 11. Contact Us
 
-**Ahmed Khaled**  
-📧 ahmedeeldin@gmail.com  
-CS Department, Northeastern Illinois University  
-
 **Ariunaa Tsegmed**  
 📧 ariunlag@gmail.com  
 Northeastern Illinois University  
+
+**Ahmed Khaled**  
+📧 ahmedeeldin@gmail.com  
+CS Department, Northeastern Illinois University  
