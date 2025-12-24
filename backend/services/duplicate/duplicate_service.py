@@ -30,7 +30,7 @@ class DuplicateService:
 
         corr, _ = pearsonr(values_a[:n], values_b[:n])
         corr_score = (corr + 1.0) / 2.0
-        weight = min(1.0, n / 100.0)
+        weight = min(0.5, n / 100.0)
         return (1 - weight) * cosine + weight * corr_score
 
 
