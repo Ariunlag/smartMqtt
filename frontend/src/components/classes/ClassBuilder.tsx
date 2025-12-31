@@ -3,7 +3,7 @@ import MeasurementsList from "./MeasurementsList";
 import SelectedMeasurements from "./SelectedMeasurements";
 import ClassNameInput from "./ClassNameInput";
 import GraphBox from "../graphs/GraphBox";
-import GraphGrid from "../graphs/GraphGrid";   // ✅ import this
+import GraphGrid from "../graphs/GraphGrid";   
 import RealtimeGraph from "../graphs/RealtimeGraph";
 import { useInfluxStore } from "../../store/useInfluxStore";
 
@@ -41,7 +41,7 @@ export default function ClassBuilder() {
             <>
               {/* Combined graph */}
               <GraphBox height="260px" title="Combined Graph">
-                <RealtimeGraph topics={selected} />
+                <RealtimeGraph topics={selected} initialData={builderTimeseriesData} />
               </GraphBox>
 
               {/* Individual graphs */}
@@ -49,7 +49,7 @@ export default function ClassBuilder() {
                 <GraphGrid rowHeight={220}>
                   {builderTimeseriesData.map((ts) => (
                     <GraphBox key={ts.measurement} title={ts.measurement}>
-                      <RealtimeGraph topics={[ts.measurement]} />
+                      <RealtimeGraph topics={[ts.measurement]} initialData={[ts]} />
                     </GraphBox>
                   ))}
                 </GraphGrid>

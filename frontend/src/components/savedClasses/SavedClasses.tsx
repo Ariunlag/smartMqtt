@@ -84,7 +84,7 @@ export default function SavedClasses() {
                 <GraphGrid rowHeight={220}>
                   {savedClassTimeseriesData.map((ts) => (
                     <GraphBox key={ts.measurement} title={ts.measurement}>
-                      <RealtimeGraph topics={[ts.measurement]} />
+                      <RealtimeGraph topics={[ts.measurement]} initialData={[ts]} />
                     </GraphBox>
                   ))}
                 </GraphGrid>

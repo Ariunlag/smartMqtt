@@ -16,7 +16,8 @@ async def list_measurements():
 async def get_timeseries(
     names: List[str] = Query(..., alias="names[]", description="List of measurement names")
 ):
-    return await query_manager.get_timeseries(names, start="-1h")
+    return await query_manager.get_timeseries(names, start="-30d")
+
 
 # 3. Get last N messages across all topics
 @router.get("/messages")

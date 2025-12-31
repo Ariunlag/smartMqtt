@@ -21,7 +21,6 @@ export default function RealtimeGraph({ topics = [], initialData = [] }: Props) 
     messages.forEach((msg) => {
       if (!topics.includes(msg.topic)) return;
 
-      // ✅ Extract single numeric value
       const value =
         msg.fields?.value ??
         msg.value ??

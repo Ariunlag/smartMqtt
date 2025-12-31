@@ -23,7 +23,7 @@ export default function GroupGraph() {
         const formatted: TimeseriesData[] = res.map((m) => ({
           measurement: m.measurement,
           points: m.points.map((p) => ({
-            time: p.timestamp,
+            timestamp: p.timestamp,
             value: p.value,
           })),
         }));
