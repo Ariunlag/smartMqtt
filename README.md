@@ -1,8 +1,8 @@
-# SmartCity Realtime IoT Hub
+# SmartMQTTRealtime IoT Hub
 
 ## 1. Overview
 
-The **SmartCity Realtime IoT Hub** is a modular IoT platform built using **FastAPI** (backend) and **React (Vite)** (frontend) for real-time telemetry ingestion, semantic analysis, intelligent topic management, and live visualization.
+The *SmartMQTT Realtime IoT Hub** is a modular IoT platform built using **FastAPI** (backend) and **React (Vite)** (frontend) for real-time telemetry ingestion, semantic analysis, intelligent topic management, and live visualization.
 
 The system combines MQTT streaming, InfluxDB time-series storage, semantic embeddings, duplicate detection, tag-grouping, and user-defined classes — all synchronized instantly to the frontend with WebSockets.
 
