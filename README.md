@@ -175,7 +175,7 @@ DATA_DIR=./backend/data
 First, clone the repository and move into the project root:
 
 ```bash
-git clone https://github.com/Ariunlag/influxai_v2
+git clone [https://github.com/Ariunlag/influxai_v2](https://github.com/Ariunlag/smartMqtt)
 cd influxai_v2
 
 ### Backend
