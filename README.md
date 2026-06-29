@@ -1,164 +1,235 @@
-# SmartCity Realtime IoT Hub
+# InfluxAI Realtime IoT Hub
 
-## 1. Overview
+InfluxAI is a real-time IoT platform for MQTT telemetry ingestion, time-series
+visualization, semantic topic analysis, duplicate detection, tag grouping, and
+user-defined topic classes.
 
-The **SmartCity Realtime IoT Hub** is a modular IoT platform built using **FastAPI** (backend) and **React (Vite)** (frontend) for real-time telemetry ingestion, semantic analysis, intelligent topic management, and live visualization.
+The application uses FastAPI and React, with a strict separation between
+telemetry, embeddings, and relational metadata:
 
-The system combines MQTT streaming, InfluxDB time-series storage, semantic embeddings, duplicate detection, tag-grouping, and user-defined classes — all synchronized instantly to the frontend with WebSockets.
+| Data | Database |
+|---|---|
+| Sensor telemetry and historical time series | InfluxDB |
+| Topic, tag key/value, and group-centroid embeddings | Qdrant |
+| Streams, classes, duplicate decisions, groups, and relationships | PostgreSQL |
 
----
+The application does not use local JSON files for runtime persistence.
 
-## 2. Main Features
+## Architecture
 
-### 2.1 Real-Time MQTT Telemetry
-- Subscribes to MQTT topics continuously  
-- Ingests messages through FastAPI's MQTT handlers  
-- Writes numeric sensor readings to **InfluxDB**  
-- Supports thousands of messages per second  
-
-### 2.2 Live React Dashboard (Vite + WebSockets)
-- Real-time charts  
-- Historical time windows  
-- Topic browser  
-- Duplicate Manager  
-- Tag Grouping Panel  
-- Saved Classes Manager  
-- Live updates via **WebSockets**
-
-### 2.3 Semantic Duplicate Detection
-- Embeds topic names and tags using `BAAI/bge-small-en-v1.5`
-- Computes cosine similarity  
-- Detects semantic duplicates (not just string matches)  
-- Stores vectors in **Qdrant** and decisions in **PostgreSQL**
-- UI lets users approve/reject duplicates  
-
-### 2.4 Tag-Based Semantic Grouping
-- Embeds tag values  
-- Groups topics based on semantic similarity  
-- Threshold controlled via `.env` (`GROUP_TAG_THRESH`)  
-- Visualized in frontend Tag Grouping panel  
-
-### 2.5 Saved Classes
-- Users create named groups of topics (e.g., `BuildingA_HVAC`)  
-- Persisted relationally in **PostgreSQL**
-- Loading a class loads all related topics + charts  
-
-### 2.6 Persistence Separation
-- **Telemetry** → InfluxDB  
-- **Embeddings** → Qdrant
-- **Metadata and relationships** → PostgreSQL
-- No runtime state is persisted in local JSON files
-
----
-## 3. User Interface Screenshots
-
-### MQTT Realtime Dashboard
-![MQTT](./images/mqtt.jpg)
-
-### Duplicate Detection Manager
-![Duplicate Manager](./images/duplicate.jpg)
-
-### Tag Grouping Panel
-![Tag Groups](./images/tag%20groups.jpg)
-
-### Saved Classes Manager
-![Saved Classes](./images/class.jpg)
-
-
----
-## 4. Project Structure
-
-The following structure mirrors your exact folders and includes comments on every line:
-
-```
-backend/                             # FastAPI backend (logic, ingestion, services)
-│
-├── services/                        # All modular backend services
-│   ├── duplicate/                   # Duplicate detection helpers
-│   ├── embedding/                   # Embedding utilities (model load, generation)
-│   ├── influx/                      # Low-level InfluxDB helpers
-│   ├── mqtt/                        # MQTT client, subscriptions, handlers
-    │   └── store/                       # PostgreSQL/Qdrant repositories
-│
-├── class_manager.py                 # Manages Saved Classes (CRUD operations)
-├── dupe_manager.py                  # Main duplicate detection orchestrator
-├── embedding_manager.py             # Handles topic/tag embeddings
-├── groups_manager.py                # Semantic tag-group management
-├── influx_manager.py                # High-level InfluxDB interface
-├── query_manager.py                 # Custom query builder for InfluxDB
-├── service_manager.py               # Initializes & coordinates backend services
-├── socket_manager.py                # WebSocket event broadcaster
-├── tag_manager.py                   # Tag parsing & normalization utilities
-├── topic_manager.py                 # Registers topics & extracts metadata
-│
-├── utils/                           # Utility functions used across backend
-│
-├── .env                             # Local environment config (ignored by Git)
-├── .env.example                     # Template env file (safe for Git)
-├── config.py                        # Central config loader using dotenv
-├── main.py                          # FastAPI entrypoint (API + WS + MQTT)
-└── requirements.txt                 # Backend Python dependencies
+```text
+IoT publishers
+      |
+      v
+Mosquitto MQTT
+      |
+      v
+FastAPI ingestion pipeline
+      |
+      +--> InfluxDB   telemetry and time-series queries
+      +--> Qdrant     semantic vectors and nearest-neighbor search
+      +--> PostgreSQL metadata and relationships
+      |
+      +--> WebSocket live events
+                |
+                v
+        React + Zustand dashboard
 ```
 
-```
-frontend/                             # React + Vite frontend application
-│
-├── public/                           # Static files (HTML, icons)
-│
-└── src/                              # Frontend source code
-    ├── assets/                       # Static assets (images, icons)
-    ├── components/                   # UI components
-    │   ├── duplicates/               # Duplicate Manager UI
-    │   ├── groups/                   # Tag Grouping UI
-    │   ├── mqtt/                     # MQTT topic display
-    │   ├── classes/                  # Saved Classes UI
-    │   └── graphs/                   # Real-time & historical chart components
-    │
-    ├── hooks/                        # WebSocket + data-fetching hooks
-    ├── services/                     # API clients (axios), websocket handlers
-    ├── store/                        # Zustand stores (topics, groups, dupes, classes)
-    ├── types/                        # TypeScript interfaces
-    │
-    ├── App.tsx                       # Main application component
-    ├── main.tsx                      # Vite entrypoint
-    └── index.css                     # Global styles
-```
+### MQTT ingestion flow
 
-```
-test/                                 # Test utilities
-└── test_piblisher.py                 # MQTT publisher for testing ingestion
-```
+1. A publisher sends a JSON message to a subscribed MQTT topic.
+2. The backend validates the payload.
+3. A previously unseen topic is embedded with
+   `BAAI/bge-small-en-v1.5`.
+4. Topic and tag key/value vectors are written to Qdrant.
+5. Topic, class, duplicate, and tag-group relationships are recorded in
+   PostgreSQL.
+6. Telemetry is written to InfluxDB using the MQTT topic as the measurement
+   name.
+7. The message and semantic updates are broadcast to connected dashboards over
+   WebSocket.
 
-```
-.gitignore                            # Git ignore rules (env, node_modules, data)
-README.md                             # This file
-```
+## Services
 
----
+| Service | Technology | Local address |
+|---|---|---|
+| Dashboard | React, Vite, Nginx | http://localhost:3000 |
+| Backend API | FastAPI, Uvicorn | http://localhost:8000 |
+| API documentation | FastAPI OpenAPI | http://localhost:8000/docs |
+| InfluxDB | InfluxDB 2.7 | http://localhost:8086 |
+| Qdrant | Qdrant 1.15 | http://localhost:6333 |
+| Qdrant dashboard | Qdrant UI | http://localhost:6333/dashboard |
+| MQTT | Eclipse Mosquitto | `localhost:1883` |
+| MQTT WebSocket | Eclipse Mosquitto | `localhost:9001` |
+| PostgreSQL | PostgreSQL 16 | Internal Docker network |
 
-## 5. Configuration
+## Quick start with Docker
 
-### 5.1 Create `.env`
+Requirements:
 
-Use `.env.example` as a starting point:
+- Docker Desktop with the Linux container engine running
+- At least several gigabytes of available disk space
+- Internet access for the first image build and embedding-model download
+
+Build and start the complete stack:
 
 ```bash
-cd backend
-cp .env.example .env
+docker compose up -d --build
 ```
 
-Then edit:
+Check service status:
 
+```bash
+docker compose ps
+docker compose logs -f backend
 ```
-MQTT_BROKER=test.mosquitto.org
+
+The backend health endpoint should report all dependencies as `true`:
+
+```bash
+curl http://localhost:3000/api/health
+```
+
+Expected response:
+
+```json
+{
+  "PostgresClient": true,
+  "QdrantClient": true,
+  "MQTTClient": true,
+  "InfluxClient": true
+}
+```
+
+Stop the containers without deleting database data:
+
+```bash
+docker compose down
+```
+
+Delete containers and all database volumes:
+
+```bash
+docker compose down -v
+```
+
+The `-v` command permanently removes PostgreSQL, Qdrant, and InfluxDB data.
+
+## MQTT payload
+
+Messages must be valid JSON with `fields`, `tags`, and an ISO 8601
+`timestamp`:
+
+```json
+{
+  "fields": {
+    "temperature": 22.5,
+    "humidity": 61
+  },
+  "tags": {
+    "location": "lab",
+    "sensor": "environment"
+  },
+  "timestamp": "2026-06-29T03:10:00Z"
+}
+```
+
+Example subscription:
+
+```bash
+curl -X POST http://localhost:3000/api/subscribe \
+  -H "Content-Type: application/json" \
+  -d '{"topic":"building/lab/environment"}'
+```
+
+Example publication:
+
+```bash
+mosquitto_pub \
+  -h localhost \
+  -p 1883 \
+  -t building/lab/environment \
+  -m '{"fields":{"temperature":22.5},"tags":{"location":"lab"},"timestamp":"2026-06-29T03:10:00Z"}'
+```
+
+## Persistence model
+
+### InfluxDB
+
+- Bucket: `smartHub`
+- Measurement: MQTT topic
+- Tags: payload `tags`
+- Fields: payload `fields`
+- Timestamp: payload `timestamp`
+- Recent-message window: one hour
+- Duplicate-correlation window: up to 100 numeric points from 24 hours
+
+### Qdrant
+
+Qdrant collections are created lazily when the first semantic record is
+processed:
+
+- `topic_embeddings`
+- `tag_key_value_embeddings`
+- `tag_group_centroids`
+
+Point IDs are deterministic, so reprocessing the same semantic entity updates
+its existing vector.
+
+### PostgreSQL
+
+The backend creates its schema idempotently during startup:
+
+- `streams`
+- `ignored_topics`
+- `detected_topics`
+- `classes`
+- `class_topics`
+- `duplicates`
+- `tag_groups`
+- `tag_group_values`
+- `tag_group_topics`
+
+See [Persistence Architecture](docs/PERSISTENCE.md) for more detail.
+
+## Main API endpoints
+
+All REST routes use the `/api` prefix.
+
+| Method | Endpoint | Purpose |
+|---|---|---|
+| GET | `/api/health` | Dependency health |
+| GET | `/api/topics` | Active MQTT subscriptions |
+| POST | `/api/subscribe` | Subscribe to a topic |
+| POST | `/api/unsubscribe` | Unsubscribe from a topic |
+| GET | `/api/measurements` | InfluxDB measurement names |
+| GET | `/api/timeseries` | Historical measurement points |
+| GET | `/api/messages` | Recent MQTT-shaped messages |
+| GET | `/api/duplicates` | Pending duplicate candidates |
+| POST | `/api/duplicate-confirm` | Resolve a duplicate candidate |
+| GET/POST | `/api/classes/` | List or create classes |
+| PUT/DELETE | `/api/classes/{name}` | Update or delete a class |
+| GET | `/api/groups` | Semantic tag groups |
+| GET | `/api/groups/{id}/topics` | Topics related to a group |
+| WebSocket | `/ws` | Live MQTT and semantic events |
+
+## Configuration
+
+Docker Compose supplies the required service configuration. For manual backend
+development, copy `backend/.env.example` to `backend/.env` and configure:
+
+```dotenv
+MQTT_BROKER=localhost
 MQTT_PORT=1883
 
 INFLUX_URL=http://localhost:8086
 INFLUX_BUCKET=smartHub
-INFLUX_ORG=Test1
-INFLUX_TOKEN=YOUR_REAL_TOKEN
+INFLUX_ORG=influxai
+INFLUX_TOKEN=CHANGE_ME
 
-POSTGRES_DSN=postgresql://influxai:password@localhost:5432/influxai
+POSTGRES_DSN=postgresql://influxai:CHANGE_ME@localhost:5432/influxai
+
 QDRANT_URL=http://localhost:6333
 QDRANT_API_KEY=
 
@@ -168,209 +239,108 @@ EMBEDDING_DEVICE=cpu
 ID_THRESH=0.90
 MIN_POINTS=10
 DUPE_CHECK_DELAY=60
-
 GROUP_TAG_THRESH=0.85
 ```
 
----
-
-## 6. Installation
-
-First, clone the repository and move into the project root:
-
-```bash
-git clone https://github.com/Ariunlag/influxai_v2
-cd influxai_v2
+## Local development
 
 ### Backend
+
+Python 3.11 is recommended:
 
 ```bash
 cd backend
 python -m venv .venv
-source .venv/bin/activate
 pip install -r requirements.txt
+python main.py
 ```
 
-Before running backend, ensure **InfluxDB is started manually**.
+PostgreSQL, Qdrant, InfluxDB, and MQTT must be reachable before FastAPI
+finishes startup.
 
 ### Frontend
 
 ```bash
 cd frontend
-npm install
-```
-
----
-
-## 7. Running the System
-
-### Start Backend
-```bash
-cd backend
-uvicorn main:app --reload
-```
-
-Backend API Docs:  
-http://localhost:8000/docs
-
-### Start Frontend
-```bash
-cd frontend
+npm ci
 npm run dev
 ```
 
-Frontend UI:  
-http://localhost:5173/
+The Vite development server proxies `/api` and `/ws` to
+`http://localhost:8000`.
 
----
+## Verification
 
-# Testing Guide
+The Docker stack has been tested for:
 
-All tests in this project are simple Python scripts (no pytest required).  
-Run them from the project root using:
+- deterministic frontend and backend image builds
+- dependency health checks
+- frontend-to-backend Nginx proxying
+- class create, update, delete, and restart persistence
+- MQTT subscription restoration after restart
+- MQTT-to-InfluxDB telemetry ingestion
+- topic and tag key/value embedding persistence in Qdrant
+- PostgreSQL topic and tag-group relationships
+- historical time-series and recent-message API responses
 
-```bash
-python test/<script>.py
-```
-
----
-
-## 8.1 MQTT Publisher Test
-
-Simulates real MQTT sensor messages and verifies:
-
-- Topic ingestion  
-- Embedding pipeline  
-- Duplicate detection  
-- WebSocket event broadcasting  
-
-**Run:**
+Useful checks:
 
 ```bash
-python test/test_piblisher.py
+docker compose config --quiet
+docker compose ps
 ```
-
----
-
-## 8.2 Text Similarity Test
-
-Computes semantic similarity using the same BGE embedding model used by the backend.  
-Reads text pairs from:
-
-```
-test/data/similarity.txt
-```
-
-**Run:**
 
 ```bash
-python test/test_similarity.py
+cd frontend
+npm run build
+npm run lint
 ```
-
----
-
-## 8.3 Duplicate Detection Test
-
-Runs the full hybrid duplicate pipeline:
-
-- Flattened topic + tag embeddings  
-- Synthetic time-series values  
-- Hybrid cosine + correlation scoring  
-- Duplicate threshold check (`ID_THRESH`)  
-
-Uses:
-
-```
-test/data/duplicate_topics.txt
-test/data/duplicate_points.txt
-```
-
-**Run:**
 
 ```bash
-python test/test_duplicate.py
+uv run --no-project --with ruff ruff check backend --exclude backend/.venv
 ```
 
----
+## Known limitations
 
-## 8.4 Tag Grouping Test (City / Location Similarity)
+- The first backend start downloads and loads the embedding model, so startup
+  can take longer than subsequent health checks.
+- FastAPI startup/shutdown currently uses deprecated `on_event` handlers and
+  should be migrated to a lifespan handler.
+- Semantic processing and database access run inside the main backend process;
+  heavier workloads should move embedding and duplicate detection to workers.
+- Authentication and authorization are not implemented.
+- The included credentials and anonymous MQTT configuration are for local
+  development only.
+- Frontend dependency auditing currently reports packages requiring review.
+- Existing scripts under `test/` are research utilities rather than a complete
+  automated regression suite.
 
-Evaluates how **tag values** (not keys) are embedded and clustered.  
-Useful for verifying IoT location similarity:  
-*“New York City” ↔ “NYC”, “Boston” ↔ “Boston City Center”*  
+## Project structure
 
-Features:
+```text
+backend/
+  api/                  FastAPI routes
+  models/               Pydantic request and response models
+  services/
+    database/           PostgreSQL and Qdrant clients
+    duplicate/          Duplicate scoring
+    embedding/          Sentence-transformer integration
+    influx/             InfluxDB client
+    mqtt/               MQTT client and handler pipeline
+    store/              Database-backed repositories
 
-- Uses real `EmbeddingManager` and `TagManager`
-- Uses an in-memory fake store (no disk writes)
-- Prints only groups containing **2 or more distinct tag values**
+frontend/
+  src/
+    components/         Dashboard feature components
+    hooks/              Bootstrap and WebSocket hooks
+    services/           API and chart adapters
+    store/              Zustand state
 
-Reads tag values from:
-
+docs/                   Architecture and engineering notes
+test/                   Research and publishing utilities
 ```
-test/data/duplicate_topics.txt
-```
 
-**Run:**
+## Contributors
 
-```bash
-python test/test_tag_groups_from_topics.py
-```
-
----
-
-## 9. Further notes on Importing and Exporting data sets
-
-> **Current architecture:** InfluxDB stores telemetry, Qdrant stores topic and
-> tag key/value embeddings, and PostgreSQL stores metadata and relationships.
-> Runtime state is no longer persisted in local JSON. The older JSON migration
-> notes below are retained only as historical documentation.
-
-There are two sources: Telemetry(from influxDB) and Non-Telemetry (from locally stored files)
-
-Telemetry storage:
-All saved measurements and historical sensor data come exclusively from InfluxDB, SMQTT does not store or cache telemetry data locally (in any local files). All charts, analytics, and backend processing query InfluxDB dynamically. Based on the current implementation, the system uses the following time windows:
-
-- Recent message feed (UI activity panel): queries the last 1 hour of data, limited to the most recent 200 messages across all topics.
-
-- Duplicate detection (numeric correlation check): queries the last 24 hours of numeric data for a topic, limited to the most recent 100 points.
-
-
-Local persistence (non-telemetry)
-
-For system continuity and semantic processing, the backend persists a small amount of metadata locally (JSON-based stores), including: Topic embeddings (vectors) for semantic duplicate detection, Detected duplicate pairs and their confirmation status, Semantic tag groups, User-defined “classes” (saved topic collections), and A lightweight registry of known topics to support automatic re-subscription on restart
-
-These local files do not store measurements and are not used for historical queries, they exist only to preserve semantic state, user decisions, and restart behavior. If InfluxDB is cleared, all historical sensor measurements are lost. On restart, SMQTT reloads only semantic metadata and topic state from local files. All measurement visualization and analysis relies on fresh, time-range queries against InfluxDB.
-
-For the Local persistence (non-telemetry) local file, please let me know the name/path of each of such local file(s) and what information such file stores. Below are the local (non-telemetry) persistence files used by SMQTT and are located under the local data/ directory and store system state and semantic metadata:
-
-- topic_store.json: Stores topics explicitly subscribed by the user, including wildcard subscriptions, and used to restore user subscriptions on restart.
-- detected_topic_store.json: Stores all concrete topics detected at runtime, including topics resolved from wildcard subscriptions, and used to track which real topics have already been processed.
-- topic_embedding_store.json: Stores embedding vectors generated from topic names and tags, and is used for semantic similarity, duplicate detection, and grouping.
-- dupe_store.json: Stores detected duplicate topic pairs, similarity score, and status (pending / approved / rejected).
-- tagset_store.json: Stores semantic tag groups, including tag values, centroid embeddings, and related topics.
-- class_store.json: Stores user-defined saved classes (named collections of topics).
-
-
-
-If both InfluxDB and these local files are cleared and new data is loaded directly into InfluxDB, SMQTT will not automatically rebuild the local files. This is because the local metadata (topics, embeddings, duplicates, tags) is created during the MQTT ingestion pipeline. If new data arrives through MQTT, the system will automatically recreate the local files as messages arrive. If data is backfilled directly into InfluxDB, an additional step is needed (for example, re-publishing topics via MQTT or running a small bootstrap/reindex process).
-
----
-
-## 10. Future work
-
-- testing with real benchmark and testing the performance of the different LLMs
-- For a tag pair (e.g., "Locaiton":"Chicago"), the classification considers the values, not the keys as well.
-- the embedded is computed on the first data point published on the topic, and does not consider the next data points
-
----
-
-## 11. Contact Us
-
-**Ariunaa Tsegmed**  
-📧 ariunlag@gmail.com  
-Northeastern Illinois University  
-
-**Ahmed Khaled**  
-📧 ahmedeeldin@gmail.com  
-CS Department, Northeastern Illinois University  
+- Ariunaa Tsegmed — ariunlag@gmail.com
+- Ahmed Khaled — ahmedeeldin@gmail.com

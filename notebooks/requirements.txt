@@ -1,0 +1,7 @@
+# Notebook extras on top of the backend's own deps.
+# The core stack (sentence-transformers, torch, scikit-learn, numpy) is already in
+# backend/requirements.txt — install that first, then these for the notebook UI/plots.
+jupyterlab
+ipykernel
+pandas
+matplotlib
