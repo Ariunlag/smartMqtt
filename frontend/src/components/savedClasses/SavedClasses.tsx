@@ -1,4 +1,3 @@
-import { useEffect } from "react";
 import SplitLayout from "../layout/SplitLayout";
 import { useInfluxStore } from "../../store/useInfluxStore";
 import GraphBox from "../graphs/GraphBox";

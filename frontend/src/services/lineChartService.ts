@@ -15,6 +15,8 @@ import "chartjs-adapter-date-fns";
 import type { ChartData, ChartOptions } from "chart.js";
 import type { MeasurementSeriesResponse, MeasurementPoint } from "../types/api_models";
 
+export type TimeseriesData = MeasurementSeriesResponse;
+
 // --------------------------- One-time registration ---------------------------
 
 function cssVar(name: string, fallback: string) {

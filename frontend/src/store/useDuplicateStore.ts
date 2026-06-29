@@ -18,7 +18,7 @@ type DuplicateState = {
   addDuplicate: (dup: DupeRecord) => void;
 
   // UI helpers
-  removeDuplicate: (topics: [string, string]) => void;
+  removeDuplicate: (topics: string[]) => void;
   selectPair: (pair: DupeRecord) => Promise<void>;
   clearSelection: () => void;
 
@@ -50,7 +50,7 @@ export const useDuplicateStore = create<DuplicateState>()(
           const { data } = await duplicateApi.confirmDuplicate(req);
 
           set((s) => {
-            const samePair = (a: [string, string], b: [string, string]) =>
+            const samePair = (a: string[], b: string[]) =>
               JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
 
             const updatedDuplicates = s.duplicates.map((d) =>
@@ -81,7 +81,7 @@ export const useDuplicateStore = create<DuplicateState>()(
         }),
 
       // === Remove duplicate record from list ===
-      removeDuplicate: (topics: [string, string]) =>
+      removeDuplicate: (topics: string[]) =>
         set((s) => ({
           duplicates: s.duplicates.filter(
             (d) => JSON.stringify(d.topics.sort()) !== JSON.stringify(topics.sort())
@@ -114,7 +114,10 @@ export const useDuplicateStore = create<DuplicateState>()(
         set((s) => ({
           series: s.series.map((ts) =>
             ts.measurement === measurement
-              ? { ...ts, points: [...ts.points, point] }
+              ? {
+                  ...ts,
+                  points: [...ts.points, { timestamp: String(point.timestamp), value: point.value }],
+                }
               : ts
           ),
         })),

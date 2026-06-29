@@ -1,4 +1,3 @@
-import React from "react"
 import { useBootstrap } from "./hooks/useBootstrap"
 import { useWebSocket } from "./hooks/useWebSocket"
 

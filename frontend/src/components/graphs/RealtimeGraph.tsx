@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { Line } from "react-chartjs-2";
 import { useMqttStore } from "../../store/useMqttStore";
 import { createLineChartConfig } from "../../services/lineChartService";

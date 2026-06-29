@@ -2,21 +2,23 @@ import { useEffect } from "react";
 import { useDuplicateStore } from "../../store/useDuplicateStore";
 import GraphBox from "../graphs/GraphBox";
 import RealtimeGraph from "../graphs/RealtimeGraph";
+import type { DupeRecord } from "../../types/api_models";
 
-export default function DupeGraph() {
+export default function DupeGraph({ dupe }: { dupe?: DupeRecord | null }) {
   const { selectedPair, series, loadPairTimeseries } = useDuplicateStore();
+  const effectivePair = dupe ?? selectedPair;
 
   useEffect(() => {
-    if (selectedPair) {
-      loadPairTimeseries(selectedPair.topics);
+    if (effectivePair) {
+      loadPairTimeseries(effectivePair.topics);
     }
-  }, [selectedPair, loadPairTimeseries]);
+  }, [effectivePair, loadPairTimeseries]);
 
-  if (!selectedPair) {
+  if (!effectivePair) {
     return <p style={{ color: "#aaa" }}>Select a duplicate to visualize</p>;
   }
 
-  const topics = selectedPair.topics || [];
+  const topics = effectivePair.topics || [];
 
   return (
     <GraphBox height="260px" >

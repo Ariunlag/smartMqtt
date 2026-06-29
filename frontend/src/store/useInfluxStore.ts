@@ -209,7 +209,7 @@ export const useInfluxStore = create<InfluxStore>()(
     },
     {
       name: "influx-storage",
-      onRehydrateStorage: () => (state) => {
+      onRehydrateStorage: () => (_state) => {
         console.log("[InfluxStore] rehydrated");
       },
     }

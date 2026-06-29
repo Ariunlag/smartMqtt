@@ -1,4 +1,3 @@
-import React from "react";
 import { useGroupStore } from "../../store/useGroupStore";
 
 export default function GroupList() {
