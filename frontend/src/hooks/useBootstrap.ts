@@ -21,7 +21,7 @@ export function useBootstrap() {
     let cancelled = false;
     const checkBackend = async () => {
       try {
-        const res = await axios.get("http://localhost:8000/api/health");
+        const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL || "/api"}/health`);
         if (cancelled) return;
 
         const { MQTTClient, InfluxClient } = res.data ?? {};

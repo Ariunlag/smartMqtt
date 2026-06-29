@@ -54,14 +54,27 @@ class QueryManager:
         if not measurements:
             return []
         filter_str = " or ".join([f'r._measurement == "{m}"' for m in measurements])
+        row_limit = max(limit * 10, limit)
         flux = f'''
         from(bucket: "{config.INFLUX_BUCKET}")
         |> range(start: -1h)
         |> filter(fn: (r) => {filter_str})
         |> sort(columns: ["_time"], desc: true)
-        |> limit(n: {limit})
+        |> limit(n: {row_limit})
         '''
-        return await self._run(flux)
+        rows = await self._run(flux)
+        messages = {}
+        for row in rows:
+            key = (row["measurement"], row["time"])
+            if key not in messages:
+                messages[key] = {
+                    "topic": row["measurement"],
+                    "timestamp": row["time"],
+                    "tags": row["tags"],
+                    "fields": {},
+                }
+            messages[key]["fields"][row["field"]] = row["value"]
+        return list(messages.values())[:limit]
 
     async def get_last_points(self, topic: str, limit: int = 100):
         """
@@ -98,7 +111,8 @@ class QueryManager:
                             "value": record.get_value(),
                             "tags": {
                                 k: v for k, v in record.values.items()
-                                if k not in ["_field", "_value", "_measurement", "_time"]
+                                if not k.startswith("_")
+                                and k not in ["result", "table"]
                             }
                         })
             return rows

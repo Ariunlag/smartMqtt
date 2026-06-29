@@ -8,7 +8,8 @@ export const useWebSocket = (enabled: boolean) => {
   useEffect(() => {
     if (!enabled) return;
 
-    const ws = new WebSocket("ws://localhost:8000/ws");
+    const proto = window.location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${window.location.host}/ws`);
 
     ws.onopen = () => console.log("[WebSocket] Connected");
     ws.onclose = () => console.log("[WebSocket] Disconnected");

@@ -1,6 +1,5 @@
 import asyncio
 from typing import List, Optional
-from api import topic
 from config import config
 from services.store.embedding_store import topic_embedding_store
 from services.store.relation_store import dupe_store
@@ -20,13 +19,19 @@ class DupeManager:
 
     async def check_new_topic(self, topic: str, embedding: List[float]):
         """Schedule a delayed check when a new topic is embedded."""
+        if hasattr(embedding, "tolist"):
+            embedding = embedding.tolist()
         asyncio.create_task(self._delayed_check(topic, embedding))
 
     async def _delayed_check(self, topic: str, embedding: List[float]):
         for _ in range(3):  # check up to 3 times (every 2 min)
             await asyncio.sleep(self.delay)
 
-            candidates = topic_embedding_store.get_all()
+            candidates = topic_embedding_store.candidates_for(
+                topic,
+                embedding,
+                limit=10,
+            )
             for rec in candidates:
                 other = rec["topic"]
                 if other == topic:
@@ -58,15 +63,26 @@ class DupeManager:
         self.store.add(record)
         return record
 
-    def confirm_duplicate(self, topic_a: str, topic_b: str) -> Optional[dict]:
+    def confirm_duplicate(
+        self,
+        topic_a: str,
+        topic_b: str,
+        target: str | None = None,
+    ) -> Optional[dict]:
         """Confirm a duplicate pair and unsubscribe one of the topics."""
         rec = self.find_pair(topic_a, topic_b)
         if not rec:
             return None
 
-        rec["status"] = "CONFIRMED_DUPLICATE"
-        topic_manager.unsubscribe(topic_b)
-        return rec
+        target = target or topic_b
+        if target not in {topic_a, topic_b}:
+            raise ValueError("Unsubscribe target must be one of the duplicate topics")
+        topic_manager.unsubscribe(target)
+        return self.store.update_status(
+            topic_a,
+            topic_b,
+            "CONFIRMED_DUPLICATE",
+        )
 
     def keep_both(self, topic_a: str, topic_b: str) -> Optional[dict]:
         """Mark a pair as not duplicates and keep both topics."""
@@ -74,8 +90,7 @@ class DupeManager:
         if not rec:
             return None
 
-        rec["status"] = "NOT_DUPLICATE"
-        return rec
+        return self.store.update_status(topic_a, topic_b, "NOT_DUPLICATE")
 
     def find_pair(self, topic_a: str, topic_b: str) -> Optional[dict]:
         """Find a stored duplicate pair, if it exists."""

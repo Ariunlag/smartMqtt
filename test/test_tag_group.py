@@ -44,6 +44,46 @@ class FakeTagSetStore:
     def get_all(self):
         return self._data
 
+    def store_tag_embedding(self, topic, tag_key, tag_value, vector):
+        pass
+
+    def find_or_create_set(
+        self,
+        tag_key,
+        tag_value,
+        vector,
+        threshold,
+        topic,
+    ):
+        import numpy as np
+
+        vector = np.asarray(vector, dtype=float)
+        best = None
+        best_score = -1.0
+        for group in self._data:
+            centroid = np.asarray(group["centroid"], dtype=float)
+            score = float(
+                np.dot(vector, centroid)
+                / (np.linalg.norm(vector) * np.linalg.norm(centroid))
+            )
+            if score > best_score:
+                best, best_score = group, score
+
+        if best is None or best_score < threshold:
+            best = {
+                "id": f"set_{len(self._data) + 1}",
+                "tags": [],
+                "centroid": vector.tolist(),
+                "topics": [],
+            }
+            self._data.append(best)
+
+        if tag_value not in best["tags"]:
+            best["tags"].append(tag_value)
+        if topic not in best["topics"]:
+            best["topics"].append(topic)
+        return best["id"]
+
 
 # ---------- PATCH MODULE GLOBAL STORE ----------
 fake_store = FakeTagSetStore()
@@ -53,12 +93,9 @@ tag_manager = tag_mod.tag_manager            # use your existing TagManager inst
 
 def load_topics_and_values():
     """
-    Read duplicate_topics.txt and return a list of (topic, tag_value) pairs.
-
-    We ignore the tag *keys* like 'location', 'zone', etc., and only keep values,
-    because your system embeds only the tag values.
+    Read duplicate_topics.txt and return (topic, tag_key, tag_value) records.
     """
-    pairs: list[tuple[str, str]] = []
+    pairs: list[tuple[str, str, str]] = []
 
     with TOPIC_FILE.open("r", encoding="utf-8") as f:
         for line in f:
@@ -73,10 +110,11 @@ def load_topics_and_values():
             for item in parts[1:]:
                 if "=" not in item:
                     continue
-                _, value = item.split("=", 1)
+                key, value = item.split("=", 1)
+                key = key.strip()
                 value = value.strip()
-                if value:
-                    pairs.append((topic, value))
+                if key and value:
+                    pairs.append((topic, key, value))
 
     return pairs
 
@@ -101,15 +139,20 @@ def main():
     set_id_to_values = defaultdict(list)
     set_id_to_topics = defaultdict(list)
 
-    for topic, raw_value in pairs:
-        # Your system embeds only the tag VALUE, normalized
-        norm_value = embedding_manager._normalize_tag_value(raw_value)  # type: ignore
+    for topic, tag_key, raw_value in pairs:
+        representation = embedding_manager._normalize_tag_pair(  # type: ignore
+            tag_key,
+            raw_value,
+        )
 
-        # Encode a single tag value
-        emb_vec = model.encode([norm_value])[0]
+        emb_vec = model.encode([representation])[0]
 
-        # Use real TagManager logic with the fake store underneath
-        set_id = tag_manager.process_tag(raw_value, emb_vec, topic)
+        set_id = tag_manager.process_tag(
+            raw_value,
+            emb_vec,
+            topic,
+            tag_key=tag_key,
+        )
 
         set_id_to_values[set_id].append(raw_value)
         set_id_to_topics[set_id].append(topic)

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter
 from models.api_models import GroupListResponse
 from services.groups_manager import groups_manager
 

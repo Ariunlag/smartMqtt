@@ -1,0 +1,102 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: influxai_postgres
+    environment:
+      POSTGRES_DB: influxai
+      POSTGRES_USER: influxai
+      POSTGRES_PASSWORD: influxai-password
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U influxai -d influxai"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  qdrant:
+    image: qdrant/qdrant:v1.15.4
+    container_name: influxai_qdrant
+    ports:
+      - "6333:6333"
+    volumes:
+      - qdrant-data:/qdrant/storage
+
+  influxdb:
+    image: influxdb:2.7
+    container_name: influxai_influxdb
+    ports:
+      - "8086:8086"
+    environment:
+      DOCKER_INFLUXDB_INIT_MODE: setup
+      DOCKER_INFLUXDB_INIT_USERNAME: admin
+      DOCKER_INFLUXDB_INIT_PASSWORD: adminpassword
+      DOCKER_INFLUXDB_INIT_ORG: influxai
+      DOCKER_INFLUXDB_INIT_BUCKET: smartHub
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: supersecret-token
+    volumes:
+      - influxdb-data:/var/lib/influxdb2
+
+  mqtt:
+    image: eclipse-mosquitto:2
+    container_name: influxai_mqtt
+    ports:
+      - "1883:1883"
+      - "9001:9001"
+    volumes:
+      - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: influxai_backend
+    depends_on:
+      - influxdb
+      - mqtt
+      - postgres
+      - qdrant
+    environment:
+      BACKEND_HOST: 0.0.0.0
+      BACKEND_PORT: 8000
+      MQTT_BROKER: mqtt
+      MQTT_PORT: 1883
+      INFLUX_URL: http://influxdb:8086
+      INFLUX_BUCKET: smartHub
+      INFLUX_ORG: influxai
+      INFLUX_TOKEN: supersecret-token
+      POSTGRES_DSN: postgresql://influxai:influxai-password@postgres:5432/influxai
+      QDRANT_URL: http://qdrant:6333
+      EMBEDDING_MODEL: BAAI/bge-small-en-v1.5
+      EMBEDDING_DEVICE: cpu
+    ports:
+      - "8000:8000"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=2)",
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+      args:
+        VITE_API_BASE_URL: /api
+    container_name: influxai_frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+
+volumes:
+  influxdb-data:
+  postgres-data:
+  qdrant-data:

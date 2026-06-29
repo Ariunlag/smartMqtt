@@ -12,7 +12,10 @@ async def list_classes():
 
 @router.post("/", response_model=ClassRecord)
 async def create_class(req: CreateClassRequest):
-    return class_manager.create_class(req.name, req.topics)
+    try:
+        return class_manager.create_class(req.name, req.topics)
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
 
 
 @router.put("/{name}", response_model=ClassRecord)
@@ -25,7 +28,8 @@ async def update_class(name: str, req: UpdateClassRequest):
 
 @router.delete("/{name}")
 async def delete_class(name: str):
-    ok = class_manager.delete_class(name)
-    if not ok:
-        raise HTTPException(status_code=404, detail="Class not found")
+    try:
+        class_manager.delete_class(name)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
     return {"status": "deleted", "name": name}

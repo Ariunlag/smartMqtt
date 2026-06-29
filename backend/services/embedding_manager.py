@@ -1,9 +1,9 @@
 import asyncio
 import numpy as np
+from config import config
 from services.embedding.base_model import BaseEmbeddingModel
 from services.embedding.sentence_transformer import STEmbeddingModel
-from services.tag_manager import tag_manager
-from .store.embedding_store import topic_embedding_store
+from .store.embedding_store import tagset_store, topic_embedding_store
 from services.dupe_manager import dupe_manager
 from services.groups_manager import groups_manager
 
@@ -43,9 +43,17 @@ class EmbeddingManager:
         return vector
 
     async def embed_tags(self, topic: str, tags: dict):
-        """Embed individual tag values separately and register them in TagManager."""
+        """Embed and persist normalized tag key/value representations."""
         print(f"[DEBUG] Starting embed_tags for topic={topic}, tags={tags}")
-        tag_texts = [self._normalize_tag_value(v) for v in tags.values() if v]
+        tag_items = [
+            (str(key), str(value))
+            for key, value in tags.items()
+            if value is not None and str(value).strip()
+        ]
+        tag_texts = [
+            self._normalize_tag_pair(key, value)
+            for key, value in tag_items
+        ]
         print(f"[DEBUG] Normalized tag values: {tag_texts}")
 
         if not tag_texts:
@@ -63,15 +71,19 @@ class EmbeddingManager:
         vectors = [np.array(v, dtype=float) for v in vectors]
         print(f"[DEBUG] Converted tag vectors, count={len(vectors)}")
 
-        for raw_value, vec in zip(tags.values(), vectors):
-            if raw_value:
-                try:
-                    tag_manager.process_tag(str(raw_value), vec, topic)
-                    print(f"[DEBUG] Processed tag={raw_value}, vec_dim={vec.shape}")
-                except Exception as e:
-                    print(f"[ERROR] TagManager failed for tag={raw_value}, error: {e}")
+        for (tag_key, tag_value), vec in zip(tag_items, vectors):
+            tagset_store.store_tag_embedding(
+                topic,
+                tag_key,
+                tag_value,
+                vec.tolist(),
+            )
+            print(
+                f"[DEBUG] Stored tag key/value={tag_key}/{tag_value}, "
+                f"vec_dim={vec.shape}"
+            )
 
-        return vectors
+        return tag_items, vectors
 
 
     async def process_new_topic(self, topic: str, tags: dict):
@@ -80,14 +92,14 @@ class EmbeddingManager:
         flat_vec = await self.embed_flattened_topic(topic, tags)
         print("[DEBUG] topic embed done")
 
-        tag_vecs = await self.embed_tags(topic, tags)
+        tag_items, tag_vecs = await self.embed_tags(topic, tags)
         print("[DEBUG] tag embed done")
 
         # convert vectors to lists before sending to managers
         tag_vecs_list = [vec.tolist() for vec in tag_vecs]
 
         try:
-            await groups_manager.update_for_topic(topic, tags, tag_vecs_list)
+            await groups_manager.update_for_topic(topic, tag_items, tag_vecs_list)
             print("[DEBUG] groups_manager updated")
         except Exception as e:
             print(f"[ERROR] groups_manager failed: {e}")
@@ -110,6 +122,10 @@ class EmbeddingManager:
         """Basic normalization for tag values."""
         return str(value).strip().lower().replace("_", " ")
 
+    def _normalize_tag_pair(self, key: str, value: str) -> str:
+        return (
+            f"{self._normalize_tag_value(key)} "
+            f"{self._normalize_tag_value(value)}"
+        )
 
-from config import config
 embedding_manager = EmbeddingManager(STEmbeddingModel(config.EMBEDDING_MODEL))

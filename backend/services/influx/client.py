@@ -9,6 +9,7 @@ class InfluxClient:
         self.client = None
         self.write_api = None
         self.query_api = None
+        self.buckets_api = None
 
     def connect(self):
         try:
@@ -19,10 +20,25 @@ class InfluxClient:
             )
             self.write_api = self.client.write_api()
             self.query_api = self.client.query_api()
+            self.buckets_api = self.client.buckets_api()
+            self._ensure_bucket()
             print(f"[InfluxClient] Connected to {self.url}")
         except Exception as e:
             print(f"[InfluxClient] Failed to connect: {e}")
             self.client = None
+
+    def _ensure_bucket(self):
+        if not self.client or not self.buckets_api:
+            return
+        try:
+            bucket = self.buckets_api.find_bucket_by_name(config.INFLUX_BUCKET)
+            if bucket is None:
+                org = self.client.organizations_api().find_organization_by_name(self.org)
+                if org:
+                    self.buckets_api.create_bucket(bucket_name=config.INFLUX_BUCKET, org_id=org.id)
+                    print(f"[InfluxClient] Created bucket {config.INFLUX_BUCKET}")
+        except Exception as e:
+            print(f"[InfluxClient] Bucket setup failed: {e}")
 
     def disconnect(self):
         if self.client:
@@ -41,17 +57,16 @@ class InfluxClient:
             return False
 
     def write_point(self, measurement: str, tags: dict, fields: dict, timestamp=None):
-        try:
-            point = Point(measurement)
-            for k, v in tags.items():
-                point = point.tag(k, v)
-            for k, v in fields.items():
-                point = point.field(k, v)
-            if timestamp:
-                point = point.time(timestamp, WritePrecision.NS)
-            self.write_api.write(bucket=config.INFLUX_BUCKET, record=point)
-        except Exception as e:
-            print(f"[InfluxClient] Failed to write point: {e}")
+        if not self.write_api:
+            raise RuntimeError("InfluxDB write API is not connected")
+        point = Point(measurement)
+        for k, v in tags.items():
+            point = point.tag(k, v)
+        for k, v in fields.items():
+            point = point.field(k, v)
+        if timestamp:
+            point = point.time(timestamp, WritePrecision.NS)
+        self.write_api.write(bucket=config.INFLUX_BUCKET, record=point)
 
     def query_raw(self, flux: str):
         try:

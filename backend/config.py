@@ -6,15 +6,28 @@ load_dotenv()
 class Config:
     def __init__(self):
         # MQTT
-        self.MQTT_BROKER = os.getenv("MQTT_BROKER", "test.mosquitto.org")
+        self.MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
         self.MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
-
 
         # InfluxDB
         self.INFLUX_URL = os.getenv("INFLUX_URL", "http://localhost:8086")
         self.INFLUX_BUCKET = os.getenv("INFLUX_BUCKET", "smartHub")
-        self.INFLUX_ORG = os.getenv("INFLUX_ORG", "Test1")
-        self.INFLUX_TOKEN = os.getenv("INFLUX_TOKEN",)
+        self.INFLUX_ORG = os.getenv("INFLUX_ORG", "influxai")
+        self.INFLUX_TOKEN = os.getenv("INFLUX_TOKEN", "")
+
+        # PostgreSQL metadata and relationships
+        self.POSTGRES_DSN = os.getenv(
+            "POSTGRES_DSN",
+            "postgresql://influxai:influxai@localhost:5432/influxai",
+        )
+
+        # Qdrant semantic vectors
+        self.QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
+        self.QDRANT_API_KEY = os.getenv("QDRANT_API_KEY") or None
+
+        # Runtime host/port
+        self.BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
+        self.BACKEND_PORT = int(os.getenv("BACKEND_PORT", 8000))
 
         # Embedding model config ( NEW)
         self.EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
@@ -31,12 +44,6 @@ class Config:
         # threshold for group tags similarity (between 0 and 1)
         self.GROUP_TAG_THRESH = float(os.getenv("GROUP_TAG_THRESH", 0.85))
 
-
-        # Data directory (for JSON stores)
-        backend_dir = os.path.dirname(os.path.abspath(__file__))  # e.g. /project/backend
-        self.DATA_DIR = os.getenv("DATA_DIR", os.path.join(backend_dir, "data"))
-
-        os.makedirs(self.DATA_DIR, exist_ok=True)
 
 # single instance used everywhere
 config = Config()

@@ -6,9 +6,11 @@ import type {
 
 import type {MqttMessagesResponse} from "../types/mqtt";
 
+const apiBaseUrl = import.meta.env.VITE_API_BASE_URL || "/api";
+
 // Base axios instance
 const api = axios.create({
-  baseURL: "http://localhost:8000/api",
+  baseURL: apiBaseUrl,
 });
 
 // 1. List all measurements

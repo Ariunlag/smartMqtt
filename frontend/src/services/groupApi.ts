@@ -2,7 +2,7 @@ import axios from "axios";
 import type { GroupListResponse, GroupTopicsResponse } from "../types/api_models";
 
 const api = axios.create({
-  baseURL: "http://localhost:8000/api",
+  baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
 });
 
 // 1. List all groups (id + tags)

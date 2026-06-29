@@ -4,6 +4,7 @@
 -CORS middleware, and sets up the main entry point.
 '''
 
+import os
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.service_manager import service_manager
@@ -38,4 +39,6 @@ app.include_router(socket.router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8000, reload=True)
+    host = os.getenv("BACKEND_HOST", "0.0.0.0")
+    port = int(os.getenv("BACKEND_PORT", "8000"))
+    uvicorn.run(app, host=host, port=port, reload=False)

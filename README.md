@@ -29,7 +29,7 @@ The system combines MQTT streaming, InfluxDB time-series storage, semantic embed
 - Embeds topic names and tags using `BAAI/bge-small-en-v1.5`
 - Computes cosine similarity  
 - Detects semantic duplicates (not just string matches)  
-- Stores results in `duplicate_store.json`  
+- Stores vectors in **Qdrant** and decisions in **PostgreSQL**
 - UI lets users approve/reject duplicates  
 
 ### 2.4 Tag-Based Semantic Grouping
@@ -40,13 +40,14 @@ The system combines MQTT streaming, InfluxDB time-series storage, semantic embed
 
 ### 2.5 Saved Classes
 - Users create named groups of topics (e.g., `BuildingA_HVAC`)  
-- Persisted in `class_store.json`  
+- Persisted relationally in **PostgreSQL**
 - Loading a class loads all related topics + charts  
 
-### 2.6 Clean Separation of Data Types
+### 2.6 Persistence Separation
 - **Telemetry** → InfluxDB  
-- **Metadata** → JSON stores  
-- Fully portable and database-ready  
+- **Embeddings** → Qdrant
+- **Metadata and relationships** → PostgreSQL
+- No runtime state is persisted in local JSON files
 
 ---
 ## 3. User Interface Screenshots
@@ -77,7 +78,7 @@ backend/                             # FastAPI backend (logic, ingestion, servic
 │   ├── embedding/                   # Embedding utilities (model load, generation)
 │   ├── influx/                      # Low-level InfluxDB helpers
 │   ├── mqtt/                        # MQTT client, subscriptions, handlers
-│   └── store/                       # JSON store utilities
+    │   └── store/                       # PostgreSQL/Qdrant repositories
 │
 ├── class_manager.py                 # Manages Saved Classes (CRUD operations)
 ├── dupe_manager.py                  # Main duplicate detection orchestrator
@@ -157,6 +158,10 @@ INFLUX_BUCKET=smartHub
 INFLUX_ORG=Test1
 INFLUX_TOKEN=YOUR_REAL_TOKEN
 
+POSTGRES_DSN=postgresql://influxai:password@localhost:5432/influxai
+QDRANT_URL=http://localhost:6333
+QDRANT_API_KEY=
+
 EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
 EMBEDDING_DEVICE=cpu
 
@@ -165,7 +170,6 @@ MIN_POINTS=10
 DUPE_CHECK_DELAY=60
 
 GROUP_TAG_THRESH=0.85
-DATA_DIR=./backend/data
 ```
 
 ---
@@ -316,6 +320,11 @@ python test/test_tag_groups_from_topics.py
 ---
 
 ## 9. Further notes on Importing and Exporting data sets
+
+> **Current architecture:** InfluxDB stores telemetry, Qdrant stores topic and
+> tag key/value embeddings, and PostgreSQL stores metadata and relationships.
+> Runtime state is no longer persisted in local JSON. The older JSON migration
+> notes below are retained only as historical documentation.
 
 There are two sources: Telemetry(from influxDB) and Non-Telemetry (from locally stored files)
 

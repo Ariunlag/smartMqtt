@@ -7,15 +7,15 @@ class TopicHandler(BaseHandler):
     async def handle_message(self, message):       
         topic = message.topic
 
-        if topic in ignored_topic_store.get_all():
+        if ignored_topic_store.contains(topic):
             print(f"[TopicHandler] Ignored topic: {topic}")
             return False   # stop further handlers
 
-        if topic not in detected_topic_store.get_all():
-            detected_topic_store.add(topic)
+        if not detected_topic_store.contains(topic):
             print(f"[TopicHandler] New detected topic: {topic}")
 
             await embedding_manager.process_new_topic(topic, message.tags)
+            detected_topic_store.add(topic)
 
             await ws_manager.broadcast({
                 "event_type": "topic",

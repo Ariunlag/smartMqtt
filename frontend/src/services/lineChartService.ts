@@ -104,10 +104,13 @@ export function createLineChartConfig(
       legend: { display: true, position: "top" },
       tooltip: {
         intersect: false,
-        mode: "nearest",
-        callbacks: {
+          mode: "nearest",
+          callbacks: {
           label(ctx) {
-            const iso = new Date(ctx.parsed.x).toISOString();
+            const iso =
+              ctx.parsed.x == null
+                ? "unknown"
+                : new Date(ctx.parsed.x).toISOString();
             return `Value: ${ctx.parsed.y}, Time: ${iso}`;
           },
         },

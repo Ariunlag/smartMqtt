@@ -13,6 +13,8 @@ class ClassManager:
             raise ValueError(f"Class '{name}' already exists")
         return self.store.add({"name": name, "topics": measurements})
 
+    def update_class(self, name: str, measurements: list[str]):
+        return self.store.update(name, measurements)
 
     def delete_class(self, name: str):
         removed = self.store.remove(name)

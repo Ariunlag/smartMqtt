@@ -13,7 +13,10 @@ async def confirm_dupe(req: ConfirmDupeRequest):
     topic_a, topic_b = req.topics
 
     if req.action == DupeAction.UNSUBSCRIBE:
-        rec = dupe_manager.confirm_duplicate(topic_a, topic_b)
+        try:
+            rec = dupe_manager.confirm_duplicate(topic_a, topic_b, req.target)
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     elif req.action == DupeAction.KEEP_BOTH:
         rec = dupe_manager.keep_both(topic_a, topic_b)
     else:

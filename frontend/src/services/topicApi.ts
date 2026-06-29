@@ -1,7 +1,7 @@
 import axios from "axios";
 import type { TopicListResponse, TopicResponse } from "../types/api_models";
 
-const BASE_URL = "http://localhost:8000/api";
+const BASE_URL = import.meta.env.VITE_API_BASE_URL || "/api";
 
 // 1. List subscribed topics
 export const getSubscribedTopics = async () => {

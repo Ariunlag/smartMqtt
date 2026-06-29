@@ -1,6 +1,5 @@
 from services.mqtt.client import mqtt_client
-from .store.topic_store import topic_store, ignored_topic_store, detected_topic_store
-from config import config
+from .store.topic_store import ignored_topic_store, topic_store
 
 
 class TopicManager:
