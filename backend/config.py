@@ -44,6 +44,11 @@ class Config:
         # threshold for group tags similarity (between 0 and 1)
         self.GROUP_TAG_THRESH = self._ratio("GROUP_TAG_THRESH", 0.85)
 
+        # Dependency health / recovery
+        self.HEALTH_CHECK_TIMEOUT = float(os.getenv("HEALTH_CHECK_TIMEOUT", 2.0))
+        self.RECOVERY_BASE_DELAY = float(os.getenv("RECOVERY_BASE_DELAY", 2.0))
+        self.RECOVERY_MAX_DELAY = float(os.getenv("RECOVERY_MAX_DELAY", 30.0))
+
     @staticmethod
     def _ratio(name: str, default: float) -> float:
         """Parse an env var as a similarity threshold in the inclusive [0, 1] range."""

@@ -94,12 +94,13 @@ services:
     ports:
       - "8000:8000"
     healthcheck:
+      # Gate on readiness (required dependencies healthy), not just liveness.
       test:
         [
           "CMD",
           "python",
           "-c",
-          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=2)",
+          "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health/ready', timeout=2)",
         ]
       interval: 5s
       timeout: 3s
