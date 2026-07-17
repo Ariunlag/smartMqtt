@@ -2,6 +2,9 @@ from typing import List
 from fastapi import WebSocket
 import json
 
+from services.events import make_envelope
+
+
 class WebSocketManager:
     def __init__(self):
         self.active_connections: List[WebSocket] = []
@@ -15,8 +18,14 @@ class WebSocketManager:
             self.active_connections.remove(websocket)
 
     async def broadcast(self, payload: dict):
-        """Broadcast a structured JSON payload to all active clients."""
-        message = json.dumps(payload)
+        """Broadcast an event to all clients inside a versioned envelope.
+
+        Accepts the existing ``{"event_type": ..., "data": ...}`` shape used by
+        callers and wraps it so the payload gains version/event_id/occurred_at
+        while remaining backward compatible (event_type and data still present).
+        """
+        envelope = make_envelope(payload.get("event_type"), payload.get("data"))
+        message = json.dumps(envelope)
         failed = []
         for connection in list(self.active_connections):
             try:

@@ -168,8 +168,22 @@ button:focus-visible {
   width: 8px;
   height: 8px;
   border-radius: 50%;
+  background: var(--muted-text);
+  box-shadow: 0 0 0 3px rgba(107, 122, 134, 0.18);
+}
+
+.app-header__status[data-status="connected"] .status-dot {
   background: var(--success);
   box-shadow: 0 0 0 3px rgba(46, 158, 91, 0.18);
+}
+.app-header__status[data-status="connecting"] .status-dot,
+.app-header__status[data-status="reconnecting"] .status-dot {
+  background: #e0a100;
+  box-shadow: 0 0 0 3px rgba(224, 161, 0, 0.18);
+}
+.app-header__status[data-status="offline"] .status-dot {
+  background: var(--danger);
+  box-shadow: 0 0 0 3px rgba(230, 57, 70, 0.18);
 }
 
 .features {

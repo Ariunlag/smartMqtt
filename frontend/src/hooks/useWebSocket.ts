@@ -3,65 +3,135 @@ import { useInfluxStore } from "../store/useInfluxStore";
 import { useDuplicateStore } from "../store/useDuplicateStore";
 import { useMqttStore } from "../store/useMqttStore";
 import { useGroupStore } from "../store/useGroupStore";
+import { useConnectionStore } from "../store/useConnectionStore";
+import { backoffDelay, parseEnvelope, EventDeduper } from "../services/wsProtocol";
 import type { MqttMessage } from "../types/mqtt";
 
 const FLUSH_INTERVAL_MS = 200;
-const MAX_RECONNECT_DELAY_MS = 30_000;
+const HEARTBEAT_MS = 15_000;
+const STALE_MS = 40_000; // no pong within this window -> assume dead, reconnect
+const OFFLINE_AFTER_ATTEMPTS = 4;
+
+/** Refetch the REST baseline so state missed while disconnected is recovered. */
+function resyncBaseline() {
+  void useMqttStore.getState().getTopics();
+  void useDuplicateStore.getState().getDuplicates();
+  void useGroupStore.getState().fetchGroups();
+  void useInfluxStore.getState().getMeasurements();
+  void useInfluxStore.getState().getClasses();
+}
 
 export const useWebSocket = (enabled: boolean) => {
-  // Buffer high-frequency mqtt messages between flushes (see flush timer below).
   const bufferRef = useRef<MqttMessage[]>([]);
 
   useEffect(() => {
     if (!enabled) return;
 
+    const setStatus = useConnectionStore.getState().setStatus;
+    const deduper = new EventDeduper();
+
     let ws: WebSocket | null = null;
     let reconnectTimer: number | undefined;
+    let heartbeatTimer: number | undefined;
     let attempts = 0;
+    let hasConnectedOnce = false;
+    let lastPong = 0;
     let disposed = false;
 
+    const clearHeartbeat = () => {
+      if (heartbeatTimer) {
+        window.clearInterval(heartbeatTimer);
+        heartbeatTimer = undefined;
+      }
+    };
+
+    const startHeartbeat = () => {
+      lastPong = Date.now();
+      clearHeartbeat();
+      heartbeatTimer = window.setInterval(() => {
+        if (!ws || ws.readyState !== WebSocket.OPEN) return;
+        if (Date.now() - lastPong > STALE_MS) {
+          // Connection is stale — force a close so onclose triggers reconnect.
+          ws.close();
+          return;
+        }
+        ws.send(JSON.stringify({ type: "ping" }));
+      }, HEARTBEAT_MS);
+    };
+
+    const dispatch = (raw: string) => {
+      // Heartbeat replies are not envelopes.
+      if (raw.includes('"pong"')) {
+        try {
+          if (JSON.parse(raw)?.type === "pong") {
+            lastPong = Date.now();
+            return;
+          }
+        } catch {
+          /* fall through to envelope parsing */
+        }
+      }
+
+      const env = parseEnvelope(raw);
+      if (!env) {
+        console.warn("[WebSocket] Ignoring malformed message");
+        return;
+      }
+      if (!deduper.isNew(env.event_id)) return; // idempotent
+
+      switch (env.event_type) {
+        case "mqtt_message":
+          bufferRef.current.push({
+            ...(env.data as MqttMessage),
+            event_id: env.event_id,
+          });
+          break;
+        case "topic":
+          useInfluxStore
+            .getState()
+            .addDetectedMeasurement((env.data as { measurement: string }).measurement);
+          break;
+        case "duplicate":
+          useDuplicateStore.getState().addDuplicate(env.data as never);
+          break;
+        case "group":
+          useGroupStore.getState().setGroups((env.data as { sets: never[] }).sets);
+          break;
+        default:
+          console.warn("[WebSocket] Unknown event:", env.event_type);
+      }
+    };
+
     const connect = () => {
+      // Keep "offline" sticky across repeated failed attempts instead of
+      // flickering back to "reconnecting" each try.
+      setStatus(
+        !hasConnectedOnce
+          ? "connecting"
+          : attempts >= OFFLINE_AFTER_ATTEMPTS
+            ? "offline"
+            : "reconnecting"
+      );
       const proto = window.location.protocol === "https:" ? "wss" : "ws";
       ws = new WebSocket(`${proto}://${window.location.host}/ws`);
 
       ws.onopen = () => {
         attempts = 0;
+        setStatus("connected");
+        startHeartbeat();
+        if (hasConnectedOnce) resyncBaseline(); // recover missed state
+        hasConnectedOnce = true;
         console.log("[WebSocket] Connected");
       };
 
-      ws.onmessage = (event) => {
-        try {
-          const msg = JSON.parse(event.data);
-          if (import.meta.env.DEV) console.log("[WS EVENT]", msg);
-
-          switch (msg.event_type) {
-            case "mqtt_message":
-              // Buffered and flushed as one batched store update.
-              bufferRef.current.push(msg.data);
-              break;
-            case "topic":
-              useInfluxStore.getState().addDetectedMeasurement(msg.data.measurement);
-              break;
-            case "duplicate":
-              useDuplicateStore.getState().addDuplicate(msg.data);
-              break;
-            case "group":
-              useGroupStore.getState().setGroups(msg.data.sets);
-              break;
-            default:
-              console.warn("[WebSocket] Unknown event:", msg);
-          }
-        } catch (err) {
-          console.error("[WebSocket] Parse failed:", err, event.data);
-        }
-      };
+      ws.onmessage = (event) => dispatch(event.data);
 
       ws.onclose = () => {
+        clearHeartbeat();
         if (disposed) return;
-        // Exponential backoff, capped, so a backend restart or network blip
-        // self-heals instead of leaving the UI silently frozen.
-        const delay = Math.min(MAX_RECONNECT_DELAY_MS, 1000 * 2 ** attempts);
         attempts += 1;
+        setStatus(attempts >= OFFLINE_AFTER_ATTEMPTS ? "offline" : "reconnecting");
+        const delay = backoffDelay(attempts - 1);
         console.warn(`[WebSocket] Disconnected; reconnecting in ${delay}ms`);
         reconnectTimer = window.setTimeout(connect, delay);
       };
@@ -71,8 +141,7 @@ export const useWebSocket = (enabled: boolean) => {
 
     connect();
 
-    // Flush buffered mqtt messages in a single batched store update to avoid a
-    // re-render per message under high throughput.
+    // Batch buffered mqtt messages into a single store update per interval.
     const flushTimer = window.setInterval(() => {
       if (bufferRef.current.length === 0) return;
       const batch = bufferRef.current;
@@ -83,6 +152,7 @@ export const useWebSocket = (enabled: boolean) => {
     return () => {
       disposed = true;
       window.clearInterval(flushTimer);
+      clearHeartbeat();
       if (reconnectTimer) window.clearTimeout(reconnectTimer);
       ws?.close();
     };
