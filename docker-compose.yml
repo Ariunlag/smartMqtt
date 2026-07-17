@@ -46,16 +46,38 @@ services:
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
 
+  # One-off schema migration job. Runs `alembic upgrade head` and exits; the
+  # backend waits for it to complete successfully. In production this maps to a
+  # separate migration job so backend replicas never own schema themselves.
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    container_name: influxai_migrate
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      POSTGRES_DSN: postgresql://influxai:influxai-password@postgres:5432/influxai
+
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
     container_name: influxai_backend
     depends_on:
-      - influxdb
-      - mqtt
-      - postgres
-      - qdrant
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+      influxdb:
+        condition: service_started
+      mqtt:
+        condition: service_started
+      qdrant:
+        condition: service_started
     environment:
       BACKEND_HOST: 0.0.0.0
       BACKEND_PORT: 8000

@@ -1,0 +1,118 @@
+"""Alembic migration tests (issue #9 / Phase 2 DB foundation).
+
+These require a disposable PostgreSQL database. Set TEST_DATABASE_URL
+(or POSTGRES_TEST_DSN) to run them; otherwise they are skipped. CI provides a
+Postgres service. The target database is wiped between tests, so never point
+these at a real database.
+"""
+
+import os
+from pathlib import Path
+
+import psycopg
+import pytest
+from alembic import command
+from alembic.config import Config
+
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+
+APP_TABLES = [
+    "streams",
+    "ignored_topics",
+    "detected_topics",
+    "classes",
+    "class_topics",
+    "duplicates",
+    "tag_groups",
+    "tag_group_values",
+    "tag_group_topics",
+]
+
+
+def _make_config(url: str) -> Config:
+    cfg = Config(str(BACKEND_DIR / "alembic.ini"))
+    cfg.set_main_option("script_location", str(BACKEND_DIR / "alembic"))
+    os.environ["POSTGRES_DSN"] = url
+    return cfg
+
+
+def _drop_everything(url: str) -> None:
+    with psycopg.connect(url) as conn:
+        with conn.cursor() as cur:
+            for table in APP_TABLES:
+                cur.execute(f"DROP TABLE IF EXISTS {table} CASCADE")
+            cur.execute("DROP TABLE IF EXISTS alembic_version")
+        conn.commit()
+
+
+def _table_exists(url: str, table: str) -> bool:
+    with psycopg.connect(url) as conn:
+        row = conn.execute(
+            "SELECT to_regclass(%s) IS NOT NULL AS present", (f"public.{table}",)
+        ).fetchone()
+    return bool(row[0])
+
+
+def _alembic_version(url: str):
+    with psycopg.connect(url) as conn:
+        if not _table_exists(url, "alembic_version"):
+            return None
+        row = conn.execute("SELECT version_num FROM alembic_version").fetchone()
+    return row[0] if row else None
+
+
+@pytest.fixture()
+def pg_url():
+    url = os.getenv("TEST_DATABASE_URL") or os.getenv("POSTGRES_TEST_DSN")
+    if not url:
+        pytest.skip("TEST_DATABASE_URL not set")
+    try:
+        with psycopg.connect(url, connect_timeout=3) as conn:
+            conn.execute("SELECT 1")
+    except Exception as exc:  # pragma: no cover - environment dependent
+        pytest.skip(f"test database not reachable: {exc}")
+    _drop_everything(url)
+    yield url
+    _drop_everything(url)
+
+
+def test_clean_database_upgrades_to_head(pg_url):
+    command.upgrade(_make_config(pg_url), "head")
+    assert _alembic_version(pg_url) == "0001_baseline"
+    for table in APP_TABLES:
+        assert _table_exists(pg_url, table), table
+
+
+def test_existing_schema_adopts_baseline_without_data_loss(pg_url):
+    # Simulate a database created by the old startup path, with data present.
+    with psycopg.connect(pg_url) as conn:
+        conn.execute(
+            "CREATE TABLE streams ("
+            "topic TEXT PRIMARY KEY, enabled BOOLEAN NOT NULL DEFAULT TRUE,"
+            "created_at TIMESTAMPTZ NOT NULL DEFAULT now())"
+        )
+        conn.execute("INSERT INTO streams(topic) VALUES ('keep/me')")
+        conn.commit()
+
+    command.upgrade(_make_config(pg_url), "head")
+
+    assert _alembic_version(pg_url) == "0001_baseline"
+    with psycopg.connect(pg_url) as conn:
+        row = conn.execute("SELECT topic FROM streams").fetchone()
+    assert row[0] == "keep/me"  # data preserved
+
+
+def test_repeated_upgrade_is_idempotent(pg_url):
+    cfg = _make_config(pg_url)
+    command.upgrade(cfg, "head")
+    command.upgrade(cfg, "head")  # must not error
+    assert _alembic_version(pg_url) == "0001_baseline"
+
+
+def test_downgrade_removes_baseline(pg_url):
+    cfg = _make_config(pg_url)
+    command.upgrade(cfg, "head")
+    command.downgrade(cfg, "base")
+    assert _alembic_version(pg_url) is None
+    for table in APP_TABLES:
+        assert not _table_exists(pg_url, table), table
