@@ -1,0 +1,30 @@
+stream_id,topic,true_class,manufacturer,notes
+S001,factory-01/edge/gw-03/node-a17/events,temperature_sensor,VendorA,"Synonymous temperature keys; numeric value is measurement, not identity"
+S002,site-alpha/building-2/gateway-11/device-204/data,temperature_sensor,VendorB,"Synonymous temperature keys; numeric value is measurement, not identity"
+S003,north-campus/floor-1/edgebox-07/channel-03,temperature_sensor,VendorC,"Synonymous temperature keys; numeric value is measurement, not identity"
+S004,warehouse-east/line-4/controller-2/node-88/telemetry,temperature_sensor,VendorD,"Synonymous temperature keys; numeric value is measurement, not identity"
+S005,building-b/room-204/hub-5/endpoint-19,temperature_sensor,VendorE,"Synonymous temperature keys; numeric value is measurement, not identity"
+S006,zone-c/collector-01/device-f6/readings,temperature_sensor,VendorF,"Synonymous temperature keys; numeric value is measurement, not identity"
+S007,plant-7/panel-3/io-module-2/ch-01,voltage_sensor,VendorA,Numeric values overlap with temperature but mean voltage
+S008,facility-main/rack-12/gateway-b/node-42,voltage_sensor,VendorB,Numeric values overlap with temperature but mean voltage
+S009,edge/us-central/site-09/unit-552/message,voltage_sensor,VendorC,Numeric values overlap with temperature but mean voltage
+S010,ops/area-7/cabinet-4/module-1/stream,voltage_sensor,VendorD,Numeric values overlap with temperature but mean voltage
+S011,warehouse-01/gw-11/node-5/sample,voltage_sensor,VendorE,Numeric values overlap with temperature but mean voltage
+S012,site-red/floor-2/counter-8/unit-12/event,occupancy_sensor,VendorA,Counts can numerically resemble temperature/voltage
+S013,building-8/entrance-b/edge-2/device-33/data,occupancy_sensor,VendorB,Counts can numerically resemble temperature/voltage
+S014,lobby-main/camera-hub-1/analytic-node-7/output,occupancy_sensor,VendorC,Counts can numerically resemble temperature/voltage
+S015,meeting-area-3/controller-9/endpoint-6/state,occupancy_sensor,VendorD,Counts can numerically resemble temperature/voltage
+S016,dock-2/edgebox-3/unit-84/message,occupancy_sensor,VendorE,Counts can numerically resemble temperature/voltage
+S017,production-line-a/plc-1/device-01/update,device_status,VendorA,Categorical values can be useful identifiers
+S018,conveyor-zone/gateway-4/asset-77/event,device_status,VendorB,Categorical values can be useful identifiers
+S019,pump-room/controller-2/node-19/telemetry,device_status,VendorC,Categorical values can be useful identifiers
+S020,hvac-area/hub-8/unit-20/report,device_status,VendorD,Categorical values can be useful identifiers
+S021,yard-ops/vehicle-hub-2/endpoint-44/data,device_status,VendorE,Categorical values can be useful identifiers
+S022,warehouse-01/environment-hub/node-22/sample,humidity_sensor,VendorA,Synonymous humidity keys
+S023,building-north/gateway-12/unit-18/readings,humidity_sensor,VendorB,Synonymous humidity keys
+S024,office-204/edge-5/channel-09/message,humidity_sensor,VendorC,Synonymous humidity keys
+S025,coldroom-a/collector-4/device-71/event,humidity_sensor,VendorD,Synonymous humidity keys
+S026,asset-registry/site-01/entity-100/update,metadata_identity,VendorA,Same value appears under different keys with different identity meaning
+S027,asset-registry/site-01/entity-101/update,metadata_identity,VendorB,Same value appears under different keys with different identity meaning
+S028,asset-registry/site-01/entity-102/update,metadata_identity,VendorC,Same value appears under different keys with different identity meaning
+S029,gateway-network/site-01/gw-11/summary,metadata_identity,VendorD,Same value appears under different keys with different identity meaning

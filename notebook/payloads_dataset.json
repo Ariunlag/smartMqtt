@@ -1,0 +1,236 @@
+[
+  {
+    "topic": "factory-01/edge/gw-03/node-a17/events",
+    "payload": {
+      "location": "Warehouse_01",
+      "temp": 22.5,
+      "status": "active"
+    }
+  },
+  {
+    "topic": "site-alpha/building-2/gateway-11/device-204/data",
+    "payload": {
+      "building_id": "Warehouse_01",
+      "temperature_celsius": 22.7
+    }
+  },
+  {
+    "topic": "north-campus/floor-1/edgebox-07/channel-03",
+    "payload": {
+      "site": "Warehouse_01",
+      "heat_level": 22.4,
+      "mode": "running",
+      "unit": "C"
+    }
+  },
+  {
+    "topic": "warehouse-east/line-4/controller-2/node-88/telemetry",
+    "payload": {
+      "zone": "ColdRoom_A",
+      "temperature": 4.2,
+      "battery": 88,
+      "online": true,
+      "fw": "1.0.3"
+    }
+  },
+  {
+    "topic": "building-b/room-204/hub-5/endpoint-19",
+    "payload": {
+      "room": "Office_204",
+      "ambient_temp": 23.1,
+      "state": "ok"
+    }
+  },
+  {
+    "topic": "zone-c/collector-01/device-f6/readings",
+    "payload": {
+      "loc": "Warehouse_01",
+      "t": 22.6,
+      "quality": "good",
+      "calibrated": true,
+      "sample_rate_sec": 30
+    }
+  },
+  {
+    "topic": "plant-7/panel-3/io-module-2/ch-01",
+    "payload": {
+      "sensor_id": "Warehouse_01",
+      "voltage": 22.5,
+      "state": "on"
+    }
+  },
+  {
+    "topic": "facility-main/rack-12/gateway-b/node-42",
+    "payload": {
+      "device": "Panel_7",
+      "volt": 22.7,
+      "status": "active",
+      "phase": "A"
+    }
+  },
+  {
+    "topic": "edge/us-central/site-09/unit-552/message",
+    "payload": {
+      "asset_id": "UPS_02",
+      "v_level": 22.4
+    }
+  },
+  {
+    "topic": "ops/area-7/cabinet-4/module-1/stream",
+    "payload": {
+      "cabinet": "Rack_12",
+      "electrical_potential": 23.1,
+      "unit": "V",
+      "alarm": false
+    }
+  },
+  {
+    "topic": "warehouse-01/gw-11/node-5/sample",
+    "payload": {
+      "node": "Warehouse_01",
+      "battery_voltage": 22.6,
+      "health": "good",
+      "last_service": "2026-05-01"
+    }
+  },
+  {
+    "topic": "site-red/floor-2/counter-8/unit-12/event",
+    "payload": {
+      "location": "Warehouse_01",
+      "people_count": 22,
+      "status": "active"
+    }
+  },
+  {
+    "topic": "building-8/entrance-b/edge-2/device-33/data",
+    "payload": {
+      "building_id": "Warehouse_01",
+      "occupancy": 23
+    }
+  },
+  {
+    "topic": "lobby-main/camera-hub-1/analytic-node-7/output",
+    "payload": {
+      "zone": "Lobby",
+      "count": 21,
+      "confidence": 0.91,
+      "camera": "cam_07"
+    }
+  },
+  {
+    "topic": "meeting-area-3/controller-9/endpoint-6/state",
+    "payload": {
+      "area": "MeetingRoom_3",
+      "persons": 6,
+      "occupied": true
+    }
+  },
+  {
+    "topic": "dock-2/edgebox-3/unit-84/message",
+    "payload": {
+      "site": "Warehouse_01",
+      "human_presence": "detected",
+      "count_estimate": 22
+    }
+  },
+  {
+    "topic": "production-line-a/plc-1/device-01/update",
+    "payload": {
+      "machine_id": "Conveyor_01",
+      "status": "active"
+    }
+  },
+  {
+    "topic": "conveyor-zone/gateway-4/asset-77/event",
+    "payload": {
+      "asset": "Conveyor_01",
+      "mode": "running",
+      "operator": "auto"
+    }
+  },
+  {
+    "topic": "pump-room/controller-2/node-19/telemetry",
+    "payload": {
+      "device_id": "Pump_9",
+      "state": "on",
+      "runtime_min": 532
+    }
+  },
+  {
+    "topic": "hvac-area/hub-8/unit-20/report",
+    "payload": {
+      "unit_id": "HVAC_2",
+      "operational_state": "enabled",
+      "fault_code": null
+    }
+  },
+  {
+    "topic": "yard-ops/vehicle-hub-2/endpoint-44/data",
+    "payload": {
+      "equipment": "Forklift_4",
+      "activity": "idle",
+      "battery": 77
+    }
+  },
+  {
+    "topic": "warehouse-01/environment-hub/node-22/sample",
+    "payload": {
+      "location": "Warehouse_01",
+      "humidity": 45.2,
+      "unit": "%"
+    }
+  },
+  {
+    "topic": "building-north/gateway-12/unit-18/readings",
+    "payload": {
+      "building": "Warehouse_01",
+      "relative_humidity": 44.8
+    }
+  },
+  {
+    "topic": "office-204/edge-5/channel-09/message",
+    "payload": {
+      "room": "Office_204",
+      "rh": 41.0,
+      "status": "normal",
+      "sample_rate_sec": 60
+    }
+  },
+  {
+    "topic": "coldroom-a/collector-4/device-71/event",
+    "payload": {
+      "zone": "ColdRoom_A",
+      "moisture_level": 78.3,
+      "alert": "high"
+    }
+  },
+  {
+    "topic": "asset-registry/site-01/entity-100/update",
+    "payload": {
+      "location": "Warehouse_01",
+      "asset_type": "temperature_probe"
+    }
+  },
+  {
+    "topic": "asset-registry/site-01/entity-101/update",
+    "payload": {
+      "sensor_id": "Warehouse_01",
+      "asset_type": "voltage_probe"
+    }
+  },
+  {
+    "topic": "asset-registry/site-01/entity-102/update",
+    "payload": {
+      "building_id": "Warehouse_01",
+      "asset_type": "occupancy_counter"
+    }
+  },
+  {
+    "topic": "gateway-network/site-01/gw-11/summary",
+    "payload": {
+      "site": "Warehouse_01",
+      "gateway": "gw_11",
+      "connected_devices": 34
+    }
+  }
+]
