@@ -9,6 +9,11 @@ from services.database.qdrant import (
 )
 
 
+# Serializes concurrent group assignment so the nearest-centroid read and the
+# subsequent group create/centroid update cannot race (safe across workers).
+GROUP_ASSIGNMENT_LOCK = 91847362
+
+
 class TopicEmbeddingStore:
     def add(self, item: dict) -> dict:
         qdrant_client.upsert(
@@ -85,59 +90,67 @@ class TagSetStore:
         threshold: float,
         topic: str,
     ) -> str:
-        nearest = qdrant_client.nearest(GROUP_COLLECTION, vector)
-        if nearest and nearest.score >= threshold:
-            set_id = nearest.payload["set_id"]
-            group_id = self._numeric_id(set_id)
-            old_vector = np.asarray(nearest.vector, dtype=float)
-            count_row = postgres_client.fetch_one(
+        with postgres_client.transaction() as conn:
+            # Hold a transaction-scoped lock across the read + writes so two
+            # similar tags arriving concurrently cannot each create a group or
+            # clobber each other's centroid. Released automatically on commit.
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(%s)", (GROUP_ASSIGNMENT_LOCK,)
+            )
+
+            nearest = qdrant_client.nearest(GROUP_COLLECTION, vector)
+            if nearest and nearest.score >= threshold:
+                set_id = nearest.payload["set_id"]
+                group_id = self._numeric_id(set_id)
+                old_vector = np.asarray(nearest.vector, dtype=float)
+                count_row = conn.execute(
+                    """
+                    SELECT count(*) AS count FROM tag_group_values
+                    WHERE group_id = %s
+                    """,
+                    (group_id,),
+                ).fetchone()
+                old_count = int(count_row["count"])
+            else:
+                row = conn.execute(
+                    "INSERT INTO tag_groups DEFAULT VALUES RETURNING id"
+                ).fetchone()
+                group_id = row["id"]
+                set_id = f"set_{group_id}"
+                old_vector = np.asarray(vector, dtype=float)
+                old_count = 0
+
+            inserted = conn.execute(
                 """
-                SELECT count(*) AS count FROM tag_group_values
-                WHERE group_id = %s
+                INSERT INTO tag_group_values(group_id, tag_key, tag_value)
+                VALUES (%s, %s, %s)
+                ON CONFLICT DO NOTHING
                 """,
-                (group_id,),
+                (group_id, tag_key, tag_value),
+            ).rowcount
+            conn.execute(
+                """
+                INSERT INTO tag_group_topics(group_id, topic)
+                VALUES (%s, %s)
+                ON CONFLICT DO NOTHING
+                """,
+                (group_id, topic),
             )
-            old_count = int(count_row["count"])
-        else:
-            row = postgres_client.fetch_one(
-                "INSERT INTO tag_groups DEFAULT VALUES RETURNING id"
+
+            if inserted:
+                centroid = (
+                    (old_vector * old_count + np.asarray(vector, dtype=float))
+                    / (old_count + 1)
+                ).tolist()
+            else:
+                centroid = old_vector.tolist()
+
+            qdrant_client.upsert(
+                GROUP_COLLECTION,
+                set_id,
+                centroid,
+                {"set_id": set_id},
             )
-            group_id = row["id"]
-            set_id = f"set_{group_id}"
-            old_vector = np.asarray(vector, dtype=float)
-            old_count = 0
-
-        inserted = postgres_client.execute(
-            """
-            INSERT INTO tag_group_values(group_id, tag_key, tag_value)
-            VALUES (%s, %s, %s)
-            ON CONFLICT DO NOTHING
-            """,
-            (group_id, tag_key, tag_value),
-        )
-        postgres_client.execute(
-            """
-            INSERT INTO tag_group_topics(group_id, topic)
-            VALUES (%s, %s)
-            ON CONFLICT DO NOTHING
-            """,
-            (group_id, topic),
-        )
-
-        if inserted:
-            centroid = (
-                (old_vector * old_count + np.asarray(vector, dtype=float))
-                / (old_count + 1)
-            ).tolist()
-        else:
-            centroid = old_vector.tolist()
-
-        qdrant_client.upsert(
-            GROUP_COLLECTION,
-            set_id,
-            centroid,
-            {"set_id": set_id},
-        )
         return set_id
 
     def get_all(self) -> list[dict]:

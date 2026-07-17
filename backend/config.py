@@ -34,7 +34,7 @@ class Config:
         self.EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "cpu")
 
        # Thresholds for duplicate detection
-        self.ID_THRESH = float(os.getenv("ID_THRESH", 0.90))      
+        self.ID_THRESH = self._ratio("ID_THRESH", 0.90)
         self.MIN_POINTS = int(os.getenv("MIN_POINTS", 10))
 
 
@@ -42,7 +42,15 @@ class Config:
         self.DUPE_CHECK_DELAY = int(os.getenv("DUPE_CHECK_DELAY", 60))  # default 1 minute
 
         # threshold for group tags similarity (between 0 and 1)
-        self.GROUP_TAG_THRESH = float(os.getenv("GROUP_TAG_THRESH", 0.85))
+        self.GROUP_TAG_THRESH = self._ratio("GROUP_TAG_THRESH", 0.85)
+
+    @staticmethod
+    def _ratio(name: str, default: float) -> float:
+        """Parse an env var as a similarity threshold in the inclusive [0, 1] range."""
+        value = float(os.getenv(name, default))
+        if not 0.0 <= value <= 1.0:
+            raise ValueError(f"{name} must be between 0 and 1, got {value}")
+        return value
 
 
 # single instance used everywhere

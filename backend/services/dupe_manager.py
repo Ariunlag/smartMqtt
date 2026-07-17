@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from typing import List, Optional
 from config import config
 from services.store.embedding_store import topic_embedding_store
@@ -7,6 +8,8 @@ from services.socket_manager import ws_manager
 from services.topic_manager import topic_manager
 from services.duplicate.duplicate_service import duplicate_service
 
+
+logger = logging.getLogger(__name__)
 
 
 class DupeManager:
@@ -46,7 +49,7 @@ class DupeManager:
                     })
                     return  
 
-        print(f"[DupeManager] No duplicates found for {topic} after retries.")
+        logger.debug("No duplicates found for %s after retries.", topic)
 
 
     def add_candidate(self, topic_a: str, topic_b: str, score: float) -> dict:

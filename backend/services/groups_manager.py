@@ -1,7 +1,11 @@
+import logging
 from services.store.embedding_store import tagset_store
 from services.socket_manager import ws_manager
 from typing import List
 from config import config
+
+
+logger = logging.getLogger(__name__)
 
 
 class GroupManager:
@@ -36,7 +40,7 @@ class GroupManager:
 
         # --- step 3: broadcast full valid state once ---
         if valid_sets:
-            print(f"[DEBUG] Broadcasting {len(valid_sets)} valid tag sets")
+            logger.debug("Broadcasting %s valid tag sets", len(valid_sets))
             await ws_manager.broadcast({
                 "event_type": "group",
                 "data": {"sets": valid_sets}

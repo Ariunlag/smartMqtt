@@ -21,14 +21,21 @@ class DuplicateService:
 
         vals_a = await query_manager.get_last_points(topic_a, limit=100)
         vals_b = await query_manager.get_last_points(topic_b, limit=100)
-        values_a = [p["value"] for p in vals_a if isinstance(p["value"], (int, float))]
-        values_b = [p["value"] for p in vals_b if isinstance(p["value"], (int, float))]
-        n = min(len(values_a), len(values_b))
+
+        # Align by timestamp so correlation compares values at the same instants
+        # instead of by list position (which is meaningless when the two streams
+        # have different sampling rates or offsets).
+        series_a = {p["time"]: p["value"] for p in vals_a if isinstance(p["value"], (int, float))}
+        series_b = {p["time"]: p["value"] for p in vals_b if isinstance(p["value"], (int, float))}
+        shared_times = sorted(series_a.keys() & series_b.keys())
+        values_a = [series_a[t] for t in shared_times]
+        values_b = [series_b[t] for t in shared_times]
+        n = len(shared_times)
 
         if n < self.min_points:
             return cosine
 
-        corr, _ = pearsonr(values_a[:n], values_b[:n])
+        corr, _ = pearsonr(values_a, values_b)
         corr_score = (corr + 1.0) / 2.0
         weight = min(0.5, n / 200.0)
         return (1 - weight) * cosine + weight * corr_score
