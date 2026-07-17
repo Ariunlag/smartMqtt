@@ -13,6 +13,7 @@ interface MqttState {
   addTopic: (topic: string) => Promise<void>;      // subscribe new topic
   removeTopic: (topic: string) => Promise<void>;   // unsubscribe topic
   addMessage: (msg: MqttMessage) => void;          // append new WS message
+  addMessages: (msgs: MqttMessage[]) => void;      // append a batch of WS messages
   clear: () => void;               // reset store
 }
 
@@ -79,6 +80,16 @@ export const useMqttStore = create<MqttState>()(
         const { messages } = get();
         set({
           messages: [msg, ...messages].slice(0, 300), // keep max 300
+        });
+      },
+
+      // Add a batch of messages in one update (WebSocket flush).
+      // Incoming batch is oldest→newest; store keeps newest-first, capped at 300.
+      addMessages: (msgs: MqttMessage[]) => {
+        if (msgs.length === 0) return;
+        const { messages } = get();
+        set({
+          messages: [...msgs.slice().reverse(), ...messages].slice(0, 300),
         });
       },
 

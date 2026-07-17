@@ -122,6 +122,11 @@ export const useDuplicateStore = create<DuplicateState>()(
           ),
         })),
     }),
-    { name: "duplicate-store" }
+    {
+      name: "duplicate-store",
+      // Persist only the pending list; live time-series and selection are
+      // transient and re-fetched on demand.
+      partialize: (state) => ({ duplicates: state.duplicates }),
+    }
   )
 );

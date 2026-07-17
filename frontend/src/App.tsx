@@ -18,14 +18,26 @@ export default function App() {
 
   return (
     <div className="app">
-      <h1>Influx Hub</h1>
-      <div className="features">
+      <header className="app-header">
+        <div className="app-header__brand">
+          <span className="app-header__logo" aria-hidden>◇</span>
+          <div>
+            <h1>Influx Hub</h1>
+            <p className="app-header__subtitle">Smart MQTT telemetry governance</p>
+          </div>
+        </div>
+        <span className="app-header__status">
+          <span className="status-dot" /> Connected
+        </span>
+      </header>
+
+      <main className="features">
         <MqttManager />
         <DuplicateManager />
         <ClassBuilder />
         <SavedClasses />
         <GroupManager />
-      </div>
+      </main>
     </div>
   );
 }

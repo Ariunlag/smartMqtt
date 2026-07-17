@@ -16,9 +16,18 @@ export function useBootstrap() {
   const getGroups = useGroupStore((s) => s.fetchGroups);
   const getMeasurements = useInfluxStore((s) => s.getMeasurements);
 
-  // === Step 1: Backend health check ===
+  // === Step 1: Backend health check (retry with backoff, no page reload) ===
   useEffect(() => {
     let cancelled = false;
+    let attempts = 0;
+    let timer: number | undefined;
+
+    const schedule = () => {
+      const delay = Math.min(10_000, 1000 * 2 ** attempts);
+      attempts += 1;
+      timer = window.setTimeout(checkBackend, delay);
+    };
+
     const checkBackend = async () => {
       try {
         const res = await axios.get(`${import.meta.env.VITE_API_BASE_URL || "/api"}/health`);
@@ -27,22 +36,25 @@ export function useBootstrap() {
         const { MQTTClient, InfluxClient } = res.data ?? {};
         if (MQTTClient && InfluxClient) {
           console.log("[Bootstrap] Backend ready ✅");
+          setError(null);
           setReady(true);
         } else {
           console.warn("[Bootstrap] Services not yet connected");
-          setError("Services not yet connected");
+          setError("Services not yet connected; retrying…");
+          schedule();
         }
       } catch (err) {
         if (cancelled) return;
         console.error("[Bootstrap] Could not reach backend:", err);
         setError("Could not reach backend; retrying…");
-        setTimeout(() => window.location.reload(), 3000);
+        schedule();
       }
     };
 
     checkBackend();
     return () => {
       cancelled = true;
+      if (timer) window.clearTimeout(timer);
     };
   }, []);
 
