@@ -26,7 +26,7 @@ const MqttMessageLog: React.FC = () => {
       {visible.length === 0 && <p style={{ color: "#aaa" }}>No messages yet.</p>}
       <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
         {visible.map((msg) => (
-          <MessageRow key={`${msg.topic}|${msg.timestamp}`} msg={msg} />
+          <MessageRow key={msg.event_id} msg={msg} />
         ))}
       </ul>
     </div>

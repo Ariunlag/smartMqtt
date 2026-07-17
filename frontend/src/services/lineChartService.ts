@@ -90,8 +90,8 @@ export function createLineChartConfig(
   // which throws "Maximum call stack size" on large point sets.
   let minX = Infinity;
   let maxX = -Infinity;
-  for (const d of datasets as any[]) {
-    for (const p of d.data as { x: number }[]) {
+  for (const d of datasets) {
+    for (const p of d.data) {
       if (p.x < minX) minX = p.x;
       if (p.x > maxX) maxX = p.x;
     }

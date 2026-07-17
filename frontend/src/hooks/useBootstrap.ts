@@ -61,7 +61,11 @@ export function useBootstrap() {
   // === Step 2: Run initial data fetch once after everything is ready ===
   useEffect(() => {
     // wait for Influx store to finish hydration before calling its actions
-    const influxPersist = (useInfluxStore as any).persist;
+    const influxPersist = (
+      useInfluxStore as unknown as {
+        persist?: { hasHydrated?: () => boolean };
+      }
+    ).persist;
     const hydrated = influxPersist?.hasHydrated?.() ?? true;
 
     if (!ready || !hydrated || bootRef.current) return;

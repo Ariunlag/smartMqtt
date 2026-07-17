@@ -221,7 +221,7 @@ export const useInfluxStore = create<InfluxStore>()(
         void savedClassTimeseriesData;
         return rest;
       },
-      onRehydrateStorage: () => (_state) => {
+      onRehydrateStorage: () => () => {
         console.log("[InfluxStore] rehydrated");
       },
     }

@@ -4,6 +4,7 @@ import * as duplicateApi from "../services/duplicateApi";
 import * as dataApi from "../services/dataApi";
 import type { DupeRecord, ConfirmDupeRequest } from "../types/api_models";
 import type { TimeseriesData } from "../services/lineChartService";
+import { pairKey, samePair } from "../utils/pairKey";
 
 type DuplicateState = {
   duplicates: DupeRecord[];
@@ -50,9 +51,6 @@ export const useDuplicateStore = create<DuplicateState>()(
           const { data } = await duplicateApi.confirmDuplicate(req);
 
           set((s) => {
-            const samePair = (a: string[], b: string[]) =>
-              JSON.stringify([...a].sort()) === JSON.stringify([...b].sort());
-
             const updatedDuplicates = s.duplicates.map((d) =>
               samePair(d.topics, req.topics) ? data : d
             );
@@ -70,23 +68,23 @@ export const useDuplicateStore = create<DuplicateState>()(
       },
 
 
-      // === Add new duplicate record via WS ===
+      // === Add new duplicate record via WS (idempotent, no state mutation) ===
       addDuplicate: (dup: DupeRecord) =>
         set((s) => {
-          const exists = s.duplicates.some(
-            (d) => JSON.stringify(d.topics.sort()) === JSON.stringify(dup.topics.sort())
-          );
+          const key = pairKey(dup.topics);
+          const exists = s.duplicates.some((d) => pairKey(d.topics) === key);
           if (exists) return {};
           return { duplicates: [...s.duplicates, dup] };
         }),
 
-      // === Remove duplicate record from list ===
+      // === Remove duplicate record from list (no state mutation) ===
       removeDuplicate: (topics: string[]) =>
-        set((s) => ({
-          duplicates: s.duplicates.filter(
-            (d) => JSON.stringify(d.topics.sort()) !== JSON.stringify(topics.sort())
-          ),
-        })),
+        set((s) => {
+          const key = pairKey(topics);
+          return {
+            duplicates: s.duplicates.filter((d) => pairKey(d.topics) !== key),
+          };
+        }),
 
       // === Select a pair and auto-load data ===
       selectPair: async (pair) => {

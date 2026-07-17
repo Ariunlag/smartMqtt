@@ -4,6 +4,12 @@ import * as topicApi from "../services/topicApi";
 import * as dataApi from "../services/dataApi";
 import type { MqttMessage } from "../types/mqtt";
 
+// Client-side fallback id for messages that arrive without an envelope event_id
+// (e.g. REST-loaded history). Guarantees a unique, stable React/dedup key.
+let __localSeq = 0;
+const withId = (m: MqttMessage): MqttMessage =>
+  m.event_id ? m : { ...m, event_id: `local-${(__localSeq += 1)}` };
+
 interface MqttState {
   topics: string[];                // subscribed topics (from backend JSON)
   messages: MqttMessage[];         // recent + live messages
@@ -62,24 +68,20 @@ export const useMqttStore = create<MqttState>()(
         }
       },
 
-      // Unsubscribe from topic
+      // Unsubscribe from topic. Only remove locally once the backend confirms;
+      // let failures propagate so the UI can surface them and offer retry.
       removeTopic: async (topic: string) => {
-        try {
-          await topicApi.unsubscribeTopic(topic); // backend call
-        } catch (error) {
-          console.warn("[Zustand] Backend unsubscribe error, but removing locally:", error);
-        }
-        // always remove locally
+        await topicApi.unsubscribeTopic(topic);
         const { topics } = get();
         set({ topics: topics.filter((t) => t !== topic) });
-        console.log("[Store] Removed from UI:", topic);
+        console.log("[Store] Unsubscribed:", topic);
       },
 
       // Add a new message (from WebSocket)
       addMessage: (msg: MqttMessage) => {
         const { messages } = get();
         set({
-          messages: [msg, ...messages].slice(0, 300), // keep max 300
+          messages: [withId(msg), ...messages].slice(0, 300), // keep max 300
         });
       },
 
@@ -88,8 +90,9 @@ export const useMqttStore = create<MqttState>()(
       addMessages: (msgs: MqttMessage[]) => {
         if (msgs.length === 0) return;
         const { messages } = get();
+        const withIds = msgs.map(withId).reverse();
         set({
-          messages: [...msgs.slice().reverse(), ...messages].slice(0, 300),
+          messages: [...withIds, ...messages].slice(0, 300),
         });
       },
 
