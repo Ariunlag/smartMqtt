@@ -86,10 +86,20 @@ export function createLineChartConfig(
       tension: 0.1,
     }));
 
-  // global min/max for axis scaling
-  const allX = datasets.flatMap((d: any) => d.data.map((p: any) => p.x));
-  const minX = allX.length ? Math.min(...allX) : Date.now() - 60_000;
-  const maxX = allX.length ? Math.max(...allX) : Date.now();
+  // global min/max for axis scaling — computed with a loop, not Math.min(...spread),
+  // which throws "Maximum call stack size" on large point sets.
+  let minX = Infinity;
+  let maxX = -Infinity;
+  for (const d of datasets as any[]) {
+    for (const p of d.data as { x: number }[]) {
+      if (p.x < minX) minX = p.x;
+      if (p.x > maxX) maxX = p.x;
+    }
+  }
+  if (!isFinite(minX)) {
+    minX = Date.now() - 60_000;
+    maxX = Date.now();
+  }
   const unit = chooseTimeUnit(minX, maxX);
 
   const data: ChartData<"line"> = { datasets };

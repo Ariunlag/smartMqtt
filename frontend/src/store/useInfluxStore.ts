@@ -11,6 +11,9 @@ import type {
 export type TimeseriesData = MeasurementSeriesResponse;
 type Aggregation = "mean" | "max" | "min" | "sum";
 
+// Cap live series length so real-time appends can't grow arrays unbounded.
+const MAX_RT_POINTS = 2000;
+
 interface InfluxStore {
   // === Core data ===
   measurements: string[];
@@ -150,7 +153,7 @@ export const useInfluxStore = create<InfluxStore>()(
         if (get().selectedMeasurements.includes(topic)) {
           updates.builderTimeseriesData = get().builderTimeseriesData.map((ts) =>
             ts.measurement === topic
-              ? { ...ts, points: [...ts.points, { value, timestamp }] }
+              ? { ...ts, points: [...ts.points, { value, timestamp }].slice(-MAX_RT_POINTS) }
               : ts
           );
         }
@@ -159,7 +162,7 @@ export const useInfluxStore = create<InfluxStore>()(
         if (get().selectedClass?.topics.includes(topic)) {
           updates.savedClassTimeseriesData = get().savedClassTimeseriesData.map((ts) =>
             ts.measurement === topic
-              ? { ...ts, points: [...ts.points, { value, timestamp }] }
+              ? { ...ts, points: [...ts.points, { value, timestamp }].slice(-MAX_RT_POINTS) }
               : ts
           );
         }
@@ -209,6 +212,15 @@ export const useInfluxStore = create<InfluxStore>()(
     },
     {
       name: "influx-storage",
+      // Exclude live time-series buffers from persistence — writing them to
+      // localStorage on every streamed point is a major performance drain and
+      // they are re-fetched/streamed on load anyway.
+      partialize: (state) => {
+        const { builderTimeseriesData, savedClassTimeseriesData, ...rest } = state;
+        void builderTimeseriesData;
+        void savedClassTimeseriesData;
+        return rest;
+      },
       onRehydrateStorage: () => (_state) => {
         console.log("[InfluxStore] rehydrated");
       },

@@ -91,7 +91,10 @@ export const useMqttStore = create<MqttState>()(
       },
     }),
     {
-      name: "mqtt-store", 
+      name: "mqtt-store",
+      // Persist only the subscription list. Live messages are streamed and must
+      // not be serialized to localStorage on every incoming message.
+      partialize: (state) => ({ topics: state.topics }),
     }
   )
 );

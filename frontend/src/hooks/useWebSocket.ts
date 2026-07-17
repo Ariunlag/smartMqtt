@@ -17,7 +17,7 @@ export const useWebSocket = (enabled: boolean) => {
     ws.onmessage = (event) => {
       try {
         const msg = JSON.parse(event.data);
-        console.log("[WS EVENT]", msg);
+        if (import.meta.env.DEV) console.log("[WS EVENT]", msg);
 
         // 🔥 Access fresh store instances dynamically
         const influx = useInfluxStore.getState();
