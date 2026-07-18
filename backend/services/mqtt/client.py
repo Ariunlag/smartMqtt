@@ -1,9 +1,16 @@
 # services/mqtt/client.py
 import asyncio
 import json
+import logging
+
 import paho.mqtt.client as mqtt
+
 from config import config
 from models.mqtt_message import MQTTMessage
+from services.mqtt.ingestion import IngestionQueue
+
+logger = logging.getLogger(__name__)
+
 
 class MQTTClient:
     def __init__(self, broker: str, port: int):
@@ -12,7 +19,17 @@ class MQTTClient:
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         self._connected = False
         self.handlers = []
-        self.loop: asyncio.AbstractEventLoop | None = None   # store FastAPI loop
+        self.loop: asyncio.AbstractEventLoop | None = None  # store FastAPI loop
+        # Bounded ingestion queue feeding the existing handler pipeline.
+        self.ingestion = IngestionQueue(
+            self._dispatch_pipeline,
+            maxsize=config.INGEST_QUEUE_MAXSIZE,
+            workers=config.INGEST_WORKERS,
+            full_policy=config.INGEST_QUEUE_FULL_POLICY,
+            max_retries=config.INGEST_MAX_RETRIES,
+            retry_delay=config.INGEST_RETRY_DELAY,
+            metrics_interval=config.INGEST_METRICS_INTERVAL,
+        )
 
     def set_loop(self, loop: asyncio.AbstractEventLoop):
         """Bind the main asyncio loop (called from ServiceManager.startup)."""
@@ -20,6 +37,15 @@ class MQTTClient:
 
     def register_handler(self, handler):
         self.handlers.append(handler)
+
+    def start_ingestion(self):
+        """Start the ingestion workers. Must run on the event loop."""
+        if self.loop is None:
+            raise RuntimeError("event loop not set; call set_loop() first")
+        self.ingestion.start(self.loop)
+
+    async def stop_ingestion(self):
+        await self.ingestion.stop()
 
     def connect(self):
         try:
@@ -29,56 +55,58 @@ class MQTTClient:
             self.client.loop_start()
             self._connected = True
         except Exception as e:
-            print(f"[MQTTClient] Failed to connect: {e}")
+            logger.warning("[MQTTClient] Failed to connect: %s", e)
             self._connected = False
 
     def _on_connect(self, client, userdata, flags, reason_code, properties=None):
         self._connected = (reason_code == 0)
-        print(f"[MQTTClient] Connected with broker {self.broker}:{self.port}, rc={reason_code}")
+        logger.info(
+            "[MQTTClient] Connected to %s:%s rc=%s", self.broker, self.port, reason_code
+        )
 
     def _on_message(self, client, userdata, msg):
+        """Paho network-thread callback. Kept short: parse + hand off to the
+        bounded ingestion queue. No unbounded task creation here."""
         try:
             payload = json.loads(msg.payload.decode())
-
             data = MQTTMessage(
                 topic=msg.topic,
                 fields=payload["fields"],
                 tags=payload["tags"],
-                timestamp=payload["timestamp"]
+                timestamp=payload["timestamp"],
             )
         except Exception as e:
-            print(f"Failed to parse MQTT payload: {e}")
+            logger.warning("[MQTTClient] Failed to parse payload on %s: %s", msg.topic, e)
             return
 
-        async def dispatch():
-            for handler in self.handlers:
-                try:
-                    result = handler.handle_message(data)
-                    if asyncio.iscoroutine(result):
-                        result = await result
-                    if result is False:
-                        break
-                except Exception as e:
-                    print(f"[MQTTClient] Handler {handler.__class__.__name__} failed: {e}")
+        self.ingestion.submit_threadsafe(data)
 
-        if self.loop is not None:
-            asyncio.run_coroutine_threadsafe(dispatch(), self.loop)
-        else:
-            print("[MQTTClient] ERROR: No event loop set! Did you forget to call set_loop()?")
+    async def _dispatch_pipeline(self, message: MQTTMessage) -> None:
+        """Run the existing handler pipeline for one message (on a worker).
+
+        Errors are not swallowed — they propagate to the ingestion layer, which
+        records the failure and applies the configured retry policy.
+        """
+        for handler in self.handlers:
+            result = handler.handle_message(message)
+            if asyncio.iscoroutine(result):
+                result = await result
+            if result is False:
+                break
 
     def subscribe(self, topic: str):
         self.client.subscribe(topic)
-        print(f"[MQTTClient] Subscribed to {topic}")
+        logger.info("[MQTTClient] Subscribed to %s", topic)
 
     def unsubscribe(self, topic: str):
         self.client.unsubscribe(topic)
-        print(f"[MQTTClient] Unsubscribed from {topic}")
+        logger.info("[MQTTClient] Unsubscribed from %s", topic)
 
     def disconnect(self):
         self.client.loop_stop()
         self.client.disconnect()
         self._connected = False
-        print("[MQTTClient] Disconnected")
+        logger.info("[MQTTClient] Disconnected")
 
     def check_health(self) -> bool:
         try:

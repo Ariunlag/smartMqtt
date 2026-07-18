@@ -48,11 +48,16 @@ class ServiceManager:
             if hasattr(service, "set_loop"):
                 service.set_loop(loop)
 
+        # Start ingestion workers before MQTT connects so the queue is ready
+        # to receive messages the moment the broker delivers them.
+        mqtt_client.start_ingestion()
+
         await self.monitor.start()
         logger.info("[Startup] Dependency monitor started")
 
     async def shutdown(self):
         await self.monitor.stop()
+        await mqtt_client.stop_ingestion()
         for service in self.services:
             if hasattr(service, "disconnect"):
                 try:

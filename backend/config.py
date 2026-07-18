@@ -49,6 +49,15 @@ class Config:
         self.RECOVERY_BASE_DELAY = float(os.getenv("RECOVERY_BASE_DELAY", 2.0))
         self.RECOVERY_MAX_DELAY = float(os.getenv("RECOVERY_MAX_DELAY", 30.0))
 
+        # MQTT ingestion queue / backpressure
+        self.INGEST_QUEUE_MAXSIZE = int(os.getenv("INGEST_QUEUE_MAXSIZE", 1000))
+        self.INGEST_WORKERS = int(os.getenv("INGEST_WORKERS", 4))
+        # "drop_new" (reject newest) or "drop_oldest" (evict oldest to admit new)
+        self.INGEST_QUEUE_FULL_POLICY = os.getenv("INGEST_QUEUE_FULL_POLICY", "drop_new")
+        self.INGEST_MAX_RETRIES = int(os.getenv("INGEST_MAX_RETRIES", 0))
+        self.INGEST_RETRY_DELAY = float(os.getenv("INGEST_RETRY_DELAY", 0.5))
+        self.INGEST_METRICS_INTERVAL = float(os.getenv("INGEST_METRICS_INTERVAL", 30.0))
+
     @staticmethod
     def _ratio(name: str, default: float) -> float:
         """Parse an env var as a similarity threshold in the inclusive [0, 1] range."""
