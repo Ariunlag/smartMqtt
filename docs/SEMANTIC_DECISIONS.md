@@ -151,6 +151,26 @@ centroids, the UNKNOWN pool, or representation reliability. There is no
 persistence or production MQTT integration. Class-update policy remains later
 work.
 
+## Decision: Update trusted prototypes one representation at a time
+
+**Status:** Accepted
+
+**Context:** A confirmed discovery candidate belongs to exactly one
+representation view, while trusted evidence for other views may not exist.
+
+**Decision:** Use confirmed candidate member topics to update only the matching
+representation-specific prototype for the confirmed semantic class name. Track
+unique accepted topics, apply count-weighted centroid updates, and treat replay
+of already accepted topics as idempotent. Do not fabricate missing view
+centroids or assemble a full six-view known class from partial evidence.
+
+**Rationale:** This retains trusted cross-view separation and lets evidence
+accumulate without making unsupported representation or class assumptions.
+
+**Consequences:** The UNKNOWN pool lifecycle remains separate, and this update
+does not remove streams, alter discovery, create class IDs, persist data, or
+integrate production MQTT behavior. Full known-class assembly is later work.
+
 ## Decision: Separate snapshot profiling from temporal profiling
 
 **Status:** Accepted

@@ -52,6 +52,12 @@ from .temporal_profile import (
     TemporalStreamProfile,
     TemporalStreamProfiler,
 )
+from .trusted_class_evidence import (
+    RepresentationClassPrototype,
+    TrustedClassEvidence,
+    TrustedClassEvidenceStore,
+    TrustedClassEvidenceUpdater,
+)
 from .unknown_stream_discovery import (
     HDBSCANDiscoveryConfig,
     RepresentationDiscoveryResult,
@@ -77,6 +83,7 @@ __all__ = [
     "RepresentationClassConsensus",
     "RepresentationClassEvidence",
     "RepresentationClassEvidenceMatrix",
+    "RepresentationClassPrototype",
     "RepresentationClassScorer",
     "RepresentationClassScores",
     "RepresentationDiscoveryResult",
@@ -107,6 +114,9 @@ __all__ = [
     "TemporalProfileUpdate",
     "TemporalStreamProfile",
     "TemporalStreamProfiler",
+    "TrustedClassEvidence",
+    "TrustedClassEvidenceStore",
+    "TrustedClassEvidenceUpdater",
     "UnknownClusterCandidate",
     "UnknownStreamDiscoveryEngine",
     "UnknownStreamDiscoveryResult",

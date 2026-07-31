@@ -62,15 +62,18 @@ KNOWN / UNCERTAIN / UNKNOWN decision policy
 Explicit candidate confirmation / rejection
         |
         v
-Class update (planned)
+Trusted representation-specific prototype update
+        |
+        v
+Full known-class assembly when sufficient trusted evidence exists (planned)
         |
         v
 Representation reliability learning
 ```
 
 Only the foundation stages identified as completed below currently exist.
-Automatic builder invocation, embedding refresh integration, class updates,
-feedback, and reliability learning remain planned stages.
+Automatic builder invocation, embedding refresh integration, full class
+assembly, feedback, and reliability learning remain planned stages.
 
 ## Implementation status
 
@@ -96,6 +99,7 @@ feedback, and reliability learning remain planned stages.
 - [x] UNKNOWN stream pool
 - [x] HDBSCAN candidate-class discovery foundation
 - [x] Human/system confirmation flow foundation
+- [x] Trusted feedback-driven representation prototype updates
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
