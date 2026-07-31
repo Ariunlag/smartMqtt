@@ -9,6 +9,7 @@ from .semantic_refresh import (
     SemanticRefreshReason,
     SemanticRefreshReasonType,
 )
+from .stability_aware_representations import StabilityAwareRepresentationBuilder
 from .stream_class import (
     ClassMatch,
     StreamClassEngine,
@@ -35,6 +36,7 @@ __all__ = [
     "SemanticRefreshPolicy",
     "SemanticRefreshReason",
     "SemanticRefreshReasonType",
+    "StabilityAwareRepresentationBuilder",
     "StreamClassEngine",
     "StreamClassMember",
     "StreamProfile",

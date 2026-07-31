@@ -23,13 +23,17 @@ Snapshot StreamProfiler
 TemporalStreamProfiler
         |
         v
-SemanticRefreshPolicy
+TemporalProfileUpdate
         |
-        v
-SemanticRefreshDecision
+        +--> SemanticRefreshPolicy
+        |           |
+        |           v
+        |    SemanticRefreshDecision (when)
         |
-        v
-Stabilized representation generation
+        +--> TemporalStreamProfile
+                    |
+                    v
+         StabilityAwareRepresentationBuilder (what)
         |
         v
 Six representation embeddings
@@ -60,8 +64,8 @@ Representation reliability learning
 ```
 
 Only the foundation stages identified as completed below currently exist.
-Stabilized representation generation, embedding refresh integration, class
-decision, discovery, feedback, and reliability learning remain planned stages.
+Automatic builder invocation, embedding refresh integration, class decision,
+discovery, feedback, and reliability learning remain planned stages.
 
 ## Implementation status
 
@@ -80,14 +84,14 @@ decision, discovery, feedback, and reliability learning remain planned stages.
 - [x] Temporal stream profile
 - [x] Metadata/schema change evidence tracking
 - [x] Semantic refresh policy
+- [x] Stability-aware representation generation
 
 These are isolated building blocks. The new semantic pipeline, temporal
-profiler, and refresh policy are not currently wired into the default
-production MQTT ingestion path.
+profiler, refresh policy, and stability-aware builder are not currently wired
+into the default production MQTT ingestion path.
 
 ### Planned work
 
-- [ ] Stability-aware representation generation
 - [ ] Representation-specific class scoring
 - [ ] Multi-view consensus
 - [ ] KNOWN / UNCERTAIN / UNKNOWN decision policy
@@ -144,7 +148,7 @@ explainable `SemanticRefreshDecision`:
 Raw observations
     -> bounded temporal evidence
     -> deterministic semantic refresh decision
-    -> stabilized representation generation (planned)
+    -> stability-aware semantic text
     -> embedding refresh integration (planned)
 ```
 
@@ -152,11 +156,14 @@ The current policy requests initialization on the first observation, ignores
 raw value changes alone, responds to structural and stable categorical changes,
 and requires a configurable persistence threshold for a missing key. A key
 that reappears requests refresh only if its prior missing streak reached that
-threshold. Together, the temporal profiler and policy now cover the lifecycle
-evidence needed by the next planned stage: first stable categorical value,
-stable replacement, persistent disappearance, and reappearance after persistent
-disappearance. They do not rebuild or embed representations and remain
-isolated from the production MQTT path.
+threshold. Together, the temporal profiler and policy cover the lifecycle
+evidence consumed by the stability-aware builder: first stable categorical
+value, stable replacement, persistent disappearance, and reappearance after
+persistent disappearance. `SemanticRefreshPolicy` decides when rebuilding is
+justified;
+`StabilityAwareRepresentationBuilder` determines the stable semantic text from
+`TemporalStreamProfile`. Automatic invocation and re-embedding are not
+integrated, and these components remain isolated from the production MQTT path.
 
 ## Representation strategy
 
