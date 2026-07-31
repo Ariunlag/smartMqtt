@@ -56,7 +56,7 @@ KNOWN / UNCERTAIN / UNKNOWN decision policy
           UNKNOWN stream pool
                  |
                  v
-          HDBSCAN discovery (planned)
+          Representation-specific HDBSCAN candidate discovery
         |
         v
 Confirmation / feedback
@@ -69,7 +69,7 @@ Representation reliability learning
 ```
 
 Only the foundation stages identified as completed below currently exist.
-Automatic builder invocation, embedding refresh integration, discovery,
+Automatic builder invocation, embedding refresh integration, confirmation,
 feedback, and reliability learning remain planned stages.
 
 ## Implementation status
@@ -94,6 +94,7 @@ feedback, and reliability learning remain planned stages.
 - [x] Multi-view consensus
 - [x] KNOWN / UNCERTAIN / UNKNOWN decision policy
 - [x] UNKNOWN stream pool
+- [x] HDBSCAN candidate-class discovery foundation
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
@@ -103,7 +104,6 @@ stream pool is likewise an isolated in-memory foundation.
 
 ### Planned work
 
-- [ ] HDBSCAN candidate-class discovery
 - [ ] Human/system confirmation flow
 - [ ] Feedback-driven online class updates
 - [ ] Representation reliability learning
@@ -126,10 +126,14 @@ confirmation.
 Centroids or prototypes and clustering solve different problems:
 
 - Centroids or prototypes support matching against known classes.
-- HDBSCAN is planned for novel or unknown-class discovery.
+- HDBSCAN provides representation-specific candidate discovery for UNKNOWN
+  streams; semantic class creation remains planned.
 
-The UNKNOWN stream pool retains the latest UNKNOWN evidence in memory. HDBSCAN
-discovery and the remaining UNKNOWN workflow are not currently implemented.
+The UNKNOWN stream pool retains the latest UNKNOWN evidence in memory.
+Representation-specific HDBSCAN discovery now exposes candidate structure and
+noise independently for all six views. Candidate clusters are not semantic
+classes, and confirmation plus the remaining UNKNOWN workflow are still
+planned.
 
 ## Temporal semantic direction
 

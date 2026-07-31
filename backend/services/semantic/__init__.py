@@ -45,11 +45,19 @@ from .temporal_profile import (
     TemporalStreamProfile,
     TemporalStreamProfiler,
 )
+from .unknown_stream_discovery import (
+    HDBSCANDiscoveryConfig,
+    RepresentationDiscoveryResult,
+    UnknownClusterCandidate,
+    UnknownStreamDiscoveryEngine,
+    UnknownStreamDiscoveryResult,
+)
 from .unknown_stream_pool import UnknownStreamEntry, UnknownStreamPool
 
 __all__ = [
     "ClassMatch",
     "FieldProfile",
+    "HDBSCANDiscoveryConfig",
     "MultiViewConsensusEngine",
     "MultiViewConsensusResult",
     "RepresentationBuilder",
@@ -59,6 +67,7 @@ __all__ = [
     "RepresentationClassEvidenceMatrix",
     "RepresentationClassScorer",
     "RepresentationClassScores",
+    "RepresentationDiscoveryResult",
     "RepresentationEmbedder",
     "RepresentationEmbeddings",
     "RepresentationViewWinner",
@@ -86,6 +95,9 @@ __all__ = [
     "TemporalProfileUpdate",
     "TemporalStreamProfile",
     "TemporalStreamProfiler",
+    "UnknownClusterCandidate",
+    "UnknownStreamDiscoveryEngine",
+    "UnknownStreamDiscoveryResult",
     "UnknownStreamEntry",
     "UnknownStreamPool",
     "normalize_text",

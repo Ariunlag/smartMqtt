@@ -110,6 +110,27 @@ candidate-class generation, feedback, or production MQTT integration. This is
 a deterministic foundation, not a claim that the retained evidence design is
 experimentally optimal.
 
+## Decision: Cluster UNKNOWN evidence independently by representation
+
+**Status:** Accepted
+
+**Context:** UNKNOWN streams may contain candidate structure, but the most
+useful representation for discovery has not been established.
+
+**Decision:** Run configurable HDBSCAN independently for each of the six
+representation embeddings. Preserve each view's canonical candidate topic
+groups and noise topics without fusing vectors, assigning fixed weights, or
+forming a cross-view cluster decision.
+
+**Rationale:** Independent results retain disagreement between representation
+views and keep future evaluation free to compare discovery strategies.
+
+**Consequences:** A candidate cluster is not automatically a semantic class,
+and noise remains valid discovery evidence. HDBSCAN parameters are explicit
+configuration that require empirical evaluation; this does not claim HDBSCAN
+or any configuration is universally optimal. There is no persistence,
+feedback, class creation, or production MQTT integration.
+
 ## Decision: Separate snapshot profiling from temporal profiling
 
 **Status:** Accepted
