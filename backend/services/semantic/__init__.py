@@ -1,5 +1,12 @@
 """Deterministic structural profiling and textual representations for SmartMQTT streams."""
 
+from .candidate_confirmation import (
+    CandidateConfirmation,
+    CandidateConfirmationSource,
+    CandidateConfirmationState,
+    CandidateConfirmationStore,
+    CandidateIdentity,
+)
 from .multi_view_consensus import (
     MultiViewConsensusEngine,
     MultiViewConsensusResult,
@@ -55,6 +62,11 @@ from .unknown_stream_discovery import (
 from .unknown_stream_pool import UnknownStreamEntry, UnknownStreamPool
 
 __all__ = [
+    "CandidateConfirmation",
+    "CandidateConfirmationSource",
+    "CandidateConfirmationState",
+    "CandidateConfirmationStore",
+    "CandidateIdentity",
     "ClassMatch",
     "FieldProfile",
     "HDBSCANDiscoveryConfig",

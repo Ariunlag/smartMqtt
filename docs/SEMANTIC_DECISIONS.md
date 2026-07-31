@@ -131,6 +131,26 @@ configuration that require empirical evaluation; this does not claim HDBSCAN
 or any configuration is universally optimal. There is no persistence,
 feedback, class creation, or production MQTT integration.
 
+## Decision: Keep candidate confirmation explicit and representation-specific
+
+**Status:** Accepted
+
+**Context:** HDBSCAN provides candidate structure, but cluster output alone is
+not sufficient to establish a semantic class.
+
+**Decision:** Record only explicit HUMAN or trusted SYSTEM confirmation or
+rejection. A candidate identity consists of its representation name and sorted
+member topics, excluding raw HDBSCAN labels and local candidate indexes. The
+same topic membership in separate representations remains separate evidence.
+
+**Rationale:** This keeps discovery evidence separate from trusted feedback and
+avoids treating SYSTEM as automatic self-confirmation.
+
+**Consequences:** Confirmation does not create or update semantic classes,
+centroids, the UNKNOWN pool, or representation reliability. There is no
+persistence or production MQTT integration. Class-update policy remains later
+work.
+
 ## Decision: Separate snapshot profiling from temporal profiling
 
 **Status:** Accepted

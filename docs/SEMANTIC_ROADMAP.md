@@ -59,17 +59,17 @@ KNOWN / UNCERTAIN / UNKNOWN decision policy
           Representation-specific HDBSCAN candidate discovery
         |
         v
-Confirmation / feedback
+Explicit candidate confirmation / rejection
         |
         v
-Centroid or prototype updates
+Class update (planned)
         |
         v
 Representation reliability learning
 ```
 
 Only the foundation stages identified as completed below currently exist.
-Automatic builder invocation, embedding refresh integration, confirmation,
+Automatic builder invocation, embedding refresh integration, class updates,
 feedback, and reliability learning remain planned stages.
 
 ## Implementation status
@@ -95,6 +95,7 @@ feedback, and reliability learning remain planned stages.
 - [x] KNOWN / UNCERTAIN / UNKNOWN decision policy
 - [x] UNKNOWN stream pool
 - [x] HDBSCAN candidate-class discovery foundation
+- [x] Human/system confirmation flow foundation
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
@@ -104,7 +105,6 @@ stream pool is likewise an isolated in-memory foundation.
 
 ### Planned work
 
-- [ ] Human/system confirmation flow
 - [ ] Feedback-driven online class updates
 - [ ] Representation reliability learning
 - [ ] Multi-prototype semantic classes
@@ -132,8 +132,9 @@ Centroids or prototypes and clustering solve different problems:
 The UNKNOWN stream pool retains the latest UNKNOWN evidence in memory.
 Representation-specific HDBSCAN discovery now exposes candidate structure and
 noise independently for all six views. Candidate clusters are not semantic
-classes, and confirmation plus the remaining UNKNOWN workflow are still
-planned.
+classes. Explicit HUMAN or SYSTEM confirmation/rejection records trusted
+feedback without creating or updating classes; class updates and the remaining
+UNKNOWN workflow are still planned.
 
 ## Temporal semantic direction
 
