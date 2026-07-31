@@ -77,21 +77,23 @@ decision policy and UNKNOWN pool are not currently implemented.
 
 ## Decision: Separate snapshot profiling from temporal profiling
 
-**Status:** Current direction
+**Status:** Accepted
 
-**Context:** The current `StreamProfiler` deterministically describes one
-observation. Temporal evidence requires bounded state across observations.
+**Context:** `StreamProfiler` deterministically describes one observation,
+while temporal evidence requires bounded state across repeated observations.
 
-**Decision:** Retain the snapshot profiler and add a separate temporal profiler
-in future work.
+**Decision:** Retain the snapshot profiler and use a separate
+`TemporalStreamProfiler` that consumes snapshot `StreamProfile` observations.
 
 **Rationale:** Snapshot normalization and structural extraction remain useful,
 testable primitives. Temporal state has different lifecycle, storage, and
 policy concerns.
 
-**Consequences:** Future temporal work will compose with, rather than replace,
-the snapshot profiler. A temporal profiler is not currently present on
-`dev-prod`.
+**Consequences:** The dependency-free temporal profiling foundation now exists
+on `dev-prod` and composes with, rather than replaces, the snapshot profiler.
+It records bounded value, type, presence, and stable categorical change
+evidence, but is not yet integrated into the production MQTT path. Refresh
+policy and runtime state ownership remain separate work.
 
 ## Decision: Do not re-embed every MQTT observation
 
