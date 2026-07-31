@@ -115,6 +115,8 @@ reliability learning remain planned stages.
 - [x] Threshold calibration protocol
 - [x] Frozen-config benchmark execution
 - [x] Recorded semantic calibration Pareto-frontier artifact and report
+- [x] Editable candidate membership review
+- [x] Positive/negative member feedback evidence
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
@@ -124,6 +126,9 @@ stream pool is likewise an isolated in-memory foundation.
 
 ### Planned work
 
+- [ ] Apply positive member feedback to six-view class prototypes
+- [ ] Negative-membership constraint handling
+- [ ] Candidate-review API/UI
 - [ ] Semantic benchmark experiment runner and metrics
 - [ ] Threshold calibration protocol
 - [ ] Frozen-config benchmark execution

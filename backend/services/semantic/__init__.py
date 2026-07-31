@@ -7,6 +7,14 @@ from .candidate_confirmation import (
     CandidateConfirmationStore,
     CandidateIdentity,
 )
+from .candidate_membership_review import (
+    CandidateMembershipReview,
+    CandidateMembershipReviewProcessor,
+    MembershipFeedbackEvidence,
+    MembershipFeedbackKind,
+    MembershipFeedbackPolarity,
+    MembershipFeedbackStore,
+)
 from .known_class_assembly import (
     KnownClassAssembler,
     KnownClassAssemblyRequest,
@@ -78,12 +86,18 @@ __all__ = [
     "CandidateConfirmationState",
     "CandidateConfirmationStore",
     "CandidateIdentity",
+    "CandidateMembershipReview",
+    "CandidateMembershipReviewProcessor",
     "ClassMatch",
     "FieldProfile",
     "HDBSCANDiscoveryConfig",
     "KnownClassAssembler",
     "KnownClassAssemblyRequest",
     "KnownClassAssemblyResult",
+    "MembershipFeedbackEvidence",
+    "MembershipFeedbackKind",
+    "MembershipFeedbackPolarity",
+    "MembershipFeedbackStore",
     "MultiViewConsensusEngine",
     "MultiViewConsensusResult",
     "RepresentationBuilder",

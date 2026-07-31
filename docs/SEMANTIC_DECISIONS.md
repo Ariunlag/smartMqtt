@@ -171,6 +171,32 @@ accumulate without making unsupported representation or class assumptions.
 does not remove streams, alter discovery, create class IDs, persist data, or
 integrate production MQTT behavior.
 
+## Decision: Preserve editable candidate membership as explicit evidence
+
+**Status:** Accepted
+
+**Context:** A discovered candidate can contain incorrect members or omit a
+topic that a HUMAN or trusted SYSTEM reviewer recognizes as belonging to the
+chosen semantic class.
+
+**Decision:** Permit candidate membership correction before feedback is saved.
+Kept and reviewer-added topics become positive membership evidence; removed
+topics become negative membership evidence. Feedback remains specific to the
+candidate representation, and ADDED remains distinguishable from KEPT so later
+evaluation can measure omissions. Replayed feedback replaces the latest state
+for the same topic, class, and representation.
+
+**Rationale:** Explicit member-level evidence preserves the reviewer's decision
+without converting it into an undocumented score adjustment. Latest-state
+replacement makes replay idempotent while allowing later corrections and
+separate class contexts.
+
+**Consequences:** Removed vectors are not subtracted from centroids, and raw
+cosine similarities are never manually incremented or decremented. Reviews do
+not alter the UNKNOWN pool, prototypes, reliability, clustering, or known-class
+assembly. Positive prototype updates, negative-membership constraints, and
+representation reliability remain separate follow-up work.
+
 ## Decision: Assemble known classes only from complete trusted evidence
 
 **Status:** Accepted
