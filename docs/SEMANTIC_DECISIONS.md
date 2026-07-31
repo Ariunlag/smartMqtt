@@ -29,19 +29,23 @@ such as `0.5 * key_only + 0.3 * schema + ...` would embed undocumented
 assumptions into every deployment.
 
 **Decision:** Keep representation evidence separate and begin with individual
-baselines and equal or consensus-based treatment. The implemented
+baselines and equal-view consensus treatment. The implemented
 `RepresentationClassScorer` compares each view only with its same-view known-
-class centroid and returns six independent scores. Reliability may later be
-derived from confirmed outcomes.
+class centroid and returns six independent scores. The initial consensus
+baseline treats all six views equally and preserves view winners, top-1 vote
+counts, mean ranks, and raw similarity evidence. It ranks class summaries using
+deterministic lexicographic rules rather than a weighted sum. Reliability may
+later be derived from confirmed outcomes.
 
 **Rationale:** Hand-tuned weights are difficult to justify scientifically, are
 likely domain dependent, can conceal weak representations, and do not support
 self-adaptation.
 
-**Consequences:** There is no weighted-fusion default. The scorer produces raw
-evidence rather than a final class decision, and intentionally preserves view
-disagreement. Weighting, consensus, and learned reliability remain later
-experimental policies.
+**Consequences:** There is no weighted-fusion default. The scorer and consensus
+engine preserve view disagreement and produce evidence rather than a final
+class decision. Equal-view consensus is an evaluation baseline, not a claim of
+optimality. Future feedback-driven representation reliability may outperform
+it and remains a later experimental policy.
 
 ## Decision: Use centroids for known classes, not for class discovery
 
