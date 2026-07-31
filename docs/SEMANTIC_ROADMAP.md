@@ -125,7 +125,8 @@ A single observation cannot reliably distinguish ordinary measurement changes
 from meaningful semantic change. The temporal profiling foundation now records
 bounded evidence across repeated observations, including value changes, type
 changes, key appearance or absence, and stable categorical value changes with
-hysteresis.
+hysteresis. It now records stable categorical establishment and replacement,
+as well as key reappearance after an absence.
 
 Examples of evidence include:
 
@@ -149,10 +150,13 @@ Raw observations
 
 The current policy requests initialization on the first observation, ignores
 raw value changes alone, responds to structural and stable categorical changes,
-and requires a configurable persistence threshold for a missing key. It decides
-whether refresh is warranted but does not rebuild or embed representations.
-The policy remains an isolated foundation and is not integrated into the
-production MQTT path.
+and requires a configurable persistence threshold for a missing key. A key
+that reappears requests refresh only if its prior missing streak reached that
+threshold. Together, the temporal profiler and policy now cover the lifecycle
+evidence needed by the next planned stage: first stable categorical value,
+stable replacement, persistent disappearance, and reappearance after persistent
+disappearance. They do not rebuild or embed representations and remain
+isolated from the production MQTT path.
 
 ## Representation strategy
 

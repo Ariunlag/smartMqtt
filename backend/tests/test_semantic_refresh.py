@@ -102,6 +102,22 @@ def test_stable_value_change_triggers_refresh():
     assert decision.reasons[0].current_value == "room b"
 
 
+def test_stable_value_establishment_triggers_refresh_with_reason_details():
+    profiler = TemporalStreamProfiler(stable_value_observations=3)
+    first = _update(profiler, tags={"location": "room_a"})
+    second = _update(profiler, first, tags={"location": "room_a"})
+    established = _update(profiler, second, tags={"location": "room_a"})
+
+    decision = SemanticRefreshPolicy().evaluate(established)
+
+    assert decision.should_refresh is True
+    assert _reason_types(decision) == (
+        SemanticRefreshReasonType.STABLE_VALUE_ESTABLISHED,
+    )
+    assert decision.reasons[0].previous_value is None
+    assert decision.reasons[0].current_value == "room a"
+
+
 def test_type_change_triggers_refresh_with_type_details():
     profiler = TemporalStreamProfiler()
     first = _update(profiler, fields={"reading": 1})
@@ -206,6 +222,50 @@ def test_reappearance_resets_missing_threshold_behavior():
     assert _reason_types(SemanticRefreshPolicy(2).evaluate(second_missing)) == (
         SemanticRefreshReasonType.KEY_MISSING_PERSISTED,
     )
+
+
+def test_reappearance_below_missing_threshold_does_not_refresh():
+    profiler = TemporalStreamProfiler()
+    first = _update(profiler, tags={"location": "A"})
+    missing = _update(profiler, first)
+    reappeared = _update(profiler, missing, tags={"location": "A"})
+
+    decision = SemanticRefreshPolicy(3).evaluate(reappeared)
+
+    assert decision.should_refresh is False
+    assert decision.reasons == ()
+
+
+@pytest.mark.parametrize("missing_count", [3, 4])
+def test_reappearance_after_persisted_missing_triggers_refresh(missing_count):
+    profiler = TemporalStreamProfiler()
+    state = _update(profiler, tags={"location": "A"})
+    for _ in range(missing_count):
+        state = _update(profiler, state)
+    reappeared = _update(profiler, state, tags={"location": "A"})
+
+    decision = SemanticRefreshPolicy(3).evaluate(reappeared)
+
+    assert _reason_types(decision) == (
+        SemanticRefreshReasonType.KEY_REAPPEARED_AFTER_PERSISTED_MISSING,
+    )
+    assert decision.reasons[0].previous_missing_streak == missing_count
+
+
+def test_persisted_reappearance_and_type_change_preserve_reason_order():
+    profiler = TemporalStreamProfiler()
+    state = _update(profiler, fields={"reading": 1})
+    for _ in range(3):
+        state = _update(profiler, state)
+    reappeared = _update(profiler, state, fields={"reading": "one"})
+
+    decision = SemanticRefreshPolicy(3).evaluate(reappeared)
+
+    assert _reason_types(decision) == (
+        SemanticRefreshReasonType.KEY_REAPPEARED_AFTER_PERSISTED_MISSING,
+        SemanticRefreshReasonType.TYPE_CHANGED,
+    )
+    assert decision.reasons[0].previous_missing_streak == 3
 
 
 def test_multiple_strong_reasons_preserve_temporal_order():

@@ -13,8 +13,10 @@ class TemporalChangeType(str, Enum):
 
     KEY_ADDED = "KEY_ADDED"
     KEY_MISSING = "KEY_MISSING"
+    KEY_REAPPEARED = "KEY_REAPPEARED"
     VALUE_CHANGED = "VALUE_CHANGED"
     TYPE_CHANGED = "TYPE_CHANGED"
+    STABLE_VALUE_ESTABLISHED = "STABLE_VALUE_ESTABLISHED"
     STABLE_VALUE_CHANGED = "STABLE_VALUE_CHANGED"
 
 
@@ -60,6 +62,7 @@ class TemporalChange:
     current_value: str | None = None
     previous_value_type: ValueType | None = None
     current_value_type: ValueType | None = None
+    previous_missing_streak: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -188,6 +191,15 @@ class TemporalStreamProfiler:
         type_changed = old_state.current_value_type != field.value_type
         value_changed = old_state.last_normalized_value != field.normalized_value
 
+        if old_state.missing_streak > 0:
+            changes.append(
+                TemporalChange(
+                    change_type=TemporalChangeType.KEY_REAPPEARED,
+                    source=field.source,
+                    normalized_key=field.normalized_key,
+                    previous_missing_streak=old_state.missing_streak,
+                )
+            )
         if type_changed:
             changes.append(
                 TemporalChange(
@@ -218,6 +230,16 @@ class TemporalStreamProfiler:
                 categorical=self._uses_categorical_stability(field),
             )
         )
+        stable_established = old_state.stable_value is None and stable_value is not None
+        if stable_established:
+            changes.append(
+                TemporalChange(
+                    change_type=TemporalChangeType.STABLE_VALUE_ESTABLISHED,
+                    source=field.source,
+                    normalized_key=field.normalized_key,
+                    current_value=stable_value,
+                )
+            )
         if stable_changed:
             changes.append(
                 TemporalChange(
