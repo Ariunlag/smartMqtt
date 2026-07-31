@@ -1,6 +1,13 @@
 """Deterministic structural profiling and textual representations for SmartMQTT streams."""
 
 from .pipeline import StreamSemanticPipeline, StreamSemanticPipelineResult
+from .representation_class_scoring import (
+    RepresentationClassCentroids,
+    RepresentationClassEvidence,
+    RepresentationClassEvidenceMatrix,
+    RepresentationClassScorer,
+    RepresentationClassScores,
+)
 from .representation_embedder import RepresentationEmbedder, RepresentationEmbeddings
 from .representations import RepresentationBuilder, StreamRepresentations
 from .semantic_refresh import (
@@ -30,6 +37,11 @@ __all__ = [
     "ClassMatch",
     "FieldProfile",
     "RepresentationBuilder",
+    "RepresentationClassCentroids",
+    "RepresentationClassEvidence",
+    "RepresentationClassEvidenceMatrix",
+    "RepresentationClassScorer",
+    "RepresentationClassScores",
     "RepresentationEmbedder",
     "RepresentationEmbeddings",
     "SemanticRefreshDecision",
