@@ -57,8 +57,8 @@ Representation reliability learning
 ```
 
 Only the foundation stages identified as completed below currently exist.
-Temporal analysis, decision policies, discovery, feedback, and reliability
-learning are planned stages.
+Refresh policy, stability-aware representation generation, class decision,
+discovery, feedback, and reliability learning remain planned stages.
 
 ## Implementation status
 
@@ -74,14 +74,15 @@ learning are planned stages.
 - [x] Incremental centroid update
 - [x] Cosine similarity
 - [x] Deterministic known-class ranking
+- [x] Temporal stream profile
+- [x] Metadata/schema change evidence tracking
 
-These are isolated building blocks. The new semantic pipeline is not currently
-wired into the default production MQTT ingestion path.
+These are isolated building blocks. The new semantic pipeline and temporal
+profiling foundation are not currently wired into the default production MQTT
+ingestion path.
 
 ### Planned work
 
-- [ ] Temporal stream profile
-- [ ] Metadata/schema change evidence tracking
 - [ ] Semantic refresh policy
 - [ ] Stability-aware representation generation
 - [ ] Representation-specific class scoring
@@ -118,17 +119,21 @@ HDBSCAN and the UNKNOWN workflow are not currently implemented.
 ## Temporal semantic direction
 
 A single observation cannot reliably distinguish ordinary measurement changes
-from meaningful semantic change. The planned temporal layer will distinguish
-evidence such as:
+from meaningful semantic change. The temporal profiling foundation now records
+bounded evidence across repeated observations, including value changes, type
+changes, key appearance or absence, and stable categorical value changes with
+hysteresis.
+
+Examples of evidence include:
 
 - Ordinary measurement variation: `temperature 22.1 -> 22.8`
 - Contextual metadata change: `location room_a -> room_b`
-- Schema evolution: `temp -> temperature`, a key appearing, or a key
-  disappearing
+- Schema evolution: a key appearing or a key disappearing
 - Type change: numeric to string
 - Stable semantic metadata change: `unit C -> F`
 
-The target flow is:
+The temporal profiler records this evidence but does not yet decide whether a
+semantic representation should be refreshed. The target flow is:
 
 ```text
 Raw observations
@@ -137,9 +142,9 @@ Raw observations
     -> selective representation refresh
 ```
 
-Not every MQTT message should cause re-embedding. Temporal profiling and the
-refresh policy are planned design work and are not part of the current
-production path.
+Not every MQTT message should cause re-embedding. Temporal profiling currently
+exists as an isolated foundation; the semantic refresh policy and production
+integration remain planned work.
 
 ## Representation strategy
 
