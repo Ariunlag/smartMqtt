@@ -114,6 +114,7 @@ reliability learning remain planned stages.
 - [x] Initial known/open-world evaluation metrics
 - [x] Threshold calibration protocol
 - [x] Frozen-config benchmark execution
+- [x] Recorded semantic calibration Pareto-frontier artifact and report
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
