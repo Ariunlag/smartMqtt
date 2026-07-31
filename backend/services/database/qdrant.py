@@ -10,6 +10,7 @@ from config import config
 TOPIC_COLLECTION = "topic_embeddings"
 TAG_COLLECTION = "tag_key_value_embeddings"
 GROUP_COLLECTION = "tag_group_centroids"
+REPRESENTATION_COLLECTION = "stream_representation_embeddings"
 
 
 class QdrantClient:
