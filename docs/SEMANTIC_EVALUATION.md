@@ -51,6 +51,19 @@ System metrics:
 
 No experiment runner or metric implementation is included yet.
 
+## Threshold calibration protocol
+
+Streams are assigned deterministically at topic level: REFERENCE streams build
+known prototypes only; CALIBRATION streams evaluate caller-supplied threshold
+configurations and form a Pareto frontier; TEST streams remain untouched until
+frozen-configuration evaluation. This prevents temporal leakage within a topic.
+Held-out unseen classes may occur in CALIBRATION and TEST, never REFERENCE.
+
+The frontier maximizes known Macro-F1, UNKNOWN precision, and UNKNOWN recall,
+while minimizing false-unknown rate. It has no weighted objective, no automatic
+best configuration, and no test-set tuning; threshold values are experimental
+configuration rather than universal defaults.
+
 ## Implemented runner and metrics
 
 The deterministic runner supports key-only, schema-only, static multi-view,

@@ -30,27 +30,14 @@ def test_runs_are_deterministic_and_predictions_are_ordered():
     second = _run(SemanticExperimentVariant.STATIC_MULTI_VIEW)
 
     assert first == second
+    dataset = SemanticBenchmarkBuilder().build()
     assert [item.observation_index for item in first.predictions] == [
-        0,
-        1,
-        2,
-        0,
-        1,
-        0,
-        1,
-        2,
-        3,
-        0,
-        1,
-        0,
-        1,
-        2,
-        0,
-        1,
-        0,
-        1,
+        observation.observation_index
+        for scenario in dataset.scenarios
+        for stream in scenario.streams
+        for observation in stream.observations
     ]
-    assert len(first.predictions) == 18
+    assert len(first.predictions) == 52
 
 
 @pytest.mark.parametrize(

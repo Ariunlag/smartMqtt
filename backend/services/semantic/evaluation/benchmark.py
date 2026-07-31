@@ -8,6 +8,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import Any
 
+from .calibration import SemanticCalibrationSplit
+
 
 class SemanticBenchmarkScenarioType(str, Enum):
     """Controlled forms of semantic stream evolution."""
@@ -74,10 +76,13 @@ class SemanticBenchmarkStream:
     topic: str
     expected_class_name: str
     observations: tuple[SemanticBenchmarkObservation, ...]
+    split: SemanticCalibrationSplit = SemanticCalibrationSplit.REFERENCE
 
     def __post_init__(self) -> None:
         _non_empty_string(self.topic, "topic")
         _non_empty_string(self.expected_class_name, "expected_class_name")
+        if not isinstance(self.split, SemanticCalibrationSplit):
+            raise TypeError("split must be a SemanticCalibrationSplit")
         observations = tuple(self.observations)
         if not observations:
             raise ValueError("observations must not be empty")
@@ -160,9 +165,58 @@ class SemanticBenchmarkDataset:
                     )
             elif observation.expected_class_name not in known:
                 raise ValueError("known observation must belong to a known class")
+        streams = tuple(stream for scenario in scenarios for stream in scenario.streams)
+        topics = tuple(stream.topic for stream in streams)
+        if len(set(topics)) != len(topics):
+            raise ValueError("stream topic must not cross split boundaries")
+        for class_name in known:
+            class_splits = {
+                stream.split
+                for stream in streams
+                if stream.expected_class_name == class_name
+            }
+            if class_splits != set(SemanticCalibrationSplit):
+                raise ValueError(
+                    "known classes require REFERENCE, CALIBRATION, and TEST streams"
+                )
+        for class_name in unseen:
+            class_splits = {
+                stream.split
+                for stream in streams
+                if stream.expected_class_name == class_name
+            }
+            if SemanticCalibrationSplit.REFERENCE in class_splits:
+                raise ValueError("unseen classes must not have REFERENCE streams")
+            if class_splits != {
+                SemanticCalibrationSplit.CALIBRATION,
+                SemanticCalibrationSplit.TEST,
+            }:
+                raise ValueError("unseen classes require CALIBRATION and TEST streams")
         object.__setattr__(self, "known_class_names", known)
         object.__setattr__(self, "unseen_class_names", unseen)
         object.__setattr__(self, "scenarios", scenarios)
+
+    @property
+    def reference_streams(self) -> tuple[SemanticBenchmarkStream, ...]:
+        return self._streams_for(SemanticCalibrationSplit.REFERENCE)
+
+    @property
+    def calibration_streams(self) -> tuple[SemanticBenchmarkStream, ...]:
+        return self._streams_for(SemanticCalibrationSplit.CALIBRATION)
+
+    @property
+    def test_streams(self) -> tuple[SemanticBenchmarkStream, ...]:
+        return self._streams_for(SemanticCalibrationSplit.TEST)
+
+    def _streams_for(
+        self, split: SemanticCalibrationSplit
+    ) -> tuple[SemanticBenchmarkStream, ...]:
+        return tuple(
+            stream
+            for scenario in self.scenarios
+            for stream in scenario.streams
+            if stream.split is split
+        )
 
 
 class SemanticBenchmarkBuilder:
@@ -180,16 +234,65 @@ class SemanticBenchmarkBuilder:
                 "Occupancy",
             ),
             unseen_class_names=("Vibration Sensor",),
-            scenarios=(
-                self._benign_numeric_drift(),
-                self._identifier_change(),
-                self._stable_metadata_change(),
-                self._key_addition(),
-                self._key_removal(),
-                self._type_change(),
-                self._new_unseen_class(),
+            scenarios=self._assign_splits(
+                (
+                    self._benign_numeric_drift(),
+                    self._identifier_change(),
+                    self._stable_metadata_change(),
+                    self._key_addition(),
+                    self._key_removal(),
+                    self._type_change(),
+                    self._new_unseen_class(),
+                )
             ),
         )
+
+    @staticmethod
+    def _assign_splits(
+        scenarios: tuple[SemanticBenchmarkScenario, ...],
+    ) -> tuple[SemanticBenchmarkScenario, ...]:
+        assigned = []
+        for scenario in scenarios:
+            streams = []
+            for stream in scenario.streams:
+                splits = (
+                    (
+                        SemanticCalibrationSplit.CALIBRATION,
+                        SemanticCalibrationSplit.TEST,
+                    )
+                    if stream.expected_class_name == "Vibration Sensor"
+                    else tuple(SemanticCalibrationSplit)
+                )
+                for split in splits:
+                    suffix = split.value.lower()
+                    observations = tuple(
+                        SemanticBenchmarkObservation(
+                            item.observation_index,
+                            f"{item.topic}/{suffix}",
+                            item.tags,
+                            item.fields,
+                            item.expected_class_name,
+                            item.is_unseen_class,
+                        )
+                        for item in stream.observations
+                    )
+                    streams.append(
+                        SemanticBenchmarkStream(
+                            f"{stream.topic}/{suffix}",
+                            stream.expected_class_name,
+                            observations,
+                            split,
+                        )
+                    )
+            assigned.append(
+                SemanticBenchmarkScenario(
+                    scenario.scenario_id,
+                    scenario.scenario_type,
+                    scenario.expected_change,
+                    tuple(streams),
+                )
+            )
+        return tuple(assigned)
 
     @staticmethod
     def _observation(

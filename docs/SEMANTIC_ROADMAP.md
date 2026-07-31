@@ -112,6 +112,7 @@ reliability learning remain planned stages.
 - [x] Controlled semantic benchmark foundation
 - [x] Semantic experiment runner
 - [x] Initial known/open-world evaluation metrics
+- [x] Threshold calibration protocol
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
@@ -123,6 +124,7 @@ stream pool is likewise an isolated in-memory foundation.
 
 - [ ] Semantic benchmark experiment runner and metrics
 - [ ] Threshold calibration protocol
+- [ ] Frozen-config benchmark execution
 - [ ] HDBSCAN discovery evaluation
 - [ ] Representation reliability experiments
 - [ ] Full benchmark result report

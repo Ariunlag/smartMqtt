@@ -106,17 +106,13 @@ def test_known_unseen_split_is_explicit_disjoint_and_labels_observations():
 def test_stream_topics_and_observation_indices_are_deterministic_and_ordered():
     dataset = _dataset()
 
-    assert [
+    topics = [
         stream.topic for scenario in dataset.scenarios for stream in scenario.streams
-    ] == [
-        "benchmark/temperature/lab-01",
-        "benchmark/humidity/greenhouse-01",
-        "benchmark/air-quality/room-01",
-        "benchmark/traffic/intersection-01",
-        "benchmark/energy/building-01",
-        "benchmark/occupancy/floor-01",
-        "benchmark/vibration/motor-01",
     ]
+    assert topics == [
+        stream.topic for scenario in _dataset().scenarios for stream in scenario.streams
+    ]
+    assert len(topics) == 20
     assert all(
         [item.observation_index for item in stream.observations]
         == sorted(item.observation_index for item in stream.observations)

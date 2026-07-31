@@ -1,5 +1,4 @@
 import pytest
-
 from services.semantic import MultiViewConsensusResult, RepresentationClassConsensus
 from services.semantic.evaluation import (
     SemanticCalibrationEvidence,
