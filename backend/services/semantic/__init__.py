@@ -10,6 +10,14 @@ from .stream_class import (
     StreamSemanticClass,
 )
 from .stream_profiler import FieldProfile, StreamProfile, StreamProfiler, normalize_text
+from .temporal_profile import (
+    TemporalChange,
+    TemporalChangeType,
+    TemporalEntryState,
+    TemporalProfileUpdate,
+    TemporalStreamProfile,
+    TemporalStreamProfiler,
+)
 
 __all__ = [
     "ClassMatch",
@@ -25,5 +33,11 @@ __all__ = [
     "StreamSemanticClass",
     "StreamSemanticPipeline",
     "StreamSemanticPipelineResult",
+    "TemporalChange",
+    "TemporalChangeType",
+    "TemporalEntryState",
+    "TemporalProfileUpdate",
+    "TemporalStreamProfile",
+    "TemporalStreamProfiler",
     "normalize_text",
 ]
