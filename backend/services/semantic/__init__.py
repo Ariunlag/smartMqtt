@@ -7,6 +7,11 @@ from .candidate_confirmation import (
     CandidateConfirmationStore,
     CandidateIdentity,
 )
+from .known_class_assembly import (
+    KnownClassAssembler,
+    KnownClassAssemblyRequest,
+    KnownClassAssemblyResult,
+)
 from .multi_view_consensus import (
     MultiViewConsensusEngine,
     MultiViewConsensusResult,
@@ -76,6 +81,9 @@ __all__ = [
     "ClassMatch",
     "FieldProfile",
     "HDBSCANDiscoveryConfig",
+    "KnownClassAssembler",
+    "KnownClassAssemblyRequest",
+    "KnownClassAssemblyResult",
     "MultiViewConsensusEngine",
     "MultiViewConsensusResult",
     "RepresentationBuilder",

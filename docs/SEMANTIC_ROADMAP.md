@@ -65,15 +65,23 @@ Explicit candidate confirmation / rejection
 Trusted representation-specific prototype update
         |
         v
-Full known-class assembly when sufficient trusted evidence exists (planned)
+Six-view completeness check
+        |
+        +--> incomplete -> retain evidence
+        |
+        v
+RepresentationClassCentroids
+        |
+        v
+Existing known-class scoring
         |
         v
 Representation reliability learning
 ```
 
 Only the foundation stages identified as completed below currently exist.
-Automatic builder invocation, embedding refresh integration, full class
-assembly, feedback, and reliability learning remain planned stages.
+Automatic builder invocation, embedding refresh integration, feedback, and
+reliability learning remain planned stages.
 
 ## Implementation status
 
@@ -100,6 +108,7 @@ assembly, feedback, and reliability learning remain planned stages.
 - [x] HDBSCAN candidate-class discovery foundation
 - [x] Human/system confirmation flow foundation
 - [x] Trusted feedback-driven representation prototype updates
+- [x] Full six-view known-class assembly from trusted evidence
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class

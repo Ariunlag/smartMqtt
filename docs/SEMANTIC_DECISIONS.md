@@ -169,7 +169,32 @@ accumulate without making unsupported representation or class assumptions.
 
 **Consequences:** The UNKNOWN pool lifecycle remains separate, and this update
 does not remove streams, alter discovery, create class IDs, persist data, or
-integrate production MQTT behavior. Full known-class assembly is later work.
+integrate production MQTT behavior.
+
+## Decision: Assemble known classes only from complete trusted evidence
+
+**Status:** Accepted
+
+**Context:** The known-class scorer requires an independent centroid for each
+of the six representation views, while trusted evidence can accumulate at
+different rates for each view.
+
+**Decision:** Materialize a scorer-ready `RepresentationClassCentroids` only
+when trusted evidence exists for all six views of the exact semantic class
+name. Missing views are never synthesized. The caller supplies `class_id`
+explicitly. Assembly reads trusted evidence without modifying it, preserves
+independent representation centroids, and performs no weighting, fusion, or
+additional centroid computation.
+
+**Rationale:** A complete structural contract avoids representing missing
+evidence as a calculated or inferred centroid and keeps semantic evidence
+separate from class-identity policy.
+
+**Consequences:** Incomplete evidence returns its missing views in deterministic
+order and produces no partial scorer-ready class. Evidence-size acceptance
+thresholds remain a separate future policy. Assembly has no persistence,
+prototype-update, scoring, consensus, classification, clustering, feedback, or
+production MQTT integration.
 
 ## Decision: Separate snapshot profiling from temporal profiling
 
