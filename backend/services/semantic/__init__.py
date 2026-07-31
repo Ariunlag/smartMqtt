@@ -1,5 +1,11 @@
 """Deterministic structural profiling and textual representations for SmartMQTT streams."""
 
+from .multi_view_consensus import (
+    MultiViewConsensusEngine,
+    MultiViewConsensusResult,
+    RepresentationClassConsensus,
+    RepresentationViewWinner,
+)
 from .pipeline import StreamSemanticPipeline, StreamSemanticPipelineResult
 from .representation_class_scoring import (
     RepresentationClassCentroids,
@@ -36,14 +42,18 @@ from .temporal_profile import (
 __all__ = [
     "ClassMatch",
     "FieldProfile",
+    "MultiViewConsensusEngine",
+    "MultiViewConsensusResult",
     "RepresentationBuilder",
     "RepresentationClassCentroids",
+    "RepresentationClassConsensus",
     "RepresentationClassEvidence",
     "RepresentationClassEvidenceMatrix",
     "RepresentationClassScorer",
     "RepresentationClassScores",
     "RepresentationEmbedder",
     "RepresentationEmbeddings",
+    "RepresentationViewWinner",
     "SemanticRefreshDecision",
     "SemanticRefreshPolicy",
     "SemanticRefreshReason",

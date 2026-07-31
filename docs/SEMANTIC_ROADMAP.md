@@ -42,10 +42,10 @@ Six representation embeddings
 RepresentationClassEvidenceMatrix
         |
         v
-Multi-view consensus
+Equal-view multi-view consensus
         |
         v
-KNOWN / UNCERTAIN / UNKNOWN
+KNOWN / UNCERTAIN / UNKNOWN (planned)
         |
         v
 UNKNOWN pool
@@ -64,9 +64,8 @@ Representation reliability learning
 ```
 
 Only the foundation stages identified as completed below currently exist.
-Automatic builder invocation, embedding refresh integration, multi-view
-consensus, class decision, discovery, feedback, and reliability learning remain
-planned stages.
+Automatic builder invocation, embedding refresh integration, class decision,
+discovery, feedback, and reliability learning remain planned stages.
 
 ## Implementation status
 
@@ -87,14 +86,15 @@ planned stages.
 - [x] Semantic refresh policy
 - [x] Stability-aware representation generation
 - [x] Representation-specific class scoring
+- [x] Multi-view consensus
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
-scorer are not currently wired into the default production MQTT ingestion path.
+scorer and equal-view consensus engine are not currently wired into the default
+production MQTT ingestion path.
 
 ### Planned work
 
-- [ ] Multi-view consensus
 - [ ] KNOWN / UNCERTAIN / UNKNOWN decision policy
 - [ ] UNKNOWN stream pool
 - [ ] HDBSCAN candidate-class discovery
@@ -179,8 +179,14 @@ The current representation builder produces six deterministic views:
 
 The representation class scorer compares each embedded view only with the
 same-view centroid of every known class. It returns an independent cosine score
-for every representation-by-class pair. No combined class score, weighting,
-consensus, or final class decision currently exists.
+for every representation-by-class pair.
+
+The equal-view consensus baseline preserves the six view winners and summarizes
+each class with its top-1 vote count, mean rank, and unweighted mean similarity.
+It ranks classes lexicographically by votes descending, mean rank ascending,
+mean similarity descending, and class ID ascending. Exact per-view score ties
+use class ID ordering only for reproducibility. No weighted score or class
+acceptance/rejection decision exists.
 
 The project intentionally does not assign arbitrary hand-tuned weights such as
 `0.5 * key_only + 0.3 * schema + ...`. Representation usefulness may vary by
