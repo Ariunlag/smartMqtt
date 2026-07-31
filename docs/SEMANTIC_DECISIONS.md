@@ -97,19 +97,34 @@ policy and runtime state ownership remain separate work.
 
 ## Decision: Do not re-embed every MQTT observation
 
-**Status:** Planned
+**Status:** Accepted
 
 **Context:** Measurements often change on every message without changing the
-stream's semantic identity.
+stream's semantic identity. The temporal profiler can emit raw value evidence
+alongside stronger structural or stable categorical evidence.
 
-**Decision:** Future refresh decisions should depend on meaningful temporal,
-schema, or stable metadata evidence.
+**Decision:** Use the deterministic `SemanticRefreshPolicy` to decide whether
+refresh is warranted:
 
-**Rationale:** Selective refresh should reduce unnecessary computation and
-avoid making semantic state react to ordinary measurement noise.
+- Initial observation requests refresh.
+- Raw `VALUE_CHANGED` alone does not request refresh.
+- `TYPE_CHANGED` requests refresh.
+- `STABLE_VALUE_CHANGED` requests refresh.
+- Post-initial `KEY_ADDED` requests refresh.
+- `KEY_MISSING` requests refresh once, when its configurable missing-key
+  persistence threshold is reached.
 
-**Consequences:** A semantic change analyzer and refresh policy must be designed
-and evaluated before production integration.
+**Rationale:** These explicit rules separate ordinary measurement noise from
+initialization, structural evidence, and temporal evidence that has already
+passed categorical hysteresis. The missing-key threshold prevents one absent
+observation from causing refresh. This is a deterministic starting policy, not
+a claim of universal or experimental optimality.
+
+**Consequences:** The dependency-free policy returns an explainable decision
+and ordered reasons. It does not rebuild representations, call an embedding
+model, persist data, or change the production MQTT path. Stabilized
+representation generation, actual re-embedding, threshold evaluation, and
+production integration remain separate work.
 
 ## Decision: Treat representation usefulness as context dependent
 
