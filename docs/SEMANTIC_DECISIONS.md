@@ -168,6 +168,31 @@ and lets representation experiments evolve independently.
 representation evidence before class matching. The class engine remains usable
 across future representation strategies.
 
+## Decision: Build temporal representations from trusted semantic evidence
+
+**Status:** Accepted
+
+**Context:** The static `RepresentationBuilder` reflects one observation and is
+required as a research baseline. Temporal state distinguishes stable evidence
+from ordinary value churn, pending categorical candidates, and transient or
+persistent key absence.
+
+**Decision:** Keep the snapshot builder unchanged and use a separate
+`StabilityAwareRepresentationBuilder` for `TemporalStreamProfile`. The temporal
+builder retains transiently missing entries, excludes persistently missing
+entries, uses stable categorical values, and ignores pending candidates. It
+suppresses numeric field, identifier, and timestamp literals while retaining
+their keys and schema. Stable unit values remain usable, and numeric tags are
+not assumed to be measurements. No representation weights are introduced.
+
+**Rationale:** These rules produce deterministic text from bounded trusted
+evidence without conflating refresh timing with representation content.
+
+**Consequences:** The exclusion threshold should normally match the refresh
+policy's missing threshold. These are initial policies to evaluate against the
+snapshot baseline, not claims of experimental optimality. The builder does not
+embed, persist, score, or integrate with production MQTT processing.
+
 ## Research direction
 
 Current hypothesis:
