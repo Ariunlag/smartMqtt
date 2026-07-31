@@ -16,6 +16,13 @@ from .representation_class_scoring import (
 )
 from .representation_embedder import RepresentationEmbedder, RepresentationEmbeddings
 from .representations import RepresentationBuilder, StreamRepresentations
+from .semantic_class_decision import (
+    SemanticClassDecision,
+    SemanticClassDecisionConfig,
+    SemanticClassDecisionPolicy,
+    SemanticClassDecisionReason,
+    SemanticClassDecisionState,
+)
 from .semantic_refresh import (
     SemanticRefreshDecision,
     SemanticRefreshPolicy,
@@ -54,6 +61,11 @@ __all__ = [
     "RepresentationEmbedder",
     "RepresentationEmbeddings",
     "RepresentationViewWinner",
+    "SemanticClassDecision",
+    "SemanticClassDecisionConfig",
+    "SemanticClassDecisionPolicy",
+    "SemanticClassDecisionReason",
+    "SemanticClassDecisionState",
     "SemanticRefreshDecision",
     "SemanticRefreshPolicy",
     "SemanticRefreshReason",

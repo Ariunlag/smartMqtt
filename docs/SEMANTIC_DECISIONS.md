@@ -69,19 +69,25 @@ implemented.
 
 ## Decision: Treat UNKNOWN as a valid semantic state
 
-**Status:** Planned
+**Status:** Accepted
 
 **Context:** Nearest-class ranking always produces a nearest result even when
 all available evidence is weak.
 
-**Decision:** Do not force weak matches into a known class. The intended
-decision states are KNOWN, UNCERTAIN, and UNKNOWN.
+**Decision:** Do not force weak matches into a known class. The implemented
+deterministic policy returns KNOWN, UNCERTAIN, or UNKNOWN. KNOWN requires
+explicitly configured agreement, absolute mean-similarity, and ambiguity-
+margin criteria. UNKNOWN represents no known classes or clearly weak absolute
+evidence. UNCERTAIN covers the middle and ambiguous region.
 
 **Rationale:** An explicit open-world state protects known classes from
 unreliable assignments and preserves novel streams for later analysis.
 
-**Consequences:** Thresholds and calibration will require evaluation. The
-decision policy and UNKNOWN pool are not currently implemented.
+**Consequences:** Thresholds are explicit configuration intended for empirical
+calibration; the repository does not prescribe production values. This policy
+is a deterministic baseline, not a claim of experimental optimality. It
+returns diagnostic candidate evidence but does not assign a class, populate an
+UNKNOWN pool, persist results, or integrate with production MQTT processing.
 
 ## Decision: Separate snapshot profiling from temporal profiling
 

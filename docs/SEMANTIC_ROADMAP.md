@@ -45,7 +45,7 @@ RepresentationClassEvidenceMatrix
 Equal-view multi-view consensus
         |
         v
-KNOWN / UNCERTAIN / UNKNOWN (planned)
+KNOWN / UNCERTAIN / UNKNOWN decision policy
         |
         v
 UNKNOWN pool
@@ -64,8 +64,8 @@ Representation reliability learning
 ```
 
 Only the foundation stages identified as completed below currently exist.
-Automatic builder invocation, embedding refresh integration, class decision,
-discovery, feedback, and reliability learning remain planned stages.
+Automatic builder invocation, embedding refresh integration, discovery,
+feedback, and reliability learning remain planned stages.
 
 ## Implementation status
 
@@ -87,15 +87,15 @@ discovery, feedback, and reliability learning remain planned stages.
 - [x] Stability-aware representation generation
 - [x] Representation-specific class scoring
 - [x] Multi-view consensus
+- [x] KNOWN / UNCERTAIN / UNKNOWN decision policy
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
-scorer and equal-view consensus engine are not currently wired into the default
-production MQTT ingestion path.
+scorer, equal-view consensus engine, and semantic class decision policy are not
+currently wired into the default production MQTT ingestion path.
 
 ### Planned work
 
-- [ ] KNOWN / UNCERTAIN / UNKNOWN decision policy
 - [ ] UNKNOWN stream pool
 - [ ] HDBSCAN candidate-class discovery
 - [ ] Human/system confirmation flow
@@ -185,8 +185,16 @@ The equal-view consensus baseline preserves the six view winners and summarizes
 each class with its top-1 vote count, mean rank, and unweighted mean similarity.
 It ranks classes lexicographically by votes descending, mean rank ascending,
 mean similarity descending, and class ID ascending. Exact per-view score ties
-use class ID ordering only for reproducibility. No weighted score or class
-acceptance/rejection decision exists.
+use class ID ordering only for reproducibility. The consensus engine produces
+no weighted score and makes no class acceptance/rejection decision itself.
+
+The open-world decision policy applies explicitly configured vote, absolute
+similarity, and top-versus-runner-up similarity-margin thresholds. `UNKNOWN`
+represents no known classes or clearly weak absolute evidence; `KNOWN` requires
+all configured acceptance criteria; `UNCERTAIN` preserves the middle or
+ambiguous region. Thresholds have no built-in recommended values and require
+later empirical calibration. The policy does not populate an UNKNOWN pool or
+assign classes in the production path.
 
 The project intentionally does not assign arbitrary hand-tuned weights such as
 `0.5 * key_only + 0.3 * schema + ...`. Representation usefulness may vary by
