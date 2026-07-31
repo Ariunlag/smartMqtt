@@ -89,6 +89,27 @@ is a deterministic baseline, not a claim of experimental optimality. It
 returns diagnostic candidate evidence but does not assign a class, populate an
 UNKNOWN pool, persist results, or integrate with production MQTT processing.
 
+## Decision: Retain UNKNOWN stream evidence without selecting discovery vectors
+
+**Status:** Accepted
+
+**Context:** UNKNOWN streams need an isolated handoff point for future
+discovery while retaining the evidence that led to their state.
+
+**Decision:** Retain each UNKNOWN stream in memory by topic with all six current
+representation embeddings and its immutable UNKNOWN decision evidence. The pool
+replaces an existing topic with its latest entry and does not choose a
+representation, combine vectors, or select a discovery algorithm.
+
+**Rationale:** Keeping complete available evidence preserves future experiment
+choices without imposing a premature clustering representation or storage
+design.
+
+**Consequences:** The pool has no persistence, timestamps, clustering,
+candidate-class generation, feedback, or production MQTT integration. This is
+a deterministic foundation, not a claim that the retained evidence design is
+experimentally optimal.
+
 ## Decision: Separate snapshot profiling from temporal profiling
 
 **Status:** Accepted

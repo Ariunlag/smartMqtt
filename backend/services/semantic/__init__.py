@@ -45,6 +45,7 @@ from .temporal_profile import (
     TemporalStreamProfile,
     TemporalStreamProfiler,
 )
+from .unknown_stream_pool import UnknownStreamEntry, UnknownStreamPool
 
 __all__ = [
     "ClassMatch",
@@ -85,5 +86,7 @@ __all__ = [
     "TemporalProfileUpdate",
     "TemporalStreamProfile",
     "TemporalStreamProfiler",
+    "UnknownStreamEntry",
+    "UnknownStreamPool",
     "normalize_text",
 ]

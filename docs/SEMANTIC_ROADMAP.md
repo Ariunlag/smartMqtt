@@ -48,10 +48,15 @@ Equal-view multi-view consensus
 KNOWN / UNCERTAIN / UNKNOWN decision policy
         |
         v
-UNKNOWN pool
+        +--> KNOWN / UNCERTAIN
         |
-        v
-HDBSCAN candidate-class discovery
+        +--> UNKNOWN
+                 |
+                 v
+          UNKNOWN stream pool
+                 |
+                 v
+          HDBSCAN discovery (planned)
         |
         v
 Confirmation / feedback
@@ -88,15 +93,16 @@ feedback, and reliability learning remain planned stages.
 - [x] Representation-specific class scoring
 - [x] Multi-view consensus
 - [x] KNOWN / UNCERTAIN / UNKNOWN decision policy
+- [x] UNKNOWN stream pool
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
 scorer, equal-view consensus engine, and semantic class decision policy are not
-currently wired into the default production MQTT ingestion path.
+currently wired into the default production MQTT ingestion path. The UNKNOWN
+stream pool is likewise an isolated in-memory foundation.
 
 ### Planned work
 
-- [ ] UNKNOWN stream pool
 - [ ] HDBSCAN candidate-class discovery
 - [ ] Human/system confirmation flow
 - [ ] Feedback-driven online class updates
@@ -122,7 +128,8 @@ Centroids or prototypes and clustering solve different problems:
 - Centroids or prototypes support matching against known classes.
 - HDBSCAN is planned for novel or unknown-class discovery.
 
-HDBSCAN and the UNKNOWN workflow are not currently implemented.
+The UNKNOWN stream pool retains the latest UNKNOWN evidence in memory. HDBSCAN
+discovery and the remaining UNKNOWN workflow are not currently implemented.
 
 ## Temporal semantic direction
 
