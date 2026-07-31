@@ -25,12 +25,22 @@ from .experiment import (
     SemanticExperimentVariant,
     SemanticPrediction,
 )
+from .final_benchmark import (
+    FrozenSemanticBenchmarkConfig,
+    SemanticBenchmarkComparison,
+    SemanticBenchmarkExecutor,
+    SemanticBenchmarkRun,
+)
 
 __all__ = [
+    "FrozenSemanticBenchmarkConfig",
     "SemanticBenchmarkBuilder",
     "SemanticBenchmarkChangeType",
+    "SemanticBenchmarkComparison",
     "SemanticBenchmarkDataset",
+    "SemanticBenchmarkExecutor",
     "SemanticBenchmarkObservation",
+    "SemanticBenchmarkRun",
     "SemanticBenchmarkScenario",
     "SemanticBenchmarkScenarioType",
     "SemanticBenchmarkStream",

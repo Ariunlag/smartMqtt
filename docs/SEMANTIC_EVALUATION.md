@@ -64,6 +64,15 @@ while minimizing false-unknown rate. It has no weighted objective, no automatic
 best configuration, and no test-set tuning; threshold values are experimental
 configuration rather than universal defaults.
 
+## Frozen TEST execution
+
+REFERENCE streams construct prototypes, CALIBRATION streams are used only for
+threshold calibration, then a caller freezes a decision configuration before
+TEST execution. The final executor compares key-only, schema-only, static
+multi-view, temporal multi-view, and open-world multi-view variants without
+tuning on TEST or claiming a universally superior variant. Discovery metrics
+remain separate planned work.
+
 ## Implemented runner and metrics
 
 The deterministic runner supports key-only, schema-only, static multi-view,
