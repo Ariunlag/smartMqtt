@@ -20,13 +20,16 @@ MQTT observations
 Snapshot StreamProfiler
         |
         v
-Temporal Stream Profile
+TemporalStreamProfiler
         |
         v
-Semantic Change Analyzer / Refresh Policy
+SemanticRefreshPolicy
         |
         v
-Stability-aware semantic representations
+SemanticRefreshDecision
+        |
+        v
+Stabilized representation generation
         |
         v
 Six representation embeddings
@@ -57,8 +60,8 @@ Representation reliability learning
 ```
 
 Only the foundation stages identified as completed below currently exist.
-Refresh policy, stability-aware representation generation, class decision,
-discovery, feedback, and reliability learning remain planned stages.
+Stabilized representation generation, embedding refresh integration, class
+decision, discovery, feedback, and reliability learning remain planned stages.
 
 ## Implementation status
 
@@ -76,14 +79,14 @@ discovery, feedback, and reliability learning remain planned stages.
 - [x] Deterministic known-class ranking
 - [x] Temporal stream profile
 - [x] Metadata/schema change evidence tracking
+- [x] Semantic refresh policy
 
-These are isolated building blocks. The new semantic pipeline and temporal
-profiling foundation are not currently wired into the default production MQTT
-ingestion path.
+These are isolated building blocks. The new semantic pipeline, temporal
+profiler, and refresh policy are not currently wired into the default
+production MQTT ingestion path.
 
 ### Planned work
 
-- [ ] Semantic refresh policy
 - [ ] Stability-aware representation generation
 - [ ] Representation-specific class scoring
 - [ ] Multi-view consensus
@@ -132,19 +135,24 @@ Examples of evidence include:
 - Type change: numeric to string
 - Stable semantic metadata change: `unit C -> F`
 
-The temporal profiler records this evidence but does not yet decide whether a
-semantic representation should be refreshed. The target flow is:
+The temporal profiler records this evidence. The deterministic
+`SemanticRefreshPolicy` now converts each `TemporalProfileUpdate` into an
+explainable `SemanticRefreshDecision`:
 
 ```text
 Raw observations
     -> bounded temporal evidence
-    -> semantic stability/change decision
-    -> selective representation refresh
+    -> deterministic semantic refresh decision
+    -> stabilized representation generation (planned)
+    -> embedding refresh integration (planned)
 ```
 
-Not every MQTT message should cause re-embedding. Temporal profiling currently
-exists as an isolated foundation; the semantic refresh policy and production
-integration remain planned work.
+The current policy requests initialization on the first observation, ignores
+raw value changes alone, responds to structural and stable categorical changes,
+and requires a configurable persistence threshold for a missing key. It decides
+whether refresh is warranted but does not rebuild or embed representations.
+The policy remains an isolated foundation and is not integrated into the
+production MQTT path.
 
 ## Representation strategy
 

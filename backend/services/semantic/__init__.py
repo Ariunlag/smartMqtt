@@ -3,6 +3,12 @@
 from .pipeline import StreamSemanticPipeline, StreamSemanticPipelineResult
 from .representation_embedder import RepresentationEmbedder, RepresentationEmbeddings
 from .representations import RepresentationBuilder, StreamRepresentations
+from .semantic_refresh import (
+    SemanticRefreshDecision,
+    SemanticRefreshPolicy,
+    SemanticRefreshReason,
+    SemanticRefreshReasonType,
+)
 from .stream_class import (
     ClassMatch,
     StreamClassEngine,
@@ -25,6 +31,10 @@ __all__ = [
     "RepresentationBuilder",
     "RepresentationEmbedder",
     "RepresentationEmbeddings",
+    "SemanticRefreshDecision",
+    "SemanticRefreshPolicy",
+    "SemanticRefreshReason",
+    "SemanticRefreshReasonType",
     "StreamClassEngine",
     "StreamClassMember",
     "StreamProfile",
