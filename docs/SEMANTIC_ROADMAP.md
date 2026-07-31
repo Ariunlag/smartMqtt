@@ -109,6 +109,7 @@ reliability learning remain planned stages.
 - [x] Human/system confirmation flow foundation
 - [x] Trusted feedback-driven representation prototype updates
 - [x] Full six-view known-class assembly from trusted evidence
+- [x] Controlled semantic benchmark foundation
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
@@ -118,12 +119,22 @@ stream pool is likewise an isolated in-memory foundation.
 
 ### Planned work
 
+- [ ] Semantic benchmark experiment runner and metrics
 - [ ] Feedback-driven online class updates
 - [ ] Representation reliability learning
 - [ ] Multi-prototype semantic classes
 - [ ] Research/diagnostic backend API
 - [ ] Research/diagnostic React UI
 - [ ] Production MQTT integration of the new semantic pipeline
+
+## Research and evaluation
+
+The controlled semantic benchmark foundation supplies deterministic structured
+stream scenarios and explicit known/unseen ground truth for later evaluation.
+It does not run semantic services or calculate metrics. Planned experiments
+will compare static single-representation and six-view baselines with
+temporal/stability-aware and full open-world workflows. Metrics and an
+experiment runner remain planned.
 
 ## Known-class matching and unknown-class discovery
 
