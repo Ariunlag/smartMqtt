@@ -109,16 +109,22 @@ refresh is warranted:
 - Initial observation requests refresh.
 - Raw `VALUE_CHANGED` alone does not request refresh.
 - `TYPE_CHANGED` requests refresh.
+- `STABLE_VALUE_ESTABLISHED` requests refresh when the first categorical value
+  completes hysteresis.
 - `STABLE_VALUE_CHANGED` requests refresh.
 - Post-initial `KEY_ADDED` requests refresh.
 - `KEY_MISSING` requests refresh once, when its configurable missing-key
   persistence threshold is reached.
+- `KEY_REAPPEARED` requests refresh only when the prior missing streak reached
+  that same threshold.
 
 **Rationale:** These explicit rules separate ordinary measurement noise from
 initialization, structural evidence, and temporal evidence that has already
 passed categorical hysteresis. The missing-key threshold prevents one absent
 observation from causing refresh. This is a deterministic starting policy, not
-a claim of universal or experimental optimality.
+a claim of universal or experimental optimality. The matching reappearance
+rule restores symmetry after a key was treated as persistently missing while
+ignoring transient absence.
 
 **Consequences:** The dependency-free policy returns an explainable decision
 and ordered reasons. It does not rebuild representations, call an embedding

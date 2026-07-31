@@ -64,10 +64,26 @@ def test_repeated_unchanged_tag_does_not_report_value_changed():
     )
 
     assert TemporalChangeType.VALUE_CHANGED not in _change_types(second)
+    assert TemporalChangeType.STABLE_VALUE_ESTABLISHED not in _change_types(second)
     location = _state(second.profile, "tag", "location")
     assert location.value_change_count == 0
     assert location.present_count == 2
     assert location.candidate_streak == 2
+
+
+def test_first_stable_value_establishment_emits_explicit_evidence():
+    profiler = TemporalStreamProfiler(3)
+    first = profiler.update(None, _observation(tags={"location": "A"}))
+    second = profiler.update(first.profile, _observation(tags={"location": "A"}))
+
+    established = profiler.update(
+        second.profile,
+        _observation(tags={"location": "A"}),
+    )
+
+    assert _change_types(established) == (TemporalChangeType.STABLE_VALUE_ESTABLISHED,)
+    assert established.changes[0].previous_value is None
+    assert established.changes[0].current_value == "A"
 
 
 def test_tag_value_transition_reports_value_changed():
@@ -126,6 +142,7 @@ def test_persistent_candidate_emits_stable_value_changed():
     assert location.candidate_value is None
     assert location.candidate_streak == 0
     assert _change_types(changed) == (TemporalChangeType.STABLE_VALUE_CHANGED,)
+    assert TemporalChangeType.STABLE_VALUE_ESTABLISHED not in _change_types(changed)
     assert changed.changes[0].previous_value == "A"
     assert changed.changes[0].current_value == "B"
 
@@ -162,7 +179,11 @@ def test_numeric_field_changes_do_not_establish_stable_categorical_value():
     assert temperature.candidate_value is None
     assert temperature.candidate_streak == 0
     assert all(
-        change.change_type != TemporalChangeType.STABLE_VALUE_CHANGED
+        change.change_type
+        not in {
+            TemporalChangeType.STABLE_VALUE_ESTABLISHED,
+            TemporalChangeType.STABLE_VALUE_CHANGED,
+        }
         for change in changes
     )
 
@@ -198,7 +219,7 @@ def test_type_change_is_counted_and_emitted():
 
 
 def test_newly_appearing_key_produces_key_added():
-    profiler = TemporalStreamProfiler(2)
+    profiler = TemporalStreamProfiler(3)
     first = profiler.update(None, _observation(tags={"location": "A"}))
 
     changed = profiler.update(
@@ -208,6 +229,19 @@ def test_newly_appearing_key_produces_key_added():
 
     assert _change_types(changed) == (TemporalChangeType.KEY_ADDED,)
     assert changed.changes[0].normalized_key == "vendor"
+
+
+def test_new_key_with_immediate_stability_emits_only_key_added():
+    profiler = TemporalStreamProfiler(1)
+    first = profiler.update(None, _observation())
+
+    added = profiler.update(
+        first.profile,
+        _observation(tags={"location": "A"}),
+    )
+
+    assert _change_types(added) == (TemporalChangeType.KEY_ADDED,)
+    assert _state(added.profile, "tag", "location").stable_value == "A"
 
 
 def test_missing_key_tracks_streak_and_emits_evidence():
@@ -225,7 +259,7 @@ def test_missing_key_tracks_streak_and_emits_evidence():
 
 
 def test_reappearing_key_resets_missing_streak():
-    profiler = TemporalStreamProfiler(2)
+    profiler = TemporalStreamProfiler(3)
     first = profiler.update(None, _observation(tags={"location": "A"}))
     missing = profiler.update(first.profile, _observation())
 
@@ -237,7 +271,64 @@ def test_reappearing_key_resets_missing_streak():
     location = _state(reappeared.profile, "tag", "location")
     assert location.missing_streak == 0
     assert location.present_count == 2
-    assert reappeared.changes == ()
+    assert _change_types(reappeared) == (TemporalChangeType.KEY_REAPPEARED,)
+    assert reappeared.changes[0].previous_missing_streak == 1
+
+
+def test_reappearance_with_changed_value_preserves_event_order():
+    profiler = TemporalStreamProfiler(3)
+    first = profiler.update(None, _observation(tags={"location": "A"}))
+    missing = profiler.update(first.profile, _observation())
+
+    reappeared = profiler.update(
+        missing.profile,
+        _observation(tags={"location": "B"}),
+    )
+
+    assert _change_types(reappeared) == (
+        TemporalChangeType.KEY_REAPPEARED,
+        TemporalChangeType.VALUE_CHANGED,
+    )
+
+
+def test_reappearance_with_type_and_value_change_has_deterministic_order():
+    profiler = TemporalStreamProfiler(3)
+    first = profiler.update(None, _observation(fields={"reading": 1}))
+    missing = profiler.update(first.profile, _observation())
+
+    reappeared = profiler.update(
+        missing.profile,
+        _observation(fields={"reading": "one"}),
+    )
+
+    assert _change_types(reappeared) == (
+        TemporalChangeType.KEY_REAPPEARED,
+        TemporalChangeType.TYPE_CHANGED,
+        TemporalChangeType.VALUE_CHANGED,
+    )
+    assert reappeared.changes[0].previous_missing_streak == 1
+
+
+def test_tag_and_field_reappearance_identities_remain_distinct():
+    profiler = TemporalStreamProfiler(3)
+    first = profiler.update(
+        None,
+        _observation(tags={"status": "online"}, fields={"status": "active"}),
+    )
+    missing = profiler.update(first.profile, _observation())
+
+    reappeared = profiler.update(
+        missing.profile,
+        _observation(tags={"status": "online"}, fields={"status": "active"}),
+    )
+
+    assert [
+        (change.change_type, change.source, change.normalized_key)
+        for change in reappeared.changes
+    ] == [
+        (TemporalChangeType.KEY_REAPPEARED, "tag", "status"),
+        (TemporalChangeType.KEY_REAPPEARED, "field", "status"),
+    ]
 
 
 def test_same_normalized_key_in_tag_and_field_remains_separate():
@@ -317,3 +408,16 @@ def test_observation_is_not_mutated_and_results_are_immutable():
         update.profile.entries[0].missing_streak = 1
     with pytest.raises(FrozenInstanceError):
         update.changes[0].current_value = "B"
+
+
+def test_reappearance_change_diagnostics_are_immutable():
+    profiler = TemporalStreamProfiler(2)
+    first = profiler.update(None, _observation(tags={"location": "A"}))
+    missing = profiler.update(first.profile, _observation())
+    reappeared = profiler.update(
+        missing.profile,
+        _observation(tags={"location": "A"}),
+    )
+
+    with pytest.raises(FrozenInstanceError):
+        reappeared.changes[0].previous_missing_streak = 2

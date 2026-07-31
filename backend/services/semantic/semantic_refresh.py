@@ -20,7 +20,9 @@ class SemanticRefreshReasonType(str, Enum):
     INITIAL_OBSERVATION = "INITIAL_OBSERVATION"
     KEY_ADDED = "KEY_ADDED"
     KEY_MISSING_PERSISTED = "KEY_MISSING_PERSISTED"
+    KEY_REAPPEARED_AFTER_PERSISTED_MISSING = "KEY_REAPPEARED_AFTER_PERSISTED_MISSING"
     TYPE_CHANGED = "TYPE_CHANGED"
+    STABLE_VALUE_ESTABLISHED = "STABLE_VALUE_ESTABLISHED"
     STABLE_VALUE_CHANGED = "STABLE_VALUE_CHANGED"
 
 
@@ -35,6 +37,7 @@ class SemanticRefreshReason:
     current_value: str | None = None
     previous_value_type: ValueType | None = None
     current_value_type: ValueType | None = None
+    previous_missing_streak: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -94,8 +97,18 @@ class SemanticRefreshPolicy:
             return SemanticRefreshReasonType.KEY_ADDED
         if change.change_type == TemporalChangeType.TYPE_CHANGED:
             return SemanticRefreshReasonType.TYPE_CHANGED
+        if change.change_type == TemporalChangeType.STABLE_VALUE_ESTABLISHED:
+            return SemanticRefreshReasonType.STABLE_VALUE_ESTABLISHED
         if change.change_type == TemporalChangeType.STABLE_VALUE_CHANGED:
             return SemanticRefreshReasonType.STABLE_VALUE_CHANGED
+        if change.change_type == TemporalChangeType.KEY_REAPPEARED:
+            if (
+                change.previous_missing_streak is not None
+                and change.previous_missing_streak
+                >= self.missing_observations_before_refresh
+            ):
+                return SemanticRefreshReasonType.KEY_REAPPEARED_AFTER_PERSISTED_MISSING
+            return None
         if change.change_type != TemporalChangeType.KEY_MISSING:
             return None
 
@@ -117,4 +130,5 @@ class SemanticRefreshPolicy:
             current_value=change.current_value,
             previous_value_type=change.previous_value_type,
             current_value_type=change.current_value_type,
+            previous_missing_streak=change.previous_missing_streak,
         )
