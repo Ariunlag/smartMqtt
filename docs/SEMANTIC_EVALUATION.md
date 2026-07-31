@@ -50,3 +50,16 @@ System metrics:
 - Computational cost
 
 No experiment runner or metric implementation is included yet.
+
+## Implemented runner and metrics
+
+The deterministic runner supports key-only, schema-only, static multi-view,
+temporal multi-view, and open-world multi-view variants. Open-world runs require
+caller-supplied decision thresholds. Known-class metrics include all known
+observations: UNKNOWN and UNCERTAIN therefore count as incorrect. UNKNOWN is
+positive only for held-out classes; zero denominators return `0.0`.
+
+Implemented metrics are Top-1 accuracy, macro-F1, UNKNOWN precision, UNKNOWN
+recall, false-unknown rate, semantic refresh count, and false refresh count.
+ARI, NMI, and other discovery metrics remain planned because discovery is not
+run by this experiment runner.

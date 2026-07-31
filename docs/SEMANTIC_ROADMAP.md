@@ -110,6 +110,8 @@ reliability learning remain planned stages.
 - [x] Trusted feedback-driven representation prototype updates
 - [x] Full six-view known-class assembly from trusted evidence
 - [x] Controlled semantic benchmark foundation
+- [x] Semantic experiment runner
+- [x] Initial known/open-world evaluation metrics
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
@@ -120,6 +122,10 @@ stream pool is likewise an isolated in-memory foundation.
 ### Planned work
 
 - [ ] Semantic benchmark experiment runner and metrics
+- [ ] Threshold calibration protocol
+- [ ] HDBSCAN discovery evaluation
+- [ ] Representation reliability experiments
+- [ ] Full benchmark result report
 - [ ] Feedback-driven online class updates
 - [ ] Representation reliability learning
 - [ ] Multi-prototype semantic classes

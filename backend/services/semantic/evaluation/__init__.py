@@ -9,6 +9,13 @@ from .benchmark import (
     SemanticBenchmarkScenarioType,
     SemanticBenchmarkStream,
 )
+from .experiment import (
+    SemanticExperimentMetrics,
+    SemanticExperimentResult,
+    SemanticExperimentRunner,
+    SemanticExperimentVariant,
+    SemanticPrediction,
+)
 
 __all__ = [
     "SemanticBenchmarkBuilder",
@@ -18,4 +25,9 @@ __all__ = [
     "SemanticBenchmarkScenario",
     "SemanticBenchmarkScenarioType",
     "SemanticBenchmarkStream",
+    "SemanticExperimentMetrics",
+    "SemanticExperimentResult",
+    "SemanticExperimentRunner",
+    "SemanticExperimentVariant",
+    "SemanticPrediction",
 ]
