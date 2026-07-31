@@ -117,6 +117,7 @@ reliability learning remain planned stages.
 - [x] Recorded semantic calibration Pareto-frontier artifact and report
 - [x] Editable candidate membership review
 - [x] Positive/negative member feedback evidence
+- [x] Apply positive reviewed membership to six-view class prototypes
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
@@ -126,7 +127,8 @@ stream pool is likewise an isolated in-memory foundation.
 
 ### Planned work
 
-- [ ] Apply positive member feedback to six-view class prototypes
+- [ ] Safe prototype retraction/recomputation after corrected feedback
+- [ ] Production semantic workflow integration
 - [ ] Negative-membership constraint handling
 - [ ] Candidate-review API/UI
 - [ ] Semantic benchmark experiment runner and metrics

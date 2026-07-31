@@ -197,6 +197,31 @@ not alter the UNKNOWN pool, prototypes, reliability, clustering, or known-class
 assembly. Positive prototype updates, negative-membership constraints, and
 representation reliability remain separate follow-up work.
 
+## Decision: Apply reviewed positive membership to all six prototypes
+
+**Status:** Accepted
+
+**Context:** Candidate discovery occurs in one representation, but a reviewed
+KEPT or ADDED topic is trusted positive membership for the semantic class as a
+complete stream with six independent embeddings.
+
+**Decision:** Use every positive reviewed topic to update each of the six
+representation-specific prototypes. The discovery representation does not
+restrict the updated views. Representations remain independent: vectors are
+neither fused nor assigned fixed weights. Prepare and validate every resulting
+prototype before any evidence-store mutation, and treat replay as idempotent.
+
+**Rationale:** Confirmed stream membership supplies matching positive evidence
+for every existing representation while atomic preparation prevents a failed
+view from leaving partial trusted state.
+
+**Consequences:** REMOVED topics do not update prototypes, but their vectors are
+also not subtracted from existing centroids. Correcting membership that was
+accepted previously requires later safe retraction or recomputation support.
+The UNKNOWN-pool lifecycle remains separate; this operation does not remove
+topics, assemble a known class, change similarity, learn reliability, or alter
+production processing.
+
 ## Decision: Assemble known classes only from complete trusted evidence
 
 **Status:** Accepted
