@@ -36,6 +36,10 @@ from .representation_class_scoring import (
 )
 from .representation_embedder import RepresentationEmbedder, RepresentationEmbeddings
 from .representations import RepresentationBuilder, StreamRepresentations
+from .reviewed_prototype_reconciliation import (
+    ReviewedPrototypeReconciler,
+    ReviewedPrototypeReconciliationResult,
+)
 from .reviewed_prototype_update import (
     ReviewedPrototypeUpdater,
     ReviewedPrototypeUpdateResult,
@@ -116,6 +120,8 @@ __all__ = [
     "RepresentationEmbedder",
     "RepresentationEmbeddings",
     "RepresentationViewWinner",
+    "ReviewedPrototypeReconciler",
+    "ReviewedPrototypeReconciliationResult",
     "ReviewedPrototypeUpdateResult",
     "ReviewedPrototypeUpdater",
     "SemanticClassDecision",

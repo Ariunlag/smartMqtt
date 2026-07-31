@@ -222,6 +222,31 @@ The UNKNOWN-pool lifecycle remains separate; this operation does not remove
 topics, assemble a known class, change similarity, learn reliability, or alter
 production processing.
 
+## Decision: Reconcile corrected prototypes by rebuilding final membership
+
+**Status:** Accepted
+
+**Context:** An edited candidate review can remove previously accepted members
+as well as keep or add members across the semantic class's six prototypes.
+
+**Decision:** Apply reviewed removal across all six representation prototypes.
+For each changed view, derive the final unique member topics and recompute its
+centroid from the matching current embeddings retained in the UNKNOWN pool.
+Never algebraically subtract removed vectors. Prepare every changed replacement
+before mutating the evidence store, and leave unchanged member sets untouched so
+replay is idempotent.
+
+**Rationale:** Full arithmetic recomputation is deterministic and avoids the
+numerical and provenance ambiguity of reversing an incremental centroid. Using
+current pool evidence establishes one explicit rebuild source for every final
+member.
+
+**Consequences:** Reconciliation does not preserve historical embedding
+snapshots and does not update embeddings itself. Missing or invalid current
+evidence aborts all six changes atomically. Negative recommendation constraints,
+UNKNOWN-pool lifecycle, reliability statistics, persistence, and production
+workflow integration remain separate work.
+
 ## Decision: Assemble known classes only from complete trusted evidence
 
 **Status:** Accepted
