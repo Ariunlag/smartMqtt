@@ -64,6 +64,19 @@ FastAPI ingestion pipeline
 | MQTT WebSocket | Eclipse Mosquitto | `localhost:9001` |
 | PostgreSQL | PostgreSQL 16 | Internal Docker network |
 
+## Semantic research foundation
+
+The repository contains isolated research components for deterministic stream
+profiling, six textual stream representations, multi-representation embedding,
+Qdrant representation persistence, semantic pipeline orchestration, and stream
+semantic class centroid, similarity, and ranking operations.
+
+These components are foundation modules and are not yet fully integrated into
+the default production MQTT ingestion path. For the intended architecture and
+implementation status, see the [Semantic Roadmap](docs/SEMANTIC_ROADMAP.md).
+For the rationale behind major architecture choices, see
+[Semantic Decisions](docs/SEMANTIC_DECISIONS.md).
+
 ## Quick start with Docker
 
 Requirements:
