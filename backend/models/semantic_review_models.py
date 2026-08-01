@@ -122,3 +122,21 @@ class SemanticPersistenceStatusModel(BaseModel):
     last_restored_at: datetime | None
     last_error_message: str | None
     compatibility_error: str | None
+
+
+class SemanticTopicStateModel(BaseModel):
+    """Vector-free decision state for operational verification."""
+
+    topic: str
+    state: str
+    class_id: str | None
+    reasons: tuple[str, ...]
+
+
+class SemanticTopicStateList(BaseModel):
+    topics: tuple[SemanticTopicStateModel, ...]
+
+
+class SemanticPersistenceRetryResult(BaseModel):
+    accepted: bool
+    current_generation: int

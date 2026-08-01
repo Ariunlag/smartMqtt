@@ -484,3 +484,26 @@ superiority.
 - Each endpoint retains its latest successful value independently. One guarded five-second polling cycle uses settled results so a failed endpoint neither overlaps another poll nor clears healthy data from other endpoints.
 - Display state is limited to `DISABLED`, `STARTING`, `HEALTHY`, `BUSY`, `DEGRADED`, and `STOPPED`. Historical failure and retry counters remain diagnostic values and do not imply current degradation when the current error has cleared.
 - The panel exposes counts, lifecycle state, generations, and recovery state only. Embeddings, centroids, raw snapshots, database connection data, SQL, credentials, and model internals are never rendered.
+
+## Real-stack acceptance and recovery operations
+
+- Real acceptance uses the existing Docker Compose architecture and real
+  `BAAI/bge-small-en-v1.5` CPU model. No fake embedding or parallel test
+  deployment is permitted.
+- An additive Compose override may reduce queue capacity and debounce/recovery
+  timing to make operational behavior deterministic. It must not change the
+  six-view algorithm, HDBSCAN configuration, scores, or frozen thresholds.
+- Each run owns a unique topic prefix and semantic persistence state key. The
+  runner never deletes volumes or resets shared database state.
+- `/api/semantic-review/topic-states` exposes only vector-free decision
+  metadata needed to verify the live policy. It does not expose similarities,
+  representations, embeddings, or centroids.
+- `/api/semantic-review/persistence-retry` requests the existing coalesced
+  persistence path after repository recovery. It does not mutate semantic
+  content or bypass generation guards.
+- MQTT connection health follows protocol callbacks. Recovery reuses the
+  existing Paho network loop and restores persisted subscriptions only after
+  the broker reconnects.
+- Liveness remains independent of dependency state. Readiness fails while a
+  required dependency is unavailable and recovers only after bounded health
+  checks succeed.

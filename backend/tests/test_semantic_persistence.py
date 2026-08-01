@@ -394,6 +394,19 @@ def test_persistence_status_endpoint_is_vector_free_and_uses_application_state()
     assert "dsn" not in body
 
 
+def test_persistence_retry_endpoint_requests_current_generation_without_state_data():
+    application = _application(InMemorySemanticStateRepository(), enabled=True)
+    app = create_app(semantic_application=application, manage_services=False)
+    with TestClient(app) as client:
+        response = client.post("/api/semantic-review/persistence-retry")
+
+    assert response.status_code == 200
+    assert response.json() == {"accepted": True, "current_generation": 0}
+    assert application.persistence_service.status().save_pending
+    assert "payload" not in response.text.lower()
+    assert "dsn" not in response.text.lower()
+
+
 def test_importing_main_does_not_construct_persistence_or_perform_io():
     import main
 

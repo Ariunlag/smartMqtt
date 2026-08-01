@@ -336,6 +336,28 @@ Candidate metrics include:
 
 No results are reported here; this section defines planned evaluation.
 
+## Real-stack operational acceptance
+
+The repository contains a bounded, non-destructive acceptance runner for the
+existing Docker Compose architecture. It verifies migration, API subscription,
+Mosquitto publication, InfluxDB ingestion, semantic processing/discovery/review,
+restart recovery, broker recovery, PostgreSQL persistence recovery, queue
+backpressure, and final shutdown flush paths. The runner uses unique per-run
+topic and persistence namespaces and never deletes volumes.
+
+Operational verification uses two additive vector-free endpoints: one reports
+topic decision metadata and one requests a coalesced persistence retry after a
+repository outage. Neither endpoint changes semantic scoring or threshold
+behavior. See `docs/REAL_STACK_ACCEPTANCE.md` for the command and runbook.
+
+Real-broker acceptance completed on 2026-07-31 with run ID
+`codex-20260731`. All phases passed against the real Compose stack. The reviewed
+follow-up stream remained `UNCERTAIN` under the frozen strict policy because
+its mean similarity was below the unchanged known-class threshold; no threshold
+was weakened. The bounded burst published 80 messages, accepted and processed
+3, dropped 77 explicitly, and recorded no semantic failures. Final persisted
+generation 15 was restored after a 3.5-second bounded shutdown.
+
 ## Documentation maintenance
 
 For every future semantic pull request:
