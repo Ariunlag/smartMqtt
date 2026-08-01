@@ -5,6 +5,9 @@ import type {
   SemanticClassList,
   SemanticReviewResult,
   SemanticReviewState,
+  SemanticProcessingStatus,
+  SemanticDiscoveryStatus,
+  SemanticPersistenceStatus,
 } from "../types/api_models";
 
 const api = axios.create({
@@ -35,5 +38,26 @@ export async function getSemanticReviewConstraints(): Promise<NegativeMembership
 
 export async function getSemanticClasses(): Promise<SemanticClassList> {
   const response = await api.get<SemanticClassList>("/semantic-review/classes");
+  return response.data;
+}
+
+export async function getSemanticProcessingStatus(): Promise<SemanticProcessingStatus> {
+  const response = await api.get<SemanticProcessingStatus>(
+    "/semantic-review/processing-status",
+  );
+  return response.data;
+}
+
+export async function getSemanticDiscoveryStatus(): Promise<SemanticDiscoveryStatus> {
+  const response = await api.get<SemanticDiscoveryStatus>(
+    "/semantic-review/discovery-status",
+  );
+  return response.data;
+}
+
+export async function getSemanticPersistenceStatus(): Promise<SemanticPersistenceStatus> {
+  const response = await api.get<SemanticPersistenceStatus>(
+    "/semantic-review/persistence-status",
+  );
   return response.data;
 }

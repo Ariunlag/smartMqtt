@@ -110,13 +110,16 @@ class SemanticReviewRuntime:
     def register_candidate(self, candidate: UnknownClusterCandidate) -> None:
         """Register a discovery candidate without exposing a public write API."""
         identity = CandidateIdentity.from_candidate(candidate)
+        pending_candidate = PendingSemanticCandidate(
+            identity=identity,
+            candidate_index=candidate.candidate_index,
+        )
         with self._pending_lock:
             previous = self._pending.get(identity)
-            self._pending[identity] = PendingSemanticCandidate(
-                identity=identity,
-                candidate_index=candidate.candidate_index,
-            )
-        if previous != self._pending[identity] and self.state_coordinator is not None:
+            changed = previous != pending_candidate
+            if changed:
+                self._pending[identity] = pending_candidate
+        if changed and self.state_coordinator is not None:
             self.state_coordinator.mark_changed()
 
     def replace_discovery(self, result: UnknownStreamDiscoveryResult) -> None:
