@@ -21,7 +21,9 @@ const state = {
 };
 
 const result = {
+  class_id: "temperature",
   semantic_class_name: "Temperature",
+  registry_updated: true,
   positive_topics: ["topic/A", "topic/C"],
   removed_topics: ["topic/B"],
   changed_representations: [
@@ -67,6 +69,9 @@ describe("SemanticReviewManager", () => {
     }
     expect(screen.getByRole("button", { name: "Apply review" })).toBeDisabled();
 
+    fireEvent.change(screen.getByLabelText("Semantic class ID"), {
+      target: { value: "temperature" },
+    });
     fireEvent.change(screen.getByLabelText("Semantic class name"), {
       target: { value: "Temperature" },
     });
@@ -92,6 +97,7 @@ describe("SemanticReviewManager", () => {
         representation_name: "key_value",
         member_topics: ["topic/A", "topic/B"],
       },
+      class_id: "temperature",
       semantic_class_name: "Temperature",
       kept_topics: ["topic/A"],
       removed_topics: ["topic/B"],
@@ -107,6 +113,9 @@ describe("SemanticReviewManager", () => {
     render(<SemanticReviewManager />);
 
     await screen.findByText("topic/A");
+    fireEvent.change(screen.getByLabelText("Semantic class ID"), {
+      target: { value: "temperature" },
+    });
     fireEvent.change(screen.getByLabelText("Semantic class name"), {
       target: { value: "Temperature" },
     });

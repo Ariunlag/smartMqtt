@@ -2,15 +2,14 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterable
 from dataclasses import dataclass
-from threading import Lock
+from threading import Lock, RLock
 
 from services.embedding.base_model import BaseEmbeddingModel
 
+from .known_class_registry import KnownClassRegistry
 from .multi_view_consensus import MultiViewConsensusEngine, MultiViewConsensusResult
 from .representation_class_scoring import (
-    RepresentationClassCentroids,
     RepresentationClassEvidenceMatrix,
     RepresentationClassScorer,
 )
@@ -19,8 +18,10 @@ from .representations import StreamRepresentations
 from .semantic_class_decision import (
     SemanticClassDecision,
     SemanticClassDecisionPolicy,
+    SemanticClassDecisionReason,
     SemanticClassDecisionState,
 )
+from .semantic_feedback_workflow import NegativeMembershipConstraintStore
 from .semantic_refresh import SemanticRefreshDecision, SemanticRefreshPolicy
 from .stability_aware_representations import StabilityAwareRepresentationBuilder
 from .stream_profiler import StreamProfile
@@ -102,17 +103,19 @@ class SemanticRuntimeOrchestrator:
         self,
         *,
         embedding_model: BaseEmbeddingModel,
-        known_classes: Iterable[RepresentationClassCentroids],
+        known_class_registry: KnownClassRegistry,
         decision_policy: SemanticClassDecisionPolicy,
         state_store: SemanticRuntimeStateStore | None = None,
         unknown_pool: UnknownStreamPool | None = None,
+        constraint_store: NegativeMembershipConstraintStore | None = None,
+        feedback_lock=None,
         temporal_profiler: TemporalStreamProfiler | None = None,
         refresh_policy: SemanticRefreshPolicy | None = None,
         representation_builder: StabilityAwareRepresentationBuilder | None = None,
         class_scorer: RepresentationClassScorer | None = None,
         consensus_engine: MultiViewConsensusEngine | None = None,
     ) -> None:
-        self.known_classes = self._known_class_registry(known_classes)
+        self.known_class_registry = known_class_registry
         self.decision_policy = decision_policy
         self.state_store = (
             state_store if state_store is not None else SemanticRuntimeStateStore()
@@ -120,6 +123,12 @@ class SemanticRuntimeOrchestrator:
         self.unknown_pool = (
             unknown_pool if unknown_pool is not None else UnknownStreamPool()
         )
+        self.constraint_store = (
+            constraint_store
+            if constraint_store is not None
+            else NegativeMembershipConstraintStore()
+        )
+        self.feedback_lock = feedback_lock or RLock()
         self.temporal_profiler = temporal_profiler or TemporalStreamProfiler()
         self.refresh_policy = refresh_policy or SemanticRefreshPolicy()
         self.representation_builder = (
@@ -161,12 +170,32 @@ class SemanticRuntimeOrchestrator:
                 )
                 stage = "representation embedding"
                 embeddings = self.embedder.embed(representations)
-                stage = "known-class scoring"
-                evidence = self.class_scorer.score(embeddings, self.known_classes)
-                stage = "multi-view consensus"
-                consensus = self.consensus_engine.build(evidence)
-                stage = "semantic class decision"
-                decision = self.decision_policy.decide(consensus)
+                with self.feedback_lock:
+                    stage = "known-class registry snapshot"
+                    known_classes = self.known_class_registry.snapshot()
+                    stage = "known-class scoring"
+                    evidence = self.class_scorer.score(embeddings, known_classes)
+                    stage = "multi-view consensus"
+                    unfiltered_consensus = self.consensus_engine.build(evidence)
+                    stage = "negative constraint filtering"
+                    eligible = self.constraint_store.filter_allowed(
+                        topic, unfiltered_consensus.classes
+                    )
+                    consensus = MultiViewConsensusResult(
+                        view_winners=unfiltered_consensus.view_winners,
+                        classes=eligible,
+                    )
+                    stage = "semantic class decision"
+                    if unfiltered_consensus.classes and not eligible:
+                        decision = SemanticClassDecision(
+                            state=SemanticClassDecisionState.UNKNOWN,
+                            candidate=None,
+                            runner_up=None,
+                            similarity_margin=None,
+                            reasons=(SemanticClassDecisionReason.ALL_CLASSES_BLOCKED,),
+                        )
+                    else:
+                        decision = self.decision_policy.decide(consensus)
             else:
                 if previous is None:
                     raise RuntimeError(
@@ -249,14 +278,7 @@ class SemanticRuntimeOrchestrator:
                 self._topic_locks[topic] = lock
             return lock
 
-    @staticmethod
-    def _known_class_registry(
-        classes: Iterable[RepresentationClassCentroids],
-    ) -> tuple[RepresentationClassCentroids, ...]:
-        registry = tuple(sorted(classes, key=lambda item: item.class_id))
-        seen: set[str] = set()
-        for known_class in registry:
-            if known_class.class_id in seen:
-                raise ValueError(f"Duplicate class_id: '{known_class.class_id}'")
-            seen.add(known_class.class_id)
-        return registry
+    @property
+    def known_classes(self):
+        """Return the current immutable registry snapshot for diagnostics."""
+        return self.known_class_registry.snapshot()

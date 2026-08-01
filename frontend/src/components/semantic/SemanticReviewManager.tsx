@@ -21,6 +21,7 @@ export default function SemanticReviewManager() {
   const [unknownTopics, setUnknownTopics] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [classId, setClassId] = useState("");
   const [className, setClassName] = useState("");
   const [removedTopics, setRemovedTopics] = useState<Set<string>>(new Set());
   const [addedTopics, setAddedTopics] = useState<string[]>([]);
@@ -63,6 +64,7 @@ export default function SemanticReviewManager() {
   }, []);
 
   useEffect(() => {
+    setClassId("");
     setClassName("");
     setRemovedTopics(new Set());
     setAddedTopics([]);
@@ -95,7 +97,11 @@ export default function SemanticReviewManager() {
   const partitionValid =
     keptTopics.length + removedTopics.size === candidate.member_topics.length;
   const submitDisabled =
-    !className.trim() || !partitionValid || finalPositiveCount === 0 || submitting;
+    !classId.trim() ||
+    !className.trim() ||
+    !partitionValid ||
+    finalPositiveCount === 0 ||
+    submitting;
 
   const toggleTopic = (topic: string, remove: boolean) => {
     setRemovedTopics((current) => {
@@ -121,6 +127,7 @@ export default function SemanticReviewManager() {
           representation_name: candidate.representation_name,
           member_topics: candidate.member_topics,
         },
+        class_id: classId.trim(),
         semantic_class_name: className.trim(),
         kept_topics: keptTopics,
         removed_topics: [...removedTopics].sort(),
@@ -150,6 +157,14 @@ export default function SemanticReviewManager() {
       <article className="semantic-review__card">
         <p><strong>Discovery representation:</strong> {candidate.representation_name}</p>
         <p><strong>Suggested count:</strong> {candidate.member_topics.length}</p>
+        <label>
+          Semantic class ID
+          <input
+            className="panel-input"
+            value={classId}
+            onChange={(event) => setClassId(event.target.value)}
+          />
+        </label>
         <label>
           Semantic class name
           <input
@@ -228,6 +243,8 @@ function ResultSummary({ result }: { result: SemanticReviewResult }) {
   return (
     <div className="semantic-review__success" role="status">
       <strong>Applied review for {result.semantic_class_name}</strong>
+      <span>Class ID: {result.class_id}</span>
+      <span>Registry updated: {result.registry_updated ? "yes" : "no"}</span>
       <span>Changed representations: {result.changed_representations.join(", ")}</span>
       <span>Constraints added: {result.constraints_added.length}</span>
       <span>Constraints removed: {result.constraints_removed.length}</span>

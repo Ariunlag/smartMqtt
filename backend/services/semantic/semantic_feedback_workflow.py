@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from threading import RLock
 
 from .candidate_membership_review import CandidateMembershipReview
 from .multi_view_consensus import RepresentationClassConsensus
@@ -33,36 +34,55 @@ class NegativeMembershipConstraintStore:
 
     def __init__(self) -> None:
         self._constraints: dict[tuple[str, str], NegativeMembershipConstraint] = {}
+        self._lock = RLock()
 
     def upsert(self, constraint: NegativeMembershipConstraint) -> None:
-        self._constraints[
-            self._key(constraint.topic, constraint.semantic_class_name)
-        ] = constraint
+        with self._lock:
+            self._constraints[
+                self._key(constraint.topic, constraint.semantic_class_name)
+            ] = constraint
 
     def get(
         self,
         topic: str,
         semantic_class_name: str,
     ) -> NegativeMembershipConstraint | None:
-        return self._constraints.get(self._key(topic, semantic_class_name))
+        with self._lock:
+            return self._constraints.get(self._key(topic, semantic_class_name))
 
     def remove(
         self,
         topic: str,
         semantic_class_name: str,
     ) -> NegativeMembershipConstraint | None:
-        return self._constraints.pop(self._key(topic, semantic_class_name), None)
+        with self._lock:
+            return self._constraints.pop(self._key(topic, semantic_class_name), None)
 
     def all(self) -> tuple[NegativeMembershipConstraint, ...]:
-        return tuple(
-            sorted(
-                self._constraints.values(),
-                key=lambda item: (item.semantic_class_name, item.topic),
+        with self._lock:
+            return tuple(
+                sorted(
+                    self._constraints.values(),
+                    key=lambda item: (item.semantic_class_name, item.topic),
+                )
             )
-        )
+
+    def snapshot(self) -> tuple[NegativeMembershipConstraint, ...]:
+        return self.all()
+
+    def replace(self, constraints: tuple[NegativeMembershipConstraint, ...]) -> None:
+        replacement = {
+            self._key(item.topic, item.semantic_class_name): item
+            for item in constraints
+        }
+        if len(replacement) != len(constraints):
+            raise ValueError("Constraint snapshot contains duplicates")
+        with self._lock:
+            self._constraints = replacement
 
     def __len__(self) -> int:
-        return len(self._constraints)
+        with self._lock:
+            return len(self._constraints)
 
     def is_blocked(self, topic: str, semantic_class_name: str) -> bool:
         """Return whether one class is ineligible for the topic."""
@@ -74,11 +94,12 @@ class NegativeMembershipConstraintStore:
         candidates: tuple[RepresentationClassConsensus, ...],
     ) -> tuple[RepresentationClassConsensus, ...]:
         """Remove blocked classes without changing evidence or order."""
-        return tuple(
-            candidate
-            for candidate in candidates
-            if not self.is_blocked(topic, candidate.class_name)
-        )
+        with self._lock:
+            return tuple(
+                candidate
+                for candidate in candidates
+                if self._key(topic, candidate.class_name) not in self._constraints
+            )
 
     @staticmethod
     def _key(topic: str, semantic_class_name: str) -> tuple[str, str]:

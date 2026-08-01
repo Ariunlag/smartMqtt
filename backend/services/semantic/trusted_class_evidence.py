@@ -6,6 +6,7 @@ import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from numbers import Real
+from threading import RLock
 
 from .candidate_confirmation import (
     CandidateConfirmation,
@@ -92,6 +93,7 @@ class TrustedClassEvidenceStore:
 
     def __init__(self) -> None:
         self._evidence: dict[tuple[str, str], TrustedClassEvidence] = {}
+        self._lock = RLock()
 
     def get(
         self,
@@ -99,13 +101,15 @@ class TrustedClassEvidenceStore:
         representation_name: str,
     ) -> TrustedClassEvidence | None:
         """Return evidence for one semantic class and representation."""
-        return self._evidence.get((semantic_class_name, representation_name))
+        with self._lock:
+            return self._evidence.get((semantic_class_name, representation_name))
 
     def upsert(self, evidence: TrustedClassEvidence) -> None:
         """Insert or replace representation-specific trusted evidence."""
-        self._evidence[(evidence.semantic_class_name, evidence.representation_name)] = (
-            evidence
-        )
+        with self._lock:
+            self._evidence[
+                (evidence.semantic_class_name, evidence.representation_name)
+            ] = evidence
 
     def remove(
         self,
@@ -113,23 +117,39 @@ class TrustedClassEvidenceStore:
         representation_name: str,
     ) -> TrustedClassEvidence | None:
         """Remove and return one representation-specific evidence record."""
-        return self._evidence.pop((semantic_class_name, representation_name), None)
+        with self._lock:
+            return self._evidence.pop((semantic_class_name, representation_name), None)
 
     def all(self) -> tuple[TrustedClassEvidence, ...]:
         """Return evidence ordered by semantic class then representation."""
-        return tuple(
-            sorted(
-                self._evidence.values(),
-                key=lambda evidence: (
-                    evidence.semantic_class_name,
-                    evidence.representation_name,
-                ),
+        with self._lock:
+            return tuple(
+                sorted(
+                    self._evidence.values(),
+                    key=lambda evidence: (
+                        evidence.semantic_class_name,
+                        evidence.representation_name,
+                    ),
+                )
             )
-        )
+
+    def snapshot(self) -> tuple[TrustedClassEvidence, ...]:
+        return self.all()
+
+    def replace(self, evidence: tuple[TrustedClassEvidence, ...]) -> None:
+        replacement = {
+            (item.semantic_class_name, item.representation_name): item
+            for item in evidence
+        }
+        if len(replacement) != len(evidence):
+            raise ValueError("Trusted evidence snapshot contains duplicates")
+        with self._lock:
+            self._evidence = replacement
 
     def __len__(self) -> int:
         """Return the number of representation-specific evidence records."""
-        return len(self._evidence)
+        with self._lock:
+            return len(self._evidence)
 
 
 class TrustedClassEvidenceUpdater:

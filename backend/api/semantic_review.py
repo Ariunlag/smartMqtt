@@ -7,6 +7,7 @@ from models.semantic_review_models import (
     CandidateIdentityModel,
     NegativeMembershipConstraintList,
     PendingSemanticCandidateModel,
+    SemanticClassList,
     SemanticMembershipReviewRequest,
     SemanticReviewResult,
     SemanticReviewState,
@@ -75,7 +76,7 @@ def apply_review(
             added_topics=request.added_topics,
             source=CandidateConfirmationSource.HUMAN,
         )
-        result = runtime.apply_review(review)
+        result = runtime.apply_review(review, request.class_id)
     except PendingCandidateNotFoundError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
     except (TypeError, ValueError) as exc:
@@ -83,7 +84,9 @@ def apply_review(
 
     workflow = result.workflow
     return SemanticReviewResult(
+        class_id=result.class_id,
         semantic_class_name=workflow.semantic_class_name,
+        registry_updated=result.registry_updated,
         positive_topics=workflow.positive_topics,
         removed_topics=workflow.removed_topics,
         changed_representations=workflow.changed_representations,
@@ -100,6 +103,13 @@ def list_constraints(
     return NegativeMembershipConstraintList(
         constraints=runtime.constraint_store.all(),
     )
+
+
+@router.get("/classes", response_model=SemanticClassList)
+def list_classes(
+    application: Annotated[SemanticApplication, Depends(get_semantic_application)],
+) -> SemanticClassList:
+    return SemanticClassList(classes=application.class_catalog.all())
 
 
 def _identity(model: CandidateIdentityModel) -> CandidateIdentity:

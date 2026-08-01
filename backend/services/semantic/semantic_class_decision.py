@@ -25,6 +25,7 @@ class SemanticClassDecisionReason(str, Enum):
     """Deterministic reasons explaining a semantic class decision."""
 
     NO_KNOWN_CLASSES = "NO_KNOWN_CLASSES"
+    ALL_CLASSES_BLOCKED = "ALL_CLASSES_BLOCKED"
     BELOW_UNKNOWN_SIMILARITY = "BELOW_UNKNOWN_SIMILARITY"
     INSUFFICIENT_TOP1_VOTES = "INSUFFICIENT_TOP1_VOTES"
     BELOW_KNOWN_SIMILARITY = "BELOW_KNOWN_SIMILARITY"

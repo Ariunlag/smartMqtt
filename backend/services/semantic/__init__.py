@@ -20,6 +20,11 @@ from .known_class_assembly import (
     KnownClassAssemblyRequest,
     KnownClassAssemblyResult,
 )
+from .known_class_registry import (
+    KnownClassRegistry,
+    SemanticClassCatalog,
+    SemanticClassDefinition,
+)
 from .multi_view_consensus import (
     MultiViewConsensusEngine,
     MultiViewConsensusResult,
@@ -123,6 +128,7 @@ __all__ = [
     "KnownClassAssembler",
     "KnownClassAssemblyRequest",
     "KnownClassAssemblyResult",
+    "KnownClassRegistry",
     "MembershipFeedbackEvidence",
     "MembershipFeedbackKind",
     "MembershipFeedbackPolarity",
@@ -151,11 +157,13 @@ __all__ = [
     "ReviewedPrototypeUpdateResult",
     "ReviewedPrototypeUpdater",
     "SemanticApplication",
+    "SemanticClassCatalog",
     "SemanticClassDecision",
     "SemanticClassDecisionConfig",
     "SemanticClassDecisionPolicy",
     "SemanticClassDecisionReason",
     "SemanticClassDecisionState",
+    "SemanticClassDefinition",
     "SemanticFeedbackWorkflow",
     "SemanticFeedbackWorkflowResult",
     "SemanticRefreshDecision",

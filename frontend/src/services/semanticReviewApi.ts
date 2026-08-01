@@ -2,6 +2,7 @@ import axios from "axios";
 import type {
   NegativeMembershipConstraintList,
   SemanticMembershipReviewRequest,
+  SemanticClassList,
   SemanticReviewResult,
   SemanticReviewState,
 } from "../types/api_models";
@@ -29,5 +30,10 @@ export async function getSemanticReviewConstraints(): Promise<NegativeMembership
   const response = await api.get<NegativeMembershipConstraintList>(
     "/semantic-review/constraints",
   );
+  return response.data;
+}
+
+export async function getSemanticClasses(): Promise<SemanticClassList> {
+  const response = await api.get<SemanticClassList>("/semantic-review/classes");
   return response.data;
 }

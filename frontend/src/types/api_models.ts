@@ -123,6 +123,7 @@ export interface SemanticReviewState {
 
 export interface SemanticMembershipReviewRequest {
   identity: CandidateIdentity;
+  class_id: string;
   semantic_class_name: string;
   kept_topics: string[];
   removed_topics: string[];
@@ -141,7 +142,9 @@ export interface PrototypeSummary {
 }
 
 export interface SemanticReviewResult {
+  class_id: string;
   semantic_class_name: string;
+  registry_updated: boolean;
   positive_topics: string[];
   removed_topics: string[];
   changed_representations: string[];
@@ -152,4 +155,13 @@ export interface SemanticReviewResult {
 
 export interface NegativeMembershipConstraintList {
   constraints: NegativeMembershipConstraint[];
+}
+
+export interface SemanticClassDefinition {
+  class_id: string;
+  semantic_class_name: string;
+}
+
+export interface SemanticClassList {
+  classes: SemanticClassDefinition[];
 }

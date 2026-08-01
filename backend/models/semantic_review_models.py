@@ -19,6 +19,7 @@ class SemanticReviewState(BaseModel):
 
 class SemanticMembershipReviewRequest(BaseModel):
     identity: CandidateIdentityModel
+    class_id: str
     semantic_class_name: str
     kept_topics: tuple[str, ...]
     removed_topics: tuple[str, ...]
@@ -41,7 +42,9 @@ class PrototypeSummaryModel(BaseModel):
 
 
 class SemanticReviewResult(BaseModel):
+    class_id: str
     semantic_class_name: str
+    registry_updated: bool
     positive_topics: tuple[str, ...]
     removed_topics: tuple[str, ...]
     changed_representations: tuple[str, ...]
@@ -52,3 +55,14 @@ class SemanticReviewResult(BaseModel):
 
 class NegativeMembershipConstraintList(BaseModel):
     constraints: tuple[NegativeMembershipConstraintModel, ...]
+
+
+class SemanticClassDefinitionModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    class_id: str
+    semantic_class_name: str
+
+
+class SemanticClassList(BaseModel):
+    classes: tuple[SemanticClassDefinitionModel, ...]

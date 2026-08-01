@@ -5,6 +5,7 @@ from threading import Lock
 import pytest
 from services.embedding.base_model import BaseEmbeddingModel
 from services.semantic import (
+    KnownClassRegistry,
     RepresentationClassCentroids,
     RepresentationEmbeddings,
     SemanticClassDecisionConfig,
@@ -76,7 +77,9 @@ def _runtime(model=None, classes=None, state_store=None, unknown_pool=None):
     model = model or ControlledEmbeddingModel()
     return SemanticRuntimeOrchestrator(
         embedding_model=model,
-        known_classes=(_known_class(),) if classes is None else classes,
+        known_class_registry=KnownClassRegistry(
+            (_known_class(),) if classes is None else classes
+        ),
         decision_policy=_policy(),
         state_store=state_store,
         unknown_pool=unknown_pool,

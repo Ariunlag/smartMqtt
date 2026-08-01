@@ -62,6 +62,7 @@ def _payload(**changes):
             "representation_name": "key_value",
             "member_topics": ["A", "B"],
         },
+        "class_id": "temperature",
         "semantic_class_name": "Temperature",
         "kept_topics": ["A"],
         "removed_topics": ["B"],
@@ -119,6 +120,7 @@ def test_complete_review_updates_six_views_constraints_and_pending_candidate():
     assert response.status_code == 200
     body = response.json()
     assert body["semantic_class_name"] == "Temperature"
+    assert body["class_id"] == "temperature"
     assert body["positive_topics"] == ["A", "C"]
     assert body["removed_topics"] == ["B"]
     assert body["changed_representations"] == list(VIEWS)

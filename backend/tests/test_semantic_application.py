@@ -80,6 +80,7 @@ def _payload(**changes):
             "representation_name": "key_value",
             "member_topics": ["A", "B"],
         },
+        "class_id": "temperature",
         "semantic_class_name": "Temperature",
         "kept_topics": ["A"],
         "removed_topics": ["B"],
@@ -114,12 +115,22 @@ def test_application_owns_exact_shared_runtime_objects():
     assert application.evidence_store is evidence_store
     assert application.constraint_store is constraint_store
     assert application.feedback_workflow is workflow
+    assert (
+        application.processing_runtime.known_class_registry
+        is application.known_class_registry
+    )
+    assert application.processing_runtime.constraint_store is constraint_store
     assert application.processing_runtime.unknown_pool is application.unknown_pool
     assert application.processing_runtime.state_store is state_store
     assert application.review_runtime.unknown_pool is application.unknown_pool
     assert application.review_runtime.evidence_store is application.evidence_store
     assert application.review_runtime.constraint_store is application.constraint_store
     assert application.review_runtime.workflow is application.feedback_workflow
+    assert (
+        application.review_runtime.known_class_registry
+        is application.known_class_registry
+    )
+    assert application.review_runtime.class_catalog is application.class_catalog
 
 
 def test_unknown_processing_is_immediately_visible_to_review_without_copying():
