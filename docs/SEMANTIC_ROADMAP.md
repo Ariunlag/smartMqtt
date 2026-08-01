@@ -133,8 +133,8 @@ reliability learning remain planned stages.
 The semantic runtime now consumes MQTT observations through an isolated,
 bounded sidecar after the existing primary handlers. It updates the shared
 in-memory runtime and UNKNOWN pool without blocking or retrying the primary
-InfluxDB/WebSocket pipeline. Discovery scheduling and persistence remain
-separate work.
+InfluxDB/WebSocket pipeline. Discovery scheduling and durable PostgreSQL
+snapshot recovery are now application-owned services.
 
 ### Planned work
 
@@ -149,10 +149,15 @@ separate work.
 - [x] Wire SemanticRuntime into production MQTT ingestion
 - [x] Trigger UNKNOWN discovery from shared pool
 - [x] Publish pending discovery candidates to review runtime
-- [ ] Persist semantic application state
-- [ ] Restart recovery
+- [x] Durable semantic application snapshot
+- [x] PostgreSQL semantic-state repository
+- [x] Startup restore before semantic processing
+- [x] Bounded debounced persistence writer
+- [x] Restart recovery integration test
 - [ ] Operational semantic diagnostics UI
 - [ ] Full real-broker acceptance test
+- [ ] Multi-instance semantic ownership strategy
+- [ ] Snapshot retention and historical audit
 - [ ] Representation reliability experiments
 - [ ] Versioned adaptive recalibration
 - [ ] Expanded hard benchmark and final TEST report

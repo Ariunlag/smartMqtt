@@ -68,6 +68,21 @@ from .semantic_feedback_workflow import (
     SemanticFeedbackWorkflow,
     SemanticFeedbackWorkflowResult,
 )
+from .semantic_persistence import (
+    InMemorySemanticStateRepository,
+    PostgresSemanticStateRepository,
+    SemanticPersistenceCompatibilityError,
+    SemanticPersistenceRecord,
+    SemanticSnapshotSerializer,
+    SemanticSnapshotValidationError,
+    SemanticStateRepository,
+    create_model_fingerprint,
+)
+from .semantic_persistence_service import (
+    SemanticPersistenceConfig,
+    SemanticPersistenceService,
+    SemanticPersistenceStatus,
+)
 from .semantic_processing_service import (
     SemanticProcessingConfig,
     SemanticProcessingService,
@@ -85,6 +100,7 @@ from .semantic_review_runtime import (
     PrototypeSummary,
     SemanticReviewApplicationResult,
     SemanticReviewRuntime,
+    SemanticReviewStateSnapshot,
 )
 from .semantic_runtime import (
     SemanticRuntimeOrchestrator,
@@ -92,6 +108,13 @@ from .semantic_runtime import (
     SemanticRuntimeProcessResult,
     SemanticRuntimeStateStore,
     SemanticRuntimeTopicState,
+)
+from .semantic_state import (
+    SEMANTIC_REPRESENTATION_CONTRACT_VERSION,
+    SEMANTIC_STATE_SCHEMA_VERSION,
+    SemanticApplicationSnapshot,
+    SemanticPersistenceMetadata,
+    SemanticStateCoordinator,
 )
 from .stability_aware_representations import StabilityAwareRepresentationBuilder
 from .stream_class import (
@@ -129,6 +152,8 @@ from .unknown_stream_pool import (
 )
 
 __all__ = [
+    "SEMANTIC_REPRESENTATION_CONTRACT_VERSION",
+    "SEMANTIC_STATE_SCHEMA_VERSION",
     "CandidateConfirmation",
     "CandidateConfirmationSource",
     "CandidateConfirmationState",
@@ -139,6 +164,7 @@ __all__ = [
     "ClassMatch",
     "FieldProfile",
     "HDBSCANDiscoveryConfig",
+    "InMemorySemanticStateRepository",
     "KnownClassAssembler",
     "KnownClassAssemblyRequest",
     "KnownClassAssemblyResult",
@@ -153,6 +179,7 @@ __all__ = [
     "NegativeMembershipConstraintStore",
     "PendingCandidateNotFoundError",
     "PendingSemanticCandidate",
+    "PostgresSemanticStateRepository",
     "PrototypeSummary",
     "RepresentationBuilder",
     "RepresentationClassCentroids",
@@ -171,6 +198,7 @@ __all__ = [
     "ReviewedPrototypeUpdateResult",
     "ReviewedPrototypeUpdater",
     "SemanticApplication",
+    "SemanticApplicationSnapshot",
     "SemanticClassCatalog",
     "SemanticClassDecision",
     "SemanticClassDecisionConfig",
@@ -183,6 +211,12 @@ __all__ = [
     "SemanticDiscoveryStatus",
     "SemanticFeedbackWorkflow",
     "SemanticFeedbackWorkflowResult",
+    "SemanticPersistenceCompatibilityError",
+    "SemanticPersistenceConfig",
+    "SemanticPersistenceMetadata",
+    "SemanticPersistenceRecord",
+    "SemanticPersistenceService",
+    "SemanticPersistenceStatus",
     "SemanticProcessingConfig",
     "SemanticProcessingService",
     "SemanticProcessingStatus",
@@ -192,11 +226,16 @@ __all__ = [
     "SemanticRefreshReasonType",
     "SemanticReviewApplicationResult",
     "SemanticReviewRuntime",
+    "SemanticReviewStateSnapshot",
     "SemanticRuntimeOrchestrator",
     "SemanticRuntimeProcessResult",
     "SemanticRuntimeProcessingError",
     "SemanticRuntimeStateStore",
     "SemanticRuntimeTopicState",
+    "SemanticSnapshotSerializer",
+    "SemanticSnapshotValidationError",
+    "SemanticStateCoordinator",
+    "SemanticStateRepository",
     "StabilityAwareRepresentationBuilder",
     "StreamClassEngine",
     "StreamClassMember",
@@ -222,5 +261,6 @@ __all__ = [
     "UnknownStreamPool",
     "UnknownStreamPoolSnapshot",
     "build_semantic_application",
+    "create_model_fingerprint",
     "normalize_text",
 ]

@@ -38,10 +38,11 @@ class UnknownStreamPoolSnapshot:
 class UnknownStreamPool:
     """Store the latest immutable UNKNOWN evidence for each topic in memory."""
 
-    def __init__(self) -> None:
+    def __init__(self, coordinator=None) -> None:
         self._entries: dict[str, UnknownStreamEntry] = {}
         self._version = 0
         self._lock = RLock()
+        self._coordinator = coordinator
 
     def upsert(self, entry: UnknownStreamEntry) -> None:
         """Insert or replace the latest UNKNOWN evidence for an entry topic."""
@@ -50,6 +51,8 @@ class UnknownStreamPool:
                 return
             self._entries[entry.topic] = entry
             self._version += 1
+        if self._coordinator is not None:
+            self._coordinator.mark_changed()
 
     def get(self, topic: str) -> UnknownStreamEntry | None:
         """Return one topic's retained UNKNOWN evidence, if present."""
@@ -62,7 +65,24 @@ class UnknownStreamPool:
             removed = self._entries.pop(topic, None)
             if removed is not None:
                 self._version += 1
-            return removed
+        if removed is not None and self._coordinator is not None:
+            self._coordinator.mark_changed()
+        return removed
+
+    def replace(self, entries: tuple[UnknownStreamEntry, ...], version: int) -> None:
+        """Replace contents while preserving the exact persisted pool version."""
+        if isinstance(version, bool) or not isinstance(version, int) or version < 0:
+            raise ValueError("UNKNOWN pool version must be a non-negative integer")
+        replacement = {entry.topic: entry for entry in entries}
+        if len(replacement) != len(entries):
+            raise ValueError("UNKNOWN pool snapshot contains duplicate topics")
+        with self._lock:
+            if self._entries == replacement and self._version == version:
+                return
+            self._entries = replacement
+            self._version = version
+        if self._coordinator is not None:
+            self._coordinator.mark_changed()
 
     def all(self) -> tuple[UnknownStreamEntry, ...]:
         """Return all entries in deterministic ascending topic order."""

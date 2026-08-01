@@ -436,7 +436,7 @@ superiority.
 - Raw embeddings and prototype centroid vectors are not exposed through the API.
 - A successful review atomically applies six-view prototype reconciliation and negative membership constraints through the domain workflow.
 - A pending candidate is removed only after its review succeeds. Validation or workflow failures preserve the candidate, prototypes, and constraints.
-- The semantic review runtime remains in memory without persistence; pending candidates are now populated automatically from the shared UNKNOWN pool.
+- Pending candidates are populated automatically from the shared UNKNOWN pool and are included in the authoritative application snapshot.
 
 ## Shared semantic application composition
 
@@ -465,4 +465,14 @@ superiority.
 - Pending candidate replacement is atomic, and all six representation-specific discovery results remain independent without cross-view merging.
 - Successfully reviewed candidate identities are suppressed from later automatic publication only for the exact representation and canonical member set.
 - Discovery is enabled by default with a one-second debounce, five-second shutdown bound, and operational `min_cluster_size` default of three. These are operational defaults, not calibrated research values, and have explicit environment overrides.
-- Semantic application persistence and restart recovery remain later tasks.
+
+## Durable semantic application state
+
+- PostgreSQL is the authoritative semantic snapshot store. One versioned JSONB snapshot keeps runtime state, UNKNOWN evidence, reviewed prototypes, constraints, class identity, and review publication state within one database transaction rather than creating cross-database partial commits.
+- Existing Qdrant behavior is unchanged in this persistence phase.
+- Persistence uses an explicit fixed-whitelist JSON serializer and never Python pickle or executable object deserialization.
+- Restore completes before discovery and semantic processing start. Model-fingerprint or six-view representation-contract incompatibility prevents persisted vectors from being applied.
+- Restore replaces content inside the application-owned shared stores, preserving the object identities held by processing, discovery, and review runtimes. A failed replacement rolls every store back.
+- One application coordinator serializes authoritative publication, advances generation once per logical content-changing transaction, and captures immutable internally consistent snapshots. Embedding, HDBSCAN, serialization, and database I/O occur outside its lock.
+- Saves use one bounded debounced writer and a PostgreSQL generation guard, so an older generation cannot overwrite newer persisted state. Save failures leave the generation dirty for a later retry without stopping semantic processing.
+- Operational counters, tasks, queues, locks, MQTT objects, database clients, and transient errors are not persisted.

@@ -91,9 +91,10 @@ class TrustedClassEvidence:
 class TrustedClassEvidenceStore:
     """In-memory store of latest trusted evidence per class and view."""
 
-    def __init__(self) -> None:
+    def __init__(self, coordinator=None) -> None:
         self._evidence: dict[tuple[str, str], TrustedClassEvidence] = {}
         self._lock = RLock()
+        self._coordinator = coordinator
 
     def get(
         self,
@@ -107,9 +108,12 @@ class TrustedClassEvidenceStore:
     def upsert(self, evidence: TrustedClassEvidence) -> None:
         """Insert or replace representation-specific trusted evidence."""
         with self._lock:
-            self._evidence[
-                (evidence.semantic_class_name, evidence.representation_name)
-            ] = evidence
+            key = (evidence.semantic_class_name, evidence.representation_name)
+            if self._evidence.get(key) == evidence:
+                return
+            self._evidence[key] = evidence
+        if self._coordinator is not None:
+            self._coordinator.mark_changed()
 
     def remove(
         self,
@@ -118,7 +122,12 @@ class TrustedClassEvidenceStore:
     ) -> TrustedClassEvidence | None:
         """Remove and return one representation-specific evidence record."""
         with self._lock:
-            return self._evidence.pop((semantic_class_name, representation_name), None)
+            removed = self._evidence.pop(
+                (semantic_class_name, representation_name), None
+            )
+        if removed is not None and self._coordinator is not None:
+            self._coordinator.mark_changed()
+        return removed
 
     def all(self) -> tuple[TrustedClassEvidence, ...]:
         """Return evidence ordered by semantic class then representation."""
@@ -144,7 +153,11 @@ class TrustedClassEvidenceStore:
         if len(replacement) != len(evidence):
             raise ValueError("Trusted evidence snapshot contains duplicates")
         with self._lock:
+            if self._evidence == replacement:
+                return
             self._evidence = replacement
+        if self._coordinator is not None:
+            self._coordinator.mark_changed()
 
     def __len__(self) -> int:
         """Return the number of representation-specific evidence records."""

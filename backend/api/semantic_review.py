@@ -10,6 +10,7 @@ from models.semantic_review_models import (
     SemanticClassList,
     SemanticDiscoveryStatusModel,
     SemanticMembershipReviewRequest,
+    SemanticPersistenceStatusModel,
     SemanticProcessingStatusModel,
     SemanticReviewResult,
     SemanticReviewState,
@@ -129,6 +130,15 @@ def discovery_status(
 ) -> SemanticDiscoveryStatusModel:
     return SemanticDiscoveryStatusModel.model_validate(
         application.discovery_service.status()
+    )
+
+
+@router.get("/persistence-status", response_model=SemanticPersistenceStatusModel)
+def persistence_status(
+    application: Annotated[SemanticApplication, Depends(get_semantic_application)],
+) -> SemanticPersistenceStatusModel:
+    return SemanticPersistenceStatusModel.model_validate(
+        application.persistence_service.status()
     )
 
 

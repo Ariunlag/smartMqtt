@@ -88,6 +88,29 @@ class Config:
             os.getenv("SEMANTIC_DISCOVERY_MIN_CLUSTER_SIZE", "3")
         )
 
+        # Authoritative semantic application snapshot persistence.
+        self.SEMANTIC_PERSISTENCE_ENABLED = self._boolean(
+            "SEMANTIC_PERSISTENCE_ENABLED", True
+        )
+        self.SEMANTIC_PERSISTENCE_STATE_KEY = os.getenv(
+            "SEMANTIC_PERSISTENCE_STATE_KEY", "default"
+        )
+        self.SEMANTIC_PERSISTENCE_SAVE_DEBOUNCE_SECONDS = float(
+            os.getenv("SEMANTIC_PERSISTENCE_SAVE_DEBOUNCE_SECONDS", "1.0")
+        )
+        self.SEMANTIC_PERSISTENCE_SAVE_TIMEOUT = float(
+            os.getenv("SEMANTIC_PERSISTENCE_SAVE_TIMEOUT", "5.0")
+        )
+        self.SEMANTIC_PERSISTENCE_RESTORE_TIMEOUT = float(
+            os.getenv("SEMANTIC_PERSISTENCE_RESTORE_TIMEOUT", "5.0")
+        )
+        self.SEMANTIC_PERSISTENCE_SHUTDOWN_FLUSH_TIMEOUT = float(
+            os.getenv("SEMANTIC_PERSISTENCE_SHUTDOWN_FLUSH_TIMEOUT", "5.0")
+        )
+        self.SEMANTIC_PERSISTENCE_REQUIRE_COMPATIBLE_RESTORE = self._boolean(
+            "SEMANTIC_PERSISTENCE_REQUIRE_COMPATIBLE_RESTORE", False
+        )
+
     @staticmethod
     def _ratio(name: str, default: float) -> float:
         """Parse an env var as a similarity threshold in the inclusive [0, 1] range."""

@@ -52,7 +52,15 @@ class ServiceManager:
         from services.mqtt.handler_setup import register_mqtt_handlers
 
         self._semantic_application = semantic_application
+        await semantic_application.persistence_service.restore()
+        await semantic_application.persistence_service.start()
         await semantic_application.discovery_service.start()
+        if (
+            len(semantic_application.unknown_pool)
+            >= semantic_application.discovery_engine.config.min_cluster_size
+            and not semantic_application.review_runtime.list_candidates()
+        ):
+            semantic_application.discovery_service.request()
         await semantic_application.processing_service.start()
         register_mqtt_handlers(semantic_application.processing_service)
         for service in self.services:
@@ -71,6 +79,9 @@ class ServiceManager:
         if self._semantic_application is not None:
             await self._semantic_application.processing_service.stop()
             await self._semantic_application.discovery_service.stop()
+            self._semantic_application.persistence_service.request_save()
+            await self._semantic_application.persistence_service.flush()
+            await self._semantic_application.persistence_service.stop()
         await self.monitor.stop()
         for service in self.services:
             if hasattr(service, "disconnect"):

@@ -28,6 +28,17 @@ from .semantic_feedback_workflow import (
     NegativeMembershipConstraintStore,
     SemanticFeedbackWorkflow,
 )
+from .semantic_persistence import (
+    InMemorySemanticStateRepository,
+    PostgresSemanticStateRepository,
+    SemanticSnapshotSerializer,
+    SemanticStateRepository,
+    create_model_fingerprint,
+)
+from .semantic_persistence_service import (
+    SemanticPersistenceConfig,
+    SemanticPersistenceService,
+)
 from .semantic_processing_service import (
     SemanticProcessingConfig,
     SemanticProcessingService,
@@ -35,6 +46,13 @@ from .semantic_processing_service import (
 from .semantic_refresh import SemanticRefreshPolicy
 from .semantic_review_runtime import SemanticReviewRuntime
 from .semantic_runtime import SemanticRuntimeOrchestrator, SemanticRuntimeStateStore
+from .semantic_state import (
+    SEMANTIC_REPRESENTATION_CONTRACT_VERSION,
+    SEMANTIC_STATE_SCHEMA_VERSION,
+    SemanticApplicationSnapshot,
+    SemanticPersistenceMetadata,
+    SemanticStateCoordinator,
+)
 from .stability_aware_representations import StabilityAwareRepresentationBuilder
 from .temporal_profile import TemporalStreamProfiler
 from .trusted_class_evidence import TrustedClassEvidenceStore
@@ -60,6 +78,86 @@ class SemanticApplication:
     discovery_service: SemanticDiscoveryService
     processing_service: SemanticProcessingService
     review_runtime: SemanticReviewRuntime
+    state_coordinator: SemanticStateCoordinator
+    persistence_service: SemanticPersistenceService
+
+    def snapshot(self) -> SemanticApplicationSnapshot:
+        """Capture every authoritative store at one coordinator generation."""
+        with self.state_coordinator.lock:
+            review = self.review_runtime.snapshot_review_state()
+            return SemanticApplicationSnapshot(
+                metadata=SemanticPersistenceMetadata(
+                    schema_version=SEMANTIC_STATE_SCHEMA_VERSION,
+                    model_fingerprint=self.persistence_service.model_fingerprint,
+                    representation_contract_version=(
+                        self.persistence_service.representation_contract_version
+                    ),
+                    policy_config={
+                        "decision": {
+                            "known_min_top1_votes": self.processing_runtime.decision_policy.config.known_min_top1_votes,
+                            "known_min_mean_similarity": self.processing_runtime.decision_policy.config.known_min_mean_similarity,
+                            "known_min_similarity_margin": self.processing_runtime.decision_policy.config.known_min_similarity_margin,
+                            "unknown_max_mean_similarity": self.processing_runtime.decision_policy.config.unknown_max_mean_similarity,
+                        },
+                        "discovery": {
+                            "min_cluster_size": self.discovery_engine.config.min_cluster_size,
+                            "min_samples": self.discovery_engine.config.min_samples,
+                            "cluster_selection_epsilon": self.discovery_engine.config.cluster_selection_epsilon,
+                            "cluster_selection_method": self.discovery_engine.config.cluster_selection_method,
+                            "allow_single_cluster": self.discovery_engine.config.allow_single_cluster,
+                            "metric": self.discovery_engine.config.metric,
+                        },
+                    },
+                ),
+                generation=self.state_coordinator.generation,
+                runtime_states=self.processing_runtime.state_store.snapshot(),
+                unknown_pool=self.unknown_pool.snapshot(),
+                trusted_evidence=self.evidence_store.snapshot(),
+                constraints=self.constraint_store.snapshot(),
+                known_classes=self.known_class_registry.snapshot(),
+                class_catalog=self.class_catalog.snapshot(),
+                pending_candidates=review.pending_candidates,
+                suppressed_candidates=review.suppressed_candidates,
+            )
+
+    def restore(self, snapshot: SemanticApplicationSnapshot) -> None:
+        """Replace existing shared stores atomically, rolling all back on error."""
+        self.persistence_service.serializer.validate(snapshot)
+        previous = self.snapshot()
+        review_snapshot_type = type(self.review_runtime.snapshot_review_state())
+        try:
+            with self.state_coordinator.restore(snapshot.generation):
+                self.processing_runtime.state_store.replace(snapshot.runtime_states)
+                self.unknown_pool.replace(
+                    snapshot.unknown_pool.entries, snapshot.unknown_pool.version
+                )
+                self.evidence_store.replace(snapshot.trusted_evidence)
+                self.constraint_store.replace(snapshot.constraints)
+                self.known_class_registry.replace(snapshot.known_classes)
+                self.class_catalog.replace(snapshot.class_catalog)
+                self.review_runtime.replace_review_state(
+                    review_snapshot_type(
+                        snapshot.pending_candidates,
+                        snapshot.suppressed_candidates,
+                    )
+                )
+        except Exception:
+            with self.state_coordinator.restore(previous.generation):
+                self.processing_runtime.state_store.replace(previous.runtime_states)
+                self.unknown_pool.replace(
+                    previous.unknown_pool.entries, previous.unknown_pool.version
+                )
+                self.evidence_store.replace(previous.trusted_evidence)
+                self.constraint_store.replace(previous.constraints)
+                self.known_class_registry.replace(previous.known_classes)
+                self.class_catalog.replace(previous.class_catalog)
+                self.review_runtime.replace_review_state(
+                    review_snapshot_type(
+                        previous.pending_candidates,
+                        previous.suppressed_candidates,
+                    )
+                )
+            raise
 
 
 def build_semantic_application(
@@ -88,8 +186,26 @@ def build_semantic_application(
     discovery_service: SemanticDiscoveryService | None = None,
     discovery_config: SemanticDiscoveryConfig | None = None,
     review_runtime: SemanticReviewRuntime | None = None,
+    state_coordinator: SemanticStateCoordinator | None = None,
+    persistence_repository: SemanticStateRepository | None = None,
+    persistence_config: SemanticPersistenceConfig | None = None,
+    persistence_serializer: SemanticSnapshotSerializer | None = None,
+    model_fingerprint: str | None = None,
+    embedding_model_identifier: str | None = None,
 ) -> SemanticApplication:
     """Build both runtimes around the exact same injected state objects."""
+    inherited_coordinator = (
+        getattr(review_runtime, "state_coordinator", None)
+        if review_runtime is not None
+        else (
+            getattr(discovery_service.review_runtime, "state_coordinator", None)
+            if discovery_service is not None
+            else None
+        )
+    )
+    coordinator = (
+        state_coordinator or inherited_coordinator or SemanticStateCoordinator()
+    )
     injected_review_runtime = review_runtime or (
         discovery_service.review_runtime if discovery_service is not None else None
     )
@@ -99,7 +215,7 @@ def build_semantic_application(
         else (
             injected_review_runtime.unknown_pool
             if injected_review_runtime is not None
-            else UnknownStreamPool()
+            else UnknownStreamPool(coordinator)
         )
     )
     shared_evidence_store = (
@@ -108,7 +224,7 @@ def build_semantic_application(
         else (
             injected_review_runtime.evidence_store
             if injected_review_runtime is not None
-            else TrustedClassEvidenceStore()
+            else TrustedClassEvidenceStore(coordinator)
         )
     )
     shared_constraint_store = (
@@ -117,7 +233,7 @@ def build_semantic_application(
         else (
             injected_review_runtime.constraint_store
             if injected_review_runtime is not None
-            else NegativeMembershipConstraintStore()
+            else NegativeMembershipConstraintStore(coordinator)
         )
     )
     shared_feedback_workflow = (
@@ -137,11 +253,12 @@ def build_semantic_application(
             injected_review_runtime.known_class_registry
             if injected_review_runtime is not None
             and injected_review_runtime.known_class_registry is not None
-            else KnownClassRegistry()
+            else KnownClassRegistry(coordinator=coordinator)
         )
     )
-    for known_class in initial_known_classes:
-        shared_known_class_registry.upsert(known_class)
+    with coordinator.restore(coordinator.generation):
+        for known_class in initial_known_classes:
+            shared_known_class_registry.upsert(known_class)
     shared_class_catalog = (
         class_catalog
         if class_catalog is not None
@@ -149,13 +266,14 @@ def build_semantic_application(
             injected_review_runtime.class_catalog
             if injected_review_runtime is not None
             and injected_review_runtime.class_catalog is not None
-            else SemanticClassCatalog()
+            else SemanticClassCatalog(coordinator=coordinator)
         )
     )
-    for known_class in shared_known_class_registry.snapshot():
-        shared_class_catalog.register(
-            SemanticClassDefinition(known_class.class_id, known_class.class_name)
-        )
+    with coordinator.restore(coordinator.generation):
+        for known_class in shared_known_class_registry.snapshot():
+            shared_class_catalog.register(
+                SemanticClassDefinition(known_class.class_id, known_class.class_name)
+            )
     shared_feedback_lock = feedback_lock or (
         injected_review_runtime.feedback_lock
         if injected_review_runtime is not None
@@ -166,7 +284,11 @@ def build_semantic_application(
         embedding_model=embedding_model,
         known_class_registry=shared_known_class_registry,
         decision_policy=decision_policy,
-        state_store=state_store,
+        state_store=(
+            state_store
+            if state_store is not None
+            else SemanticRuntimeStateStore(coordinator)
+        ),
         unknown_pool=shared_unknown_pool,
         constraint_store=shared_constraint_store,
         feedback_lock=shared_feedback_lock,
@@ -175,6 +297,7 @@ def build_semantic_application(
         representation_builder=representation_builder,
         class_scorer=class_scorer,
         consensus_engine=consensus_engine,
+        state_coordinator=coordinator,
     )
     shared_review_runtime = injected_review_runtime or SemanticReviewRuntime(
         unknown_pool=shared_unknown_pool,
@@ -185,6 +308,7 @@ def build_semantic_application(
         class_catalog=shared_class_catalog,
         assembler=known_class_assembler,
         feedback_lock=shared_feedback_lock,
+        state_coordinator=coordinator,
     )
     if shared_review_runtime.unknown_pool is not shared_unknown_pool:
         raise ValueError("review_runtime must reference the application UNKNOWN pool")
@@ -230,7 +354,51 @@ def build_semantic_application(
         raise ValueError("processing_service must reference the application runtime")
     if shared_processing_service.discovery_service is not shared_discovery_service:
         raise ValueError("processing_service must reference application discovery")
-    return SemanticApplication(
+    for store in (
+        shared_unknown_pool,
+        shared_evidence_store,
+        shared_constraint_store,
+        shared_known_class_registry,
+        shared_class_catalog,
+        processing_runtime.state_store,
+    ):
+        existing = getattr(store, "_coordinator", None)
+        if existing not in (None, coordinator):
+            raise ValueError(
+                "Injected semantic store uses a different state coordinator"
+            )
+        store._coordinator = coordinator
+    if getattr(shared_review_runtime, "state_coordinator", None) not in (
+        None,
+        coordinator,
+    ):
+        raise ValueError("review_runtime uses a different state coordinator")
+    shared_review_runtime.state_coordinator = coordinator
+
+    resolved_config = persistence_config or SemanticPersistenceConfig(enabled=False)
+    if persistence_repository is None:
+        if resolved_config.enabled:
+            from services.database.postgres import postgres_client
+
+            persistence_repository = PostgresSemanticStateRepository(postgres_client)
+        else:
+            persistence_repository = InMemorySemanticStateRepository()
+    identifier = embedding_model_identifier or getattr(
+        embedding_model, "model_name", type(embedding_model).__name__
+    )
+    fingerprint = model_fingerprint or create_model_fingerprint(str(identifier))
+    holder: dict[str, SemanticApplication] = {}
+    persistence_service = SemanticPersistenceService(
+        repository=persistence_repository,
+        coordinator=coordinator,
+        snapshot_provider=lambda: holder["application"].snapshot(),
+        restore_handler=lambda snapshot: holder["application"].restore(snapshot),
+        model_fingerprint=fingerprint,
+        representation_contract_version=SEMANTIC_REPRESENTATION_CONTRACT_VERSION,
+        config=resolved_config,
+        serializer=persistence_serializer,
+    )
+    application = SemanticApplication(
         unknown_pool=shared_unknown_pool,
         evidence_store=shared_evidence_store,
         constraint_store=shared_constraint_store,
@@ -242,4 +410,8 @@ def build_semantic_application(
         discovery_service=shared_discovery_service,
         processing_service=shared_processing_service,
         review_runtime=shared_review_runtime,
+        state_coordinator=coordinator,
+        persistence_service=persistence_service,
     )
+    holder["application"] = application
+    return application

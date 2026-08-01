@@ -1,5 +1,7 @@
 """Vector-free API models for diagnostic semantic candidate review."""
 
+from datetime import datetime
+
 from pydantic import BaseModel, ConfigDict
 
 
@@ -99,3 +101,24 @@ class SemanticDiscoveryStatusModel(BaseModel):
     candidate_count: int
     noise_topic_count: int
     last_error_message: str | None
+
+
+class SemanticPersistenceStatusModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    enabled: bool
+    running: bool
+    restored: bool
+    degraded: bool
+    schema_version: int
+    current_generation: int
+    persisted_generation: int | None
+    save_pending: bool
+    save_count: int
+    restore_count: int
+    failed_save_count: int
+    failed_restore_count: int
+    last_saved_at: datetime | None
+    last_restored_at: datetime | None
+    last_error_message: str | None
+    compatibility_error: str | None

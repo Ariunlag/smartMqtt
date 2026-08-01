@@ -57,6 +57,14 @@ class SemanticReviewApplicationResult:
     registry_updated: bool
 
 
+@dataclass(frozen=True, slots=True)
+class SemanticReviewStateSnapshot:
+    """Immutable pending and reviewed-candidate publication state."""
+
+    pending_candidates: tuple[PendingSemanticCandidate, ...]
+    suppressed_candidates: tuple[CandidateIdentity, ...]
+
+
 class SemanticReviewRuntime:
     """Own isolated in-memory state used by the diagnostic review API."""
 
@@ -70,6 +78,7 @@ class SemanticReviewRuntime:
         class_catalog: SemanticClassCatalog | None = None,
         assembler: KnownClassAssembler | None = None,
         feedback_lock=None,
+        state_coordinator=None,
     ) -> None:
         self.unknown_pool = (
             unknown_pool if unknown_pool is not None else UnknownStreamPool()
@@ -89,6 +98,7 @@ class SemanticReviewRuntime:
         self.class_catalog = class_catalog
         self.assembler = assembler or KnownClassAssembler()
         self.feedback_lock = feedback_lock or RLock()
+        self.state_coordinator = state_coordinator
         self._pending: dict[CandidateIdentity, PendingSemanticCandidate] = {}
         self._suppressed: set[CandidateIdentity] = set()
         self._pending_lock = RLock()
@@ -101,10 +111,13 @@ class SemanticReviewRuntime:
         """Register a discovery candidate without exposing a public write API."""
         identity = CandidateIdentity.from_candidate(candidate)
         with self._pending_lock:
+            previous = self._pending.get(identity)
             self._pending[identity] = PendingSemanticCandidate(
                 identity=identity,
                 candidate_index=candidate.candidate_index,
             )
+        if previous != self._pending[identity] and self.state_coordinator is not None:
+            self.state_coordinator.mark_changed()
 
     def replace_discovery(self, result: UnknownStreamDiscoveryResult) -> None:
         """Replace pending candidates with one complete discovery result."""
@@ -117,16 +130,57 @@ class SemanticReviewRuntime:
                     candidate_index=candidate.candidate_index,
                 )
         with self._pending_lock:
-            self._pending = {
+            replacement = {
                 identity: candidate
                 for identity, candidate in pending.items()
                 if identity not in self._suppressed
             }
+            if self._pending == replacement:
+                return
+            self._pending = replacement
+        if self.state_coordinator is not None:
+            self.state_coordinator.mark_changed()
 
     def clear_candidates(self) -> None:
         """Atomically remove every pending discovery candidate."""
         with self._pending_lock:
+            if not self._pending:
+                return
             self._pending = {}
+        if self.state_coordinator is not None:
+            self.state_coordinator.mark_changed()
+
+    def snapshot_review_state(self) -> SemanticReviewStateSnapshot:
+        with self._pending_lock:
+            return SemanticReviewStateSnapshot(
+                pending_candidates=self.list_candidates(),
+                suppressed_candidates=tuple(
+                    sorted(
+                        self._suppressed,
+                        key=lambda identity: (
+                            identity.representation_name,
+                            identity.member_topics,
+                        ),
+                    )
+                ),
+            )
+
+    def replace_review_state(self, snapshot: SemanticReviewStateSnapshot) -> None:
+        pending = {item.identity: item for item in snapshot.pending_candidates}
+        suppressed = set(snapshot.suppressed_candidates)
+        if len(pending) != len(snapshot.pending_candidates):
+            raise ValueError("Review snapshot contains duplicate pending identities")
+        if len(suppressed) != len(snapshot.suppressed_candidates):
+            raise ValueError("Review snapshot contains duplicate suppressed identities")
+        if pending.keys() & suppressed:
+            raise ValueError("A candidate cannot be both pending and suppressed")
+        with self._pending_lock:
+            if self._pending == pending and self._suppressed == suppressed:
+                return
+            self._pending = pending
+            self._suppressed = suppressed
+        if self.state_coordinator is not None:
+            self.state_coordinator.mark_changed()
 
     def list_candidates(self) -> tuple[PendingSemanticCandidate, ...]:
         """Return candidates in deterministic identity order."""
@@ -151,7 +205,12 @@ class SemanticReviewRuntime:
         class_id: str | None = None,
     ) -> SemanticReviewApplicationResult:
         """Apply a valid pending review and remove its candidate on success."""
-        with self._pending_lock:
+        transaction = (
+            self.state_coordinator.transaction()
+            if self.state_coordinator is not None
+            else self._pending_lock
+        )
+        with transaction, self._pending_lock:
             if review.identity not in self._pending:
                 raise PendingCandidateNotFoundError("Candidate is not pending")
 
@@ -229,8 +288,14 @@ class SemanticReviewRuntime:
     ) -> PendingSemanticCandidate | None:
         """Remove a pending candidate by durable content identity."""
         with self._pending_lock:
-            return self._pending.pop(identity, None)
+            removed = self._pending.pop(identity, None)
+        if removed is not None and self.state_coordinator is not None:
+            self.state_coordinator.mark_changed()
+        return removed
 
     def _suppress_and_remove(self, identity: CandidateIdentity) -> None:
+        changed = identity not in self._suppressed or identity in self._pending
         self._suppressed.add(identity)
         self._pending.pop(identity, None)
+        if changed and self.state_coordinator is not None:
+            self.state_coordinator.mark_changed()
