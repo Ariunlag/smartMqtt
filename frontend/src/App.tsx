@@ -7,6 +7,7 @@ import DuplicateManager from "./components/duplicates/DuplicateManager";
 import ClassBuilder from "./components/classes/ClassBuilder";
 import SavedClasses from "./components/savedClasses/SavedClasses";
 import GroupManager from "./components/groups/GroupManager";
+import SemanticReviewManager from "./components/semantic/SemanticReviewManager";
 
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
@@ -46,6 +47,7 @@ export default function App() {
         <ClassBuilder />
         <SavedClasses />
         <GroupManager />
+        <SemanticReviewManager />
       </main>
     </div>
   );

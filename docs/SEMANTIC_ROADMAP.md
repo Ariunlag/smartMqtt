@@ -130,22 +130,24 @@ stream pool is likewise an isolated in-memory foundation.
 
 ### Planned work
 
-- [ ] Representation reliability statistics
+- [x] Candidate-review backend API
+- [x] Candidate-review React MVP
+- [x] End-to-end semantic review workflow test
+- [ ] Production MQTT integration
+- [ ] Persistent semantic runtime state
+- [ ] Representation reliability experiments
 - [ ] Versioned adaptive recalibration
-- [ ] Production semantic workflow integration
-- [ ] Candidate-review API/UI
+- [ ] Expanded hard benchmark and final TEST report
 - [ ] Semantic benchmark experiment runner and metrics
 - [ ] Threshold calibration protocol
 - [ ] Frozen-config benchmark execution
 - [ ] HDBSCAN discovery evaluation
-- [ ] Representation reliability experiments
 - [ ] Full benchmark result report
 - [ ] Feedback-driven online class updates
 - [ ] Representation reliability learning
 - [ ] Multi-prototype semantic classes
 - [ ] Research/diagnostic backend API
 - [ ] Research/diagnostic React UI
-- [ ] Production MQTT integration of the new semantic pipeline
 
 ## Research and evaluation
 

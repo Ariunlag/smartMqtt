@@ -63,6 +63,13 @@ from .semantic_refresh import (
     SemanticRefreshReason,
     SemanticRefreshReasonType,
 )
+from .semantic_review_runtime import (
+    PendingCandidateNotFoundError,
+    PendingSemanticCandidate,
+    PrototypeSummary,
+    SemanticReviewApplicationResult,
+    SemanticReviewRuntime,
+)
 from .semantic_runtime import (
     SemanticRuntimeOrchestrator,
     SemanticRuntimeProcessingError,
@@ -123,6 +130,9 @@ __all__ = [
     "MultiViewConsensusResult",
     "NegativeMembershipConstraint",
     "NegativeMembershipConstraintStore",
+    "PendingCandidateNotFoundError",
+    "PendingSemanticCandidate",
+    "PrototypeSummary",
     "RepresentationBuilder",
     "RepresentationClassCentroids",
     "RepresentationClassConsensus",
@@ -150,6 +160,8 @@ __all__ = [
     "SemanticRefreshPolicy",
     "SemanticRefreshReason",
     "SemanticRefreshReasonType",
+    "SemanticReviewApplicationResult",
+    "SemanticReviewRuntime",
     "SemanticRuntimeOrchestrator",
     "SemanticRuntimeProcessResult",
     "SemanticRuntimeProcessingError",

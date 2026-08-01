@@ -483,3 +483,102 @@ button:focus-visible {
   .split-layout{ flex-direction:column; }
   .split-layout .left{ border-right:none; border-bottom:2px solid var(--accent); }
 }
+
+/* Diagnostic semantic candidate review */
+.semantic-review {
+  padding: 1rem;
+  background: var(--box-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+
+.semantic-review--state,
+.semantic-review--error {
+  color: var(--muted-text);
+}
+
+.semantic-review__card {
+  display: grid;
+  gap: 0.85rem;
+}
+
+.semantic-review__card p {
+  margin: 0;
+}
+
+.semantic-review__topics {
+  display: grid;
+  gap: 0.5rem;
+}
+
+.semantic-review__topic,
+.semantic-review__add {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.6rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.semantic-review__topic [aria-pressed="true"] {
+  background: var(--accent);
+  color: #fff;
+}
+
+.semantic-review__add label {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.semantic-review__chips,
+.semantic-review__success {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.semantic-review__chips > span {
+  padding: 0.25rem 0.4rem 0.25rem 0.65rem;
+  background: var(--accent-soft);
+  border-radius: 999px;
+}
+
+.semantic-review__chips button {
+  padding: 0 0.35rem;
+  border: 0;
+  background: transparent;
+}
+
+.semantic-review__diagnostics {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin: 0;
+}
+
+.semantic-review__diagnostics div {
+  display: flex;
+  gap: 0.35rem;
+}
+
+.semantic-review__diagnostics dd {
+  margin: 0;
+  font-weight: 700;
+}
+
+.semantic-review__success {
+  flex-direction: column;
+  margin-bottom: 0.75rem;
+  padding: 0.75rem;
+  color: var(--success);
+  border: 1px solid var(--success);
+  border-radius: 8px;
+}
+
+.semantic-review__error {
+  color: var(--danger);
+}

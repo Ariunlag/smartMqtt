@@ -102,3 +102,54 @@ export type GroupTopicsResponse = {
   id: string;
   topics: string[];
 };
+
+// ---------------------------
+// Diagnostic semantic review
+// ---------------------------
+
+export interface CandidateIdentity {
+  representation_name: string;
+  member_topics: string[];
+}
+
+export interface PendingSemanticCandidate extends CandidateIdentity {
+  candidate_index?: number | null;
+}
+
+export interface SemanticReviewState {
+  candidates: PendingSemanticCandidate[];
+  available_unknown_topics: string[];
+}
+
+export interface SemanticMembershipReviewRequest {
+  identity: CandidateIdentity;
+  semantic_class_name: string;
+  kept_topics: string[];
+  removed_topics: string[];
+  added_topics: string[];
+}
+
+export interface NegativeMembershipConstraint {
+  topic: string;
+  semantic_class_name: string;
+}
+
+export interface PrototypeSummary {
+  representation_name: string;
+  member_topics: string[];
+  member_count: number;
+}
+
+export interface SemanticReviewResult {
+  semantic_class_name: string;
+  positive_topics: string[];
+  removed_topics: string[];
+  changed_representations: string[];
+  constraints_added: NegativeMembershipConstraint[];
+  constraints_removed: NegativeMembershipConstraint[];
+  prototypes: PrototypeSummary[];
+}
+
+export interface NegativeMembershipConstraintList {
+  constraints: NegativeMembershipConstraint[];
+}

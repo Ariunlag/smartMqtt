@@ -427,3 +427,14 @@ SmartMQTT is intended to bootstrap and incrementally refine semantic stream
 organization in a new deployment with limited supervision. This is an
 open-world research direction, not a claim of established novelty or measured
 superiority.
+
+# Diagnostic semantic candidate review
+
+- The API and React screen are diagnostic human-review surfaces, not a production MQTT integration.
+- Browser-submitted feedback is always recorded as `HUMAN`; clients cannot claim `SYSTEM` feedback.
+- Pending candidate identity is the representation name plus canonical member topics. The discovery candidate index is display metadata only.
+- Raw embeddings and prototype centroid vectors are not exposed through the API.
+- A successful review atomically applies six-view prototype reconciliation and negative membership constraints through the domain workflow.
+- A pending candidate is removed only after its review succeeds. Validation or workflow failures preserve the candidate, prototypes, and constraints.
+- The semantic review runtime remains in memory, without persistence or automatic MQTT wiring.
+- The current API dependency retains an isolated module-level runtime for diagnostic use only. The next production-composition task must replace it with application-level dependency injection and share the `UnknownStreamPool`, `TrustedClassEvidenceStore`, and `NegativeMembershipConstraintStore` instances between the processing and review runtimes as applicable; it must not create a second production state path.
