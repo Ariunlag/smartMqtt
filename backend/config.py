@@ -73,6 +73,21 @@ class Config:
             os.getenv("SEMANTIC_SHUTDOWN_DRAIN_TIMEOUT", "5.0")
         )
 
+        # Debounced UNKNOWN discovery operational defaults. These values are
+        # scheduling defaults, not calibrated research thresholds.
+        self.SEMANTIC_DISCOVERY_ENABLED = self._boolean(
+            "SEMANTIC_DISCOVERY_ENABLED", True
+        )
+        self.SEMANTIC_DISCOVERY_DEBOUNCE_SECONDS = float(
+            os.getenv("SEMANTIC_DISCOVERY_DEBOUNCE_SECONDS", "1.0")
+        )
+        self.SEMANTIC_DISCOVERY_SHUTDOWN_TIMEOUT = float(
+            os.getenv("SEMANTIC_DISCOVERY_SHUTDOWN_TIMEOUT", "5.0")
+        )
+        self.SEMANTIC_DISCOVERY_MIN_CLUSTER_SIZE = int(
+            os.getenv("SEMANTIC_DISCOVERY_MIN_CLUSTER_SIZE", "3")
+        )
+
     @staticmethod
     def _ratio(name: str, default: float) -> float:
         """Parse an env var as a similarity threshold in the inclusive [0, 1] range."""

@@ -436,7 +436,7 @@ superiority.
 - Raw embeddings and prototype centroid vectors are not exposed through the API.
 - A successful review atomically applies six-view prototype reconciliation and negative membership constraints through the domain workflow.
 - A pending candidate is removed only after its review succeeds. Validation or workflow failures preserve the candidate, prototypes, and constraints.
-- The semantic review runtime remains in memory, without persistence or automatic MQTT wiring.
+- The semantic review runtime remains in memory without persistence; pending candidates are now populated automatically from the shared UNKNOWN pool.
 
 ## Shared semantic application composition
 
@@ -455,4 +455,14 @@ superiority.
 - The worker calls the shared live runtime through a thread boundary so synchronous embedding and classification do not block the FastAPI event loop.
 - Semantic failures are recorded locally and never propagate into the primary ingestion retry path, so they cannot repeat InfluxDB writes or WebSocket broadcasts.
 - MQTT observations update the application-owned runtime state and shared UNKNOWN pool used by review.
-- UNKNOWN discovery scheduling and pending-candidate publication remain separate next tasks.
+
+## Automatic UNKNOWN discovery coordination
+
+- Discovery is requested only when successful semantic processing changes the shared UNKNOWN pool version.
+- HDBSCAN runs outside the event loop through one asynchronous coordinator and one thread-worker boundary.
+- Requests are debounced and coalesced without creating an unbounded number of tasks or overlapping discovery runs.
+- A discovery result is published only when its pool snapshot version is still current; stale results are discarded and a fresh run is requested.
+- Pending candidate replacement is atomic, and all six representation-specific discovery results remain independent without cross-view merging.
+- Successfully reviewed candidate identities are suppressed from later automatic publication only for the exact representation and canonical member set.
+- Discovery is enabled by default with a one-second debounce, five-second shutdown bound, and operational `min_cluster_size` default of three. These are operational defaults, not calibrated research values, and have explicit environment overrides.
+- Semantic application persistence and restart recovery remain later tasks.

@@ -82,3 +82,20 @@ class SemanticProcessingStatusModel(BaseModel):
     last_processed_topic: str | None
     last_error_topic: str | None
     last_error_message: str | None
+
+
+class SemanticDiscoveryStatusModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    running: bool
+    enabled: bool
+    request_pending: bool
+    pool_version: int
+    last_processed_version: int | None
+    run_count: int
+    published_count: int
+    failed_count: int
+    stale_discard_count: int
+    candidate_count: int
+    noise_topic_count: int
+    last_error_message: str | None

@@ -167,6 +167,13 @@ async def test_semantic_failure_isolated_from_primary_pipeline_and_worker_contin
 async def test_service_manager_starts_and_stops_sidecar_in_required_order(monkeypatch):
     events = []
 
+    class DiscoveryService:
+        async def start(self):
+            events.append("discovery-start")
+
+        async def stop(self):
+            events.append("discovery-stop")
+
     class ProcessingService:
         async def start(self):
             events.append("semantic-start")
@@ -194,7 +201,10 @@ async def test_service_manager_starts_and_stops_sidecar_in_required_order(monkey
         def disconnect(self):
             events.append("mqtt-disconnect")
 
-    semantic_application = SimpleNamespace(processing_service=ProcessingService())
+    semantic_application = SimpleNamespace(
+        discovery_service=DiscoveryService(),
+        processing_service=ProcessingService(),
+    )
     mqtt = Mqtt()
     manager = ServiceManager()
     manager.services = [mqtt]
@@ -214,6 +224,7 @@ async def test_service_manager_starts_and_stops_sidecar_in_required_order(monkey
     await manager.shutdown()
 
     assert events == [
+        "discovery-start",
         "semantic-start",
         ("handlers", semantic_application.processing_service),
         "mqtt-loop",
@@ -221,6 +232,7 @@ async def test_service_manager_starts_and_stops_sidecar_in_required_order(monkey
         "monitor-start",
         "mqtt-stop",
         "semantic-stop",
+        "discovery-stop",
         "monitor-stop",
         "mqtt-disconnect",
     ]

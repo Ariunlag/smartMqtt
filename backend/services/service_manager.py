@@ -52,6 +52,7 @@ class ServiceManager:
         from services.mqtt.handler_setup import register_mqtt_handlers
 
         self._semantic_application = semantic_application
+        await semantic_application.discovery_service.start()
         await semantic_application.processing_service.start()
         register_mqtt_handlers(semantic_application.processing_service)
         for service in self.services:
@@ -69,6 +70,7 @@ class ServiceManager:
         await mqtt_client.stop_ingestion()
         if self._semantic_application is not None:
             await self._semantic_application.processing_service.stop()
+            await self._semantic_application.discovery_service.stop()
         await self.monitor.stop()
         for service in self.services:
             if hasattr(service, "disconnect"):

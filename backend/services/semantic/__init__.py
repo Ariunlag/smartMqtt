@@ -57,6 +57,11 @@ from .semantic_class_decision import (
     SemanticClassDecisionReason,
     SemanticClassDecisionState,
 )
+from .semantic_discovery_service import (
+    SemanticDiscoveryConfig,
+    SemanticDiscoveryService,
+    SemanticDiscoveryStatus,
+)
 from .semantic_feedback_workflow import (
     NegativeMembershipConstraint,
     NegativeMembershipConstraintStore,
@@ -117,7 +122,11 @@ from .unknown_stream_discovery import (
     UnknownStreamDiscoveryEngine,
     UnknownStreamDiscoveryResult,
 )
-from .unknown_stream_pool import UnknownStreamEntry, UnknownStreamPool
+from .unknown_stream_pool import (
+    UnknownStreamEntry,
+    UnknownStreamPool,
+    UnknownStreamPoolSnapshot,
+)
 
 __all__ = [
     "CandidateConfirmation",
@@ -169,6 +178,9 @@ __all__ = [
     "SemanticClassDecisionReason",
     "SemanticClassDecisionState",
     "SemanticClassDefinition",
+    "SemanticDiscoveryConfig",
+    "SemanticDiscoveryService",
+    "SemanticDiscoveryStatus",
     "SemanticFeedbackWorkflow",
     "SemanticFeedbackWorkflowResult",
     "SemanticProcessingConfig",
@@ -208,6 +220,7 @@ __all__ = [
     "UnknownStreamDiscoveryResult",
     "UnknownStreamEntry",
     "UnknownStreamPool",
+    "UnknownStreamPoolSnapshot",
     "build_semantic_application",
     "normalize_text",
 ]

@@ -1,5 +1,6 @@
 """Tests for the in-memory UNKNOWN stream evidence pool."""
 
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import FrozenInstanceError
 
 import pytest
@@ -186,3 +187,57 @@ def test_upsert_does_not_aggregate_or_merge_embeddings_or_decisions():
     assert retained is second
     assert retained.embeddings is second.embeddings
     assert retained.decision is second.decision
+
+
+def test_snapshot_version_changes_only_for_actual_content_mutations():
+    pool = UnknownStreamPool()
+    first = _entry("a/topic")
+    changed = _entry("a/topic", seed=2.0)
+
+    assert pool.snapshot().version == 0
+    pool.upsert(first)
+    assert pool.version == 1
+    pool.upsert(first)
+    pool.upsert(_entry("a/topic"))
+    assert pool.version == 1
+    pool.upsert(changed)
+    assert pool.version == 2
+    assert pool.remove("missing") is None
+    assert pool.version == 2
+    assert pool.remove("a/topic") is changed
+    assert pool.version == 3
+
+
+def test_snapshot_is_internally_consistent_immutable_and_topic_ordered():
+    pool = UnknownStreamPool()
+    pool.upsert(_entry("z/topic"))
+    pool.upsert(_entry("a/topic"))
+
+    snapshot = pool.snapshot()
+
+    assert snapshot.version == 2
+    assert tuple(entry.topic for entry in snapshot.entries) == ("a/topic", "z/topic")
+    with pytest.raises(FrozenInstanceError):
+        snapshot.version = 99
+
+
+def test_pool_operations_remain_consistent_under_concurrent_access():
+    pool = UnknownStreamPool()
+
+    def mutate(index):
+        topic = f"topic/{index % 10}"
+        pool.upsert(_entry(topic, seed=float(index + 1)))
+        if index % 3 == 0:
+            pool.remove(topic)
+        snapshot = pool.snapshot()
+        assert tuple(entry.topic for entry in snapshot.entries) == tuple(
+            sorted(entry.topic for entry in snapshot.entries)
+        )
+        return snapshot.version
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        versions = tuple(executor.map(mutate, range(100)))
+
+    final = pool.snapshot()
+    assert all(version <= final.version for version in versions)
+    assert len({entry.topic for entry in final.entries}) == len(final.entries)

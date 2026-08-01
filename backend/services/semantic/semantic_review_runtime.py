@@ -90,6 +90,8 @@ class SemanticReviewRuntime:
         self.assembler = assembler or KnownClassAssembler()
         self.feedback_lock = feedback_lock or RLock()
         self._pending: dict[CandidateIdentity, PendingSemanticCandidate] = {}
+        self._suppressed: set[CandidateIdentity] = set()
+        self._pending_lock = RLock()
 
     def register_unknown_entry(self, entry: UnknownStreamEntry) -> None:
         """Insert or replace UNKNOWN evidence for an integration caller."""
@@ -98,10 +100,11 @@ class SemanticReviewRuntime:
     def register_candidate(self, candidate: UnknownClusterCandidate) -> None:
         """Register a discovery candidate without exposing a public write API."""
         identity = CandidateIdentity.from_candidate(candidate)
-        self._pending[identity] = PendingSemanticCandidate(
-            identity=identity,
-            candidate_index=candidate.candidate_index,
-        )
+        with self._pending_lock:
+            self._pending[identity] = PendingSemanticCandidate(
+                identity=identity,
+                candidate_index=candidate.candidate_index,
+            )
 
     def replace_discovery(self, result: UnknownStreamDiscoveryResult) -> None:
         """Replace pending candidates with one complete discovery result."""
@@ -113,19 +116,30 @@ class SemanticReviewRuntime:
                     identity=identity,
                     candidate_index=candidate.candidate_index,
                 )
-        self._pending = pending
+        with self._pending_lock:
+            self._pending = {
+                identity: candidate
+                for identity, candidate in pending.items()
+                if identity not in self._suppressed
+            }
+
+    def clear_candidates(self) -> None:
+        """Atomically remove every pending discovery candidate."""
+        with self._pending_lock:
+            self._pending = {}
 
     def list_candidates(self) -> tuple[PendingSemanticCandidate, ...]:
         """Return candidates in deterministic identity order."""
-        return tuple(
-            sorted(
-                self._pending.values(),
-                key=lambda candidate: (
-                    candidate.identity.representation_name,
-                    candidate.identity.member_topics,
-                ),
+        with self._pending_lock:
+            return tuple(
+                sorted(
+                    self._pending.values(),
+                    key=lambda candidate: (
+                        candidate.identity.representation_name,
+                        candidate.identity.member_topics,
+                    ),
+                )
             )
-        )
 
     def list_unknown_topics(self) -> tuple[str, ...]:
         """Return retained UNKNOWN topics in ascending order."""
@@ -137,51 +151,48 @@ class SemanticReviewRuntime:
         class_id: str | None = None,
     ) -> SemanticReviewApplicationResult:
         """Apply a valid pending review and remove its candidate on success."""
-        if review.identity not in self._pending:
-            raise PendingCandidateNotFoundError("Candidate is not pending")
+        with self._pending_lock:
+            if review.identity not in self._pending:
+                raise PendingCandidateNotFoundError("Candidate is not pending")
 
-        if self.known_class_registry is None or self.class_catalog is None:
-            workflow_result = self._apply_workflow(review)
-            result = self._result(class_id, workflow_result, False)
-            self.remove_candidate(review.identity)
-            return result
-        if not isinstance(class_id, str) or not class_id.strip():
-            raise ValueError("class_id must be a non-empty string")
-
-        with self.feedback_lock:
-            evidence_before = self.evidence_store.snapshot()
-            constraints_before = self.constraint_store.snapshot()
-            catalog_before = self.class_catalog.snapshot()
-            registry_before = self.known_class_registry.snapshot()
-            try:
-                self.class_catalog.register(
-                    SemanticClassDefinition(class_id, review.semantic_class_name)
-                )
+            if self.known_class_registry is None or self.class_catalog is None:
                 workflow_result = self._apply_workflow(review)
-                assembly = self.assembler.assemble(
-                    KnownClassAssemblyRequest(class_id, review.semantic_class_name),
-                    self.evidence_store,
-                )
-                if not assembly.is_complete:
-                    missing = ", ".join(assembly.missing_representations)
-                    raise ValueError(
-                        f"Cannot publish incomplete known class '{class_id}'; "
-                        f"missing representations: {missing}"
-                    )
-                self.known_class_registry.upsert(assembly.centroids)
-                result = self._result(
-                    class_id,
-                    workflow_result,
-                    True,
-                )
-                self.remove_candidate(review.identity)
+                result = self._result(class_id, workflow_result, False)
+                self._suppress_and_remove(review.identity)
                 return result
-            except Exception:
-                self.evidence_store.replace(evidence_before)
-                self.constraint_store.replace(constraints_before)
-                self.class_catalog.replace(catalog_before)
-                self.known_class_registry.replace(registry_before)
-                raise
+            if not isinstance(class_id, str) or not class_id.strip():
+                raise ValueError("class_id must be a non-empty string")
+
+            with self.feedback_lock:
+                evidence_before = self.evidence_store.snapshot()
+                constraints_before = self.constraint_store.snapshot()
+                catalog_before = self.class_catalog.snapshot()
+                registry_before = self.known_class_registry.snapshot()
+                try:
+                    self.class_catalog.register(
+                        SemanticClassDefinition(class_id, review.semantic_class_name)
+                    )
+                    workflow_result = self._apply_workflow(review)
+                    assembly = self.assembler.assemble(
+                        KnownClassAssemblyRequest(class_id, review.semantic_class_name),
+                        self.evidence_store,
+                    )
+                    if not assembly.is_complete:
+                        missing = ", ".join(assembly.missing_representations)
+                        raise ValueError(
+                            f"Cannot publish incomplete known class '{class_id}'; "
+                            f"missing representations: {missing}"
+                        )
+                    self.known_class_registry.upsert(assembly.centroids)
+                    result = self._result(class_id, workflow_result, True)
+                    self._suppress_and_remove(review.identity)
+                    return result
+                except Exception:
+                    self.evidence_store.replace(evidence_before)
+                    self.constraint_store.replace(constraints_before)
+                    self.class_catalog.replace(catalog_before)
+                    self.known_class_registry.replace(registry_before)
+                    raise
 
     def _apply_workflow(
         self, review: CandidateMembershipReview
@@ -217,4 +228,9 @@ class SemanticReviewRuntime:
         self, identity: CandidateIdentity
     ) -> PendingSemanticCandidate | None:
         """Remove a pending candidate by durable content identity."""
-        return self._pending.pop(identity, None)
+        with self._pending_lock:
+            return self._pending.pop(identity, None)
+
+    def _suppress_and_remove(self, identity: CandidateIdentity) -> None:
+        self._suppressed.add(identity)
+        self._pending.pop(identity, None)

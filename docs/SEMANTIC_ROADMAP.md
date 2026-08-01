@@ -126,6 +126,9 @@ reliability learning remain planned stages.
 - [x] Production MQTT semantic sidecar
 - [x] Bounded isolated semantic processing queue
 - [x] Shared live runtime processing from MQTT observations
+- [x] Automatic UNKNOWN-pool discovery trigger
+- [x] Debounced and stale-safe HDBSCAN execution
+- [x] Automatic publication of pending review candidates
 
 The semantic runtime now consumes MQTT observations through an isolated,
 bounded sidecar after the existing primary handlers. It updates the shared
@@ -144,12 +147,12 @@ separate work.
 - [x] Synchronize reviewed prototypes into the known-class registry
 - [x] Apply negative constraints during runtime candidate eligibility
 - [x] Wire SemanticRuntime into production MQTT ingestion
-- [ ] Trigger UNKNOWN discovery from shared pool
-- [ ] Publish pending discovery candidates to review runtime
+- [x] Trigger UNKNOWN discovery from shared pool
+- [x] Publish pending discovery candidates to review runtime
 - [ ] Persist semantic application state
 - [ ] Restart recovery
 - [ ] Operational semantic diagnostics UI
-- [ ] Full broker-to-review-to-reclassification system test
+- [ ] Full real-broker acceptance test
 - [ ] Representation reliability experiments
 - [ ] Versioned adaptive recalibration
 - [ ] Expanded hard benchmark and final TEST report

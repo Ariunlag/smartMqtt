@@ -22,9 +22,11 @@ from config import config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.semantic import (
+    HDBSCANDiscoveryConfig,
     SemanticApplication,
     SemanticClassDecisionConfig,
     SemanticClassDecisionPolicy,
+    SemanticDiscoveryConfig,
     SemanticProcessingConfig,
     build_semantic_application,
 )
@@ -55,6 +57,14 @@ def _build_default_semantic_application() -> SemanticApplication:
             enabled=config.SEMANTIC_PROCESSING_ENABLED,
             queue_max_size=config.SEMANTIC_QUEUE_MAXSIZE,
             shutdown_drain_timeout=config.SEMANTIC_SHUTDOWN_DRAIN_TIMEOUT,
+        ),
+        hdbscan_config=HDBSCANDiscoveryConfig(
+            min_cluster_size=config.SEMANTIC_DISCOVERY_MIN_CLUSTER_SIZE,
+        ),
+        discovery_config=SemanticDiscoveryConfig(
+            enabled=config.SEMANTIC_DISCOVERY_ENABLED,
+            debounce_seconds=config.SEMANTIC_DISCOVERY_DEBOUNCE_SECONDS,
+            shutdown_timeout=config.SEMANTIC_DISCOVERY_SHUTDOWN_TIMEOUT,
         ),
     )
 

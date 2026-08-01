@@ -7,11 +7,15 @@ import logging
 from dataclasses import dataclass
 from numbers import Real
 from threading import Lock
+from typing import TYPE_CHECKING
 
 from models.mqtt_message import MQTTMessage
 
 from .semantic_runtime import SemanticRuntimeOrchestrator
 from .stream_profiler import StreamProfiler
+
+if TYPE_CHECKING:
+    from .semantic_discovery_service import SemanticDiscoveryService
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +70,12 @@ class SemanticProcessingService:
         runtime: SemanticRuntimeOrchestrator,
         profile_builder: StreamProfiler | None = None,
         config: SemanticProcessingConfig | None = None,
+        discovery_service: SemanticDiscoveryService | None = None,
     ) -> None:
         self.runtime = runtime
         self.profile_builder = profile_builder or StreamProfiler()
         self.config = config or SemanticProcessingConfig()
+        self.discovery_service = discovery_service
         self._queue: asyncio.Queue[MQTTMessage] | None = None
         self._worker: asyncio.Task[None] | None = None
         self._accepting = False
@@ -178,12 +184,22 @@ class SemanticProcessingService:
         while True:
             message = await queue.get()
             try:
+                pool_version = (
+                    self.discovery_service.unknown_pool.version
+                    if self.discovery_service is not None
+                    else None
+                )
                 profile = self.profile_builder.profile(
                     message.topic,
                     message.tags,
                     message.fields,
                 )
                 await asyncio.to_thread(self.runtime.process, profile)
+                if (
+                    self.discovery_service is not None
+                    and self.discovery_service.unknown_pool.version != pool_version
+                ):
+                    self.discovery_service.request()
             except asyncio.CancelledError:
                 raise
             except Exception as exc:

@@ -8,6 +8,7 @@ from models.semantic_review_models import (
     NegativeMembershipConstraintList,
     PendingSemanticCandidateModel,
     SemanticClassList,
+    SemanticDiscoveryStatusModel,
     SemanticMembershipReviewRequest,
     SemanticProcessingStatusModel,
     SemanticReviewResult,
@@ -119,6 +120,15 @@ def processing_status(
 ) -> SemanticProcessingStatusModel:
     return SemanticProcessingStatusModel.model_validate(
         application.processing_service.status()
+    )
+
+
+@router.get("/discovery-status", response_model=SemanticDiscoveryStatusModel)
+def discovery_status(
+    application: Annotated[SemanticApplication, Depends(get_semantic_application)],
+) -> SemanticDiscoveryStatusModel:
+    return SemanticDiscoveryStatusModel.model_validate(
+        application.discovery_service.status()
     )
 
 
