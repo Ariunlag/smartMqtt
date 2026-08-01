@@ -13,8 +13,8 @@ and logged — messages are never silently discarded.
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
-from typing import Awaitable, Callable, Optional
+from collections.abc import Awaitable, Callable
+from dataclasses import dataclass
 
 from models.mqtt_message import MQTTMessage
 
@@ -66,10 +66,11 @@ class IngestionQueue:
         self._metrics_interval = metrics_interval
         self._name = name
 
-        self._queue: Optional[asyncio.Queue] = None
+        self._queue: asyncio.Queue | None = None
         self._workers: list[asyncio.Task] = []
-        self._metrics_task: Optional[asyncio.Task] = None
-        self._loop: Optional[asyncio.AbstractEventLoop] = None
+        self._metrics_task: asyncio.Task | None = None
+        self._loop: asyncio.AbstractEventLoop | None = None
+        self._accepting = False
         self.metrics = IngestionMetrics()
 
     # ---- lifecycle -------------------------------------------------------
@@ -80,6 +81,7 @@ class IngestionQueue:
             return
         self._loop = loop
         self._queue = asyncio.Queue(maxsize=self._maxsize)
+        self._accepting = True
         self._workers = [
             loop.create_task(self._worker(i)) for i in range(self._worker_count)
         ]
@@ -98,18 +100,32 @@ class IngestionQueue:
         """Gracefully drain in-flight work, then stop workers."""
         if not self._workers or self._queue is None:
             return
+        self._accepting = False
         if self._metrics_task is not None:
             self._metrics_task.cancel()
+        timed_out = False
         try:
             await asyncio.wait_for(self._queue.join(), timeout=drain_timeout)
         except asyncio.TimeoutError:
+            timed_out = True
             logger.warning(
                 "[ingestion:%s] drain timed out; %d items still queued",
                 self._name,
                 self._queue.qsize(),
             )
-        for _ in self._workers:
-            self._queue.put_nowait(_SHUTDOWN)
+        if timed_out:
+            for worker in self._workers:
+                worker.cancel()
+            while True:
+                try:
+                    self._queue.get_nowait()
+                except asyncio.QueueEmpty:
+                    break
+                else:
+                    self._queue.task_done()
+        else:
+            for _ in self._workers:
+                self._queue.put_nowait(_SHUTDOWN)
         await asyncio.gather(*self._workers, return_exceptions=True)
         self._workers.clear()
         logger.info(
@@ -134,6 +150,15 @@ class IngestionQueue:
         """Enqueue on the event loop, applying the full policy. Returns True if
         the message was accepted."""
         assert self._queue is not None
+        if not self._accepting:
+            self.metrics.dropped += 1
+            logger.warning(
+                "[ingestion:%s] stopped; dropped topic=%s (total_dropped=%d)",
+                self._name,
+                message.topic,
+                self.metrics.dropped,
+            )
+            return False
         item = (message, time.monotonic())
         try:
             self._queue.put_nowait(item)
@@ -210,7 +235,7 @@ class IngestionQueue:
                         message.topic,
                         attempt + 1,
                     )
-                    await asyncio.sleep(self._retry_delay * (2 ** attempt))
+                    await asyncio.sleep(self._retry_delay * (2**attempt))
                 else:
                     self.metrics.failed += 1
                     logger.exception(

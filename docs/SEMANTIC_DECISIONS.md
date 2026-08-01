@@ -443,6 +443,16 @@ superiority.
 - One `SemanticApplication` owns the processing runtime, review runtime, and in-memory semantic state for a FastAPI application instance.
 - Processing and review use the exact same `UnknownStreamPool`; review updates the application's shared `TrustedClassEvidenceStore` and `NegativeMembershipConstraintStore` through the shared feedback workflow.
 - The semantic application is attached to `app.state.semantic_application`. API modules resolve it through FastAPI dependencies and do not create independent production runtimes.
-- Reviewed prototypes are not yet synchronized into the processing runtime's explicit known-class registry. Class-name to class-ID mapping remains explicit, and no automatic class ID is generated.
-- Negative constraints are not yet applied during processing-runtime candidate eligibility.
-- Production MQTT ingestion remains unchanged; semantic processing integration is a separate next step.
+- Reviewed six-view prototypes are atomically synchronized into the processing runtime's explicit known-class registry. Class-name to class-ID mapping remains explicit, and no automatic class ID is generated.
+- Negative constraints filter processing-runtime candidate eligibility without changing scores, votes, ranks, similarities, or view winners.
+
+## Production MQTT semantic sidecar
+
+- Semantic processing is a sidecar after the existing TopicHandler, InfluxHandler, and Broadcaster pipeline.
+- The Paho callback performs no semantic profiling, embedding, or model work.
+- A bounded application-owned queue feeds one ordered semantic worker; submission never waits for embedding completion.
+- Semantic processing is enabled by default with a queue capacity of 256 and a five-second shutdown drain timeout; `SEMANTIC_PROCESSING_ENABLED`, `SEMANTIC_QUEUE_MAXSIZE`, and `SEMANTIC_SHUTDOWN_DRAIN_TIMEOUT` provide explicit environment overrides.
+- The worker calls the shared live runtime through a thread boundary so synchronous embedding and classification do not block the FastAPI event loop.
+- Semantic failures are recorded locally and never propagate into the primary ingestion retry path, so they cannot repeat InfluxDB writes or WebSocket broadcasts.
+- MQTT observations update the application-owned runtime state and shared UNKNOWN pool used by review.
+- UNKNOWN discovery scheduling and pending-candidate publication remain separate next tasks.

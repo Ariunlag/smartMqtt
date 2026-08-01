@@ -121,12 +121,17 @@ reliability learning remain planned stages.
 - [x] Safe prototype reconciliation after edited membership feedback
 - [x] Negative membership constraints
 - [x] Integrated semantic feedback application workflow
+- [x] Reviewed prototype synchronization into the live known-class registry
+- [x] Negative-constraint filtering during runtime candidate eligibility
+- [x] Production MQTT semantic sidecar
+- [x] Bounded isolated semantic processing queue
+- [x] Shared live runtime processing from MQTT observations
 
-These are isolated building blocks. The new semantic pipeline, temporal
-profiler, refresh policy, stability-aware builder, and representation class
-scorer, equal-view consensus engine, and semantic class decision policy are not
-currently wired into the default production MQTT ingestion path. The UNKNOWN
-stream pool is likewise an isolated in-memory foundation.
+The semantic runtime now consumes MQTT observations through an isolated,
+bounded sidecar after the existing primary handlers. It updates the shared
+in-memory runtime and UNKNOWN pool without blocking or retrying the primary
+InfluxDB/WebSocket pipeline. Discovery scheduling and persistence remain
+separate work.
 
 ### Planned work
 
@@ -136,12 +141,15 @@ stream pool is likewise an isolated in-memory foundation.
 - [x] Shared semantic application composition
 - [x] Shared UNKNOWN pool between processing and review
 - [x] Shared prototype and constraint state for review workflow
-- [ ] Synchronize reviewed prototypes into the known-class registry
-- [ ] Apply negative constraints during runtime candidate eligibility
-- [ ] Wire SemanticRuntime into production MQTT ingestion
-- [ ] Trigger UNKNOWN discovery and pending-candidate refresh
+- [x] Synchronize reviewed prototypes into the known-class registry
+- [x] Apply negative constraints during runtime candidate eligibility
+- [x] Wire SemanticRuntime into production MQTT ingestion
+- [ ] Trigger UNKNOWN discovery from shared pool
+- [ ] Publish pending discovery candidates to review runtime
 - [ ] Persist semantic application state
-- [ ] Restart recovery and full end-to-end system test
+- [ ] Restart recovery
+- [ ] Operational semantic diagnostics UI
+- [ ] Full broker-to-review-to-reclassification system test
 - [ ] Representation reliability experiments
 - [ ] Versioned adaptive recalibration
 - [ ] Expanded hard benchmark and final TEST report
@@ -215,7 +223,7 @@ Raw observations
     -> bounded temporal evidence
     -> deterministic semantic refresh decision
     -> stability-aware semantic text
-    -> embedding refresh integration (planned)
+    -> embedding refresh through the ordered MQTT semantic sidecar
 ```
 
 The current policy requests initialization on the first observation, ignores
@@ -228,8 +236,8 @@ value, stable replacement, persistent disappearance, and reappearance after
 persistent disappearance. `SemanticRefreshPolicy` decides when rebuilding is
 justified;
 `StabilityAwareRepresentationBuilder` determines the stable semantic text from
-`TemporalStreamProfile`. Automatic invocation and re-embedding are not
-integrated, and these components remain isolated from the production MQTT path.
+`TemporalStreamProfile`. The application-owned MQTT sidecar now invokes this
+runtime workflow without changing the primary ingestion pipeline.
 
 ## Representation strategy
 

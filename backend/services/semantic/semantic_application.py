@@ -24,6 +24,10 @@ from .semantic_feedback_workflow import (
     NegativeMembershipConstraintStore,
     SemanticFeedbackWorkflow,
 )
+from .semantic_processing_service import (
+    SemanticProcessingConfig,
+    SemanticProcessingService,
+)
 from .semantic_refresh import SemanticRefreshPolicy
 from .semantic_review_runtime import SemanticReviewRuntime
 from .semantic_runtime import SemanticRuntimeOrchestrator, SemanticRuntimeStateStore
@@ -44,6 +48,7 @@ class SemanticApplication:
     known_class_registry: KnownClassRegistry
     class_catalog: SemanticClassCatalog
     processing_runtime: SemanticRuntimeOrchestrator
+    processing_service: SemanticProcessingService
     review_runtime: SemanticReviewRuntime
 
 
@@ -66,6 +71,8 @@ def build_semantic_application(
     representation_builder: StabilityAwareRepresentationBuilder | None = None,
     class_scorer: RepresentationClassScorer | None = None,
     consensus_engine: MultiViewConsensusEngine | None = None,
+    processing_service: SemanticProcessingService | None = None,
+    processing_config: SemanticProcessingConfig | None = None,
 ) -> SemanticApplication:
     """Build both runtimes around the exact same injected state objects."""
     shared_unknown_pool = (
@@ -115,6 +122,12 @@ def build_semantic_application(
         class_scorer=class_scorer,
         consensus_engine=consensus_engine,
     )
+    shared_processing_service = processing_service or SemanticProcessingService(
+        processing_runtime,
+        config=processing_config,
+    )
+    if shared_processing_service.runtime is not processing_runtime:
+        raise ValueError("processing_service must reference the application runtime")
     review_runtime = SemanticReviewRuntime(
         unknown_pool=shared_unknown_pool,
         evidence_store=shared_evidence_store,
@@ -133,5 +146,6 @@ def build_semantic_application(
         known_class_registry=shared_known_class_registry,
         class_catalog=shared_class_catalog,
         processing_runtime=processing_runtime,
+        processing_service=shared_processing_service,
         review_runtime=review_runtime,
     )

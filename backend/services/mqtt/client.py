@@ -4,7 +4,6 @@ import json
 import logging
 
 import paho.mqtt.client as mqtt
-
 from config import config
 from models.mqtt_message import MQTTMessage
 from services.mqtt.ingestion import IngestionQueue
@@ -35,7 +34,14 @@ class MQTTClient:
         """Bind the main asyncio loop (called from ServiceManager.startup)."""
         self.loop = loop
 
-    def register_handler(self, handler):
+    def register_handler(self, handler, *, replace: bool = False):
+        identity = getattr(handler, "handler_identity", None)
+        if identity is not None:
+            for index, existing in enumerate(self.handlers):
+                if getattr(existing, "handler_identity", None) == identity:
+                    if replace:
+                        self.handlers[index] = handler
+                    return
         self.handlers.append(handler)
 
     def start_ingestion(self):
@@ -59,7 +65,7 @@ class MQTTClient:
             self._connected = False
 
     def _on_connect(self, client, userdata, flags, reason_code, properties=None):
-        self._connected = (reason_code == 0)
+        self._connected = reason_code == 0
         logger.info(
             "[MQTTClient] Connected to %s:%s rc=%s", self.broker, self.port, reason_code
         )
@@ -76,7 +82,9 @@ class MQTTClient:
                 timestamp=payload["timestamp"],
             )
         except Exception as e:
-            logger.warning("[MQTTClient] Failed to parse payload on %s: %s", msg.topic, e)
+            logger.warning(
+                "[MQTTClient] Failed to parse payload on %s: %s", msg.topic, e
+            )
             return
 
         self.ingestion.submit_threadsafe(data)

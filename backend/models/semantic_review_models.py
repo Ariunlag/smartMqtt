@@ -66,3 +66,19 @@ class SemanticClassDefinitionModel(BaseModel):
 
 class SemanticClassList(BaseModel):
     classes: tuple[SemanticClassDefinitionModel, ...]
+
+
+class SemanticProcessingStatusModel(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    running: bool
+    enabled: bool
+    queue_size: int
+    queue_capacity: int
+    submitted_count: int
+    processed_count: int
+    failed_count: int
+    dropped_count: int
+    last_processed_topic: str | None
+    last_error_topic: str | None
+    last_error_message: str | None

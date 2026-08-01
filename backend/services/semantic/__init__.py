@@ -63,6 +63,11 @@ from .semantic_feedback_workflow import (
     SemanticFeedbackWorkflow,
     SemanticFeedbackWorkflowResult,
 )
+from .semantic_processing_service import (
+    SemanticProcessingConfig,
+    SemanticProcessingService,
+    SemanticProcessingStatus,
+)
 from .semantic_refresh import (
     SemanticRefreshDecision,
     SemanticRefreshPolicy,
@@ -166,6 +171,9 @@ __all__ = [
     "SemanticClassDefinition",
     "SemanticFeedbackWorkflow",
     "SemanticFeedbackWorkflowResult",
+    "SemanticProcessingConfig",
+    "SemanticProcessingService",
+    "SemanticProcessingStatus",
     "SemanticRefreshDecision",
     "SemanticRefreshPolicy",
     "SemanticRefreshReason",

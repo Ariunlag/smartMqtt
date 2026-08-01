@@ -18,12 +18,14 @@ from api import (
     socket,
     topic,
 )
+from config import config
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from services.semantic import (
     SemanticApplication,
     SemanticClassDecisionConfig,
     SemanticClassDecisionPolicy,
+    SemanticProcessingConfig,
     build_semantic_application,
 )
 from services.service_manager import service_manager
@@ -35,9 +37,8 @@ def _build_default_semantic_application() -> SemanticApplication:
     """Build configured semantic state lazily during application startup."""
     from services.embedding_manager import embedding_manager
 
-    # The registry is intentionally empty until reviewed prototypes receive
-    # explicit class IDs in the next integration step. These thresholds are
-    # therefore not exercised by the default composition.
+    # Thresholds remain explicit and unchanged; calibration/freeze decisions
+    # are outside the MQTT sidecar integration.
     decision_policy = SemanticClassDecisionPolicy(
         SemanticClassDecisionConfig(
             known_min_top1_votes=6,
@@ -50,6 +51,11 @@ def _build_default_semantic_application() -> SemanticApplication:
         embedding_model=embedding_manager.model,
         known_classes=(),
         decision_policy=decision_policy,
+        processing_config=SemanticProcessingConfig(
+            enabled=config.SEMANTIC_PROCESSING_ENABLED,
+            queue_max_size=config.SEMANTIC_QUEUE_MAXSIZE,
+            shutdown_drain_timeout=config.SEMANTIC_SHUTDOWN_DRAIN_TIMEOUT,
+        ),
     )
 
 
@@ -73,7 +79,7 @@ def create_app(
         if manage_services:
             # Startup is non-blocking for external dependencies; the monitor
             # recovers unavailable services in the background.
-            await service_manager.startup()
+            await service_manager.startup(app.state.semantic_application)
         try:
             yield
         finally:

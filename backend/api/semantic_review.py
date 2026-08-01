@@ -9,6 +9,7 @@ from models.semantic_review_models import (
     PendingSemanticCandidateModel,
     SemanticClassList,
     SemanticMembershipReviewRequest,
+    SemanticProcessingStatusModel,
     SemanticReviewResult,
     SemanticReviewState,
 )
@@ -110,6 +111,15 @@ def list_classes(
     application: Annotated[SemanticApplication, Depends(get_semantic_application)],
 ) -> SemanticClassList:
     return SemanticClassList(classes=application.class_catalog.all())
+
+
+@router.get("/processing-status", response_model=SemanticProcessingStatusModel)
+def processing_status(
+    application: Annotated[SemanticApplication, Depends(get_semantic_application)],
+) -> SemanticProcessingStatusModel:
+    return SemanticProcessingStatusModel.model_validate(
+        application.processing_service.status()
+    )
 
 
 def _identity(model: CandidateIdentityModel) -> CandidateIdentity:
