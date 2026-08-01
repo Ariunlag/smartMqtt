@@ -11,9 +11,12 @@ from .representation_class_scoring import RepresentationClassCentroids
 class KnownClassRegistry:
     """Latest immutable six-view centroids keyed explicitly by class ID."""
 
-    def __init__(self, initial: tuple[RepresentationClassCentroids, ...] = ()) -> None:
+    def __init__(
+        self, initial: tuple[RepresentationClassCentroids, ...] = (), coordinator=None
+    ) -> None:
         self._classes: dict[str, RepresentationClassCentroids] = {}
         self._lock = RLock()
+        self._coordinator = coordinator
         for known_class in initial:
             self.upsert(known_class)
 
@@ -21,7 +24,10 @@ class KnownClassRegistry:
         if not isinstance(known_class, RepresentationClassCentroids):
             raise TypeError("known_class must be RepresentationClassCentroids")
         with self._lock:
+            changed = self._classes.get(known_class.class_id) != known_class
             self._classes[known_class.class_id] = known_class
+        if changed and self._coordinator is not None:
+            self._coordinator.mark_changed()
 
     def get(self, class_id: str) -> RepresentationClassCentroids | None:
         with self._lock:
@@ -29,7 +35,10 @@ class KnownClassRegistry:
 
     def remove(self, class_id: str) -> RepresentationClassCentroids | None:
         with self._lock:
-            return self._classes.pop(class_id, None)
+            removed = self._classes.pop(class_id, None)
+        if removed is not None and self._coordinator is not None:
+            self._coordinator.mark_changed()
+        return removed
 
     def all(self) -> tuple[RepresentationClassCentroids, ...]:
         return self.snapshot()
@@ -43,7 +52,11 @@ class KnownClassRegistry:
         if len(replacement) != len(classes):
             raise ValueError("Known class snapshot contains duplicate class_id")
         with self._lock:
+            if self._classes == replacement:
+                return
             self._classes = replacement
+        if self._coordinator is not None:
+            self._coordinator.mark_changed()
 
     def __len__(self) -> int:
         with self._lock:
@@ -70,10 +83,13 @@ class SemanticClassDefinition:
 class SemanticClassCatalog:
     """Thread-safe bijection of explicit class IDs and class names."""
 
-    def __init__(self, initial: tuple[SemanticClassDefinition, ...] = ()) -> None:
+    def __init__(
+        self, initial: tuple[SemanticClassDefinition, ...] = (), coordinator=None
+    ) -> None:
         self._by_id: dict[str, SemanticClassDefinition] = {}
         self._id_by_name: dict[str, str] = {}
         self._lock = RLock()
+        self._coordinator = coordinator
         for definition in initial:
             self.register(definition)
 
@@ -95,6 +111,8 @@ class SemanticClassCatalog:
                 )
             self._by_id[definition.class_id] = definition
             self._id_by_name[definition.semantic_class_name] = definition.class_id
+        if existing_id != definition and self._coordinator is not None:
+            self._coordinator.mark_changed()
 
     def get(self, class_id: str) -> SemanticClassDefinition | None:
         with self._lock:
@@ -125,8 +143,12 @@ class SemanticClassCatalog:
             by_id[definition.class_id] = definition
             by_name[definition.semantic_class_name] = definition.class_id
         with self._lock:
+            if self._by_id == by_id:
+                return
             self._by_id = by_id
             self._id_by_name = by_name
+        if self._coordinator is not None:
+            self._coordinator.mark_changed()
 
     def __len__(self) -> int:
         with self._lock:

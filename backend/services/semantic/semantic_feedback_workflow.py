@@ -32,15 +32,19 @@ class NegativeMembershipConstraint:
 class NegativeMembershipConstraintStore:
     """Latest class-wide negative membership constraints."""
 
-    def __init__(self) -> None:
+    def __init__(self, coordinator=None) -> None:
         self._constraints: dict[tuple[str, str], NegativeMembershipConstraint] = {}
         self._lock = RLock()
+        self._coordinator = coordinator
 
     def upsert(self, constraint: NegativeMembershipConstraint) -> None:
         with self._lock:
-            self._constraints[
-                self._key(constraint.topic, constraint.semantic_class_name)
-            ] = constraint
+            key = self._key(constraint.topic, constraint.semantic_class_name)
+            if self._constraints.get(key) == constraint:
+                return
+            self._constraints[key] = constraint
+        if self._coordinator is not None:
+            self._coordinator.mark_changed()
 
     def get(
         self,
@@ -56,7 +60,10 @@ class NegativeMembershipConstraintStore:
         semantic_class_name: str,
     ) -> NegativeMembershipConstraint | None:
         with self._lock:
-            return self._constraints.pop(self._key(topic, semantic_class_name), None)
+            removed = self._constraints.pop(self._key(topic, semantic_class_name), None)
+        if removed is not None and self._coordinator is not None:
+            self._coordinator.mark_changed()
+        return removed
 
     def all(self) -> tuple[NegativeMembershipConstraint, ...]:
         with self._lock:
@@ -78,7 +85,11 @@ class NegativeMembershipConstraintStore:
         if len(replacement) != len(constraints):
             raise ValueError("Constraint snapshot contains duplicates")
         with self._lock:
+            if self._constraints == replacement:
+                return
             self._constraints = replacement
+        if self._coordinator is not None:
+            self._coordinator.mark_changed()
 
     def __len__(self) -> int:
         with self._lock:

@@ -181,6 +181,22 @@ async def test_service_manager_starts_and_stops_sidecar_in_required_order(monkey
         async def stop(self):
             events.append("semantic-stop")
 
+    class PersistenceService:
+        async def restore(self):
+            events.append("persistence-restore")
+
+        async def start(self):
+            events.append("persistence-start")
+
+        def request_save(self):
+            events.append("persistence-request")
+
+        async def flush(self):
+            events.append("persistence-flush")
+
+        async def stop(self):
+            events.append("persistence-stop")
+
     class Monitor:
         async def start(self):
             events.append("monitor-start")
@@ -204,6 +220,10 @@ async def test_service_manager_starts_and_stops_sidecar_in_required_order(monkey
     semantic_application = SimpleNamespace(
         discovery_service=DiscoveryService(),
         processing_service=ProcessingService(),
+        persistence_service=PersistenceService(),
+        unknown_pool=(),
+        discovery_engine=SimpleNamespace(config=SimpleNamespace(min_cluster_size=3)),
+        review_runtime=SimpleNamespace(list_candidates=lambda: ()),
     )
     mqtt = Mqtt()
     manager = ServiceManager()
@@ -224,6 +244,8 @@ async def test_service_manager_starts_and_stops_sidecar_in_required_order(monkey
     await manager.shutdown()
 
     assert events == [
+        "persistence-restore",
+        "persistence-start",
         "discovery-start",
         "semantic-start",
         ("handlers", semantic_application.processing_service),
@@ -233,6 +255,9 @@ async def test_service_manager_starts_and_stops_sidecar_in_required_order(monkey
         "mqtt-stop",
         "semantic-stop",
         "discovery-stop",
+        "persistence-request",
+        "persistence-flush",
+        "persistence-stop",
         "monitor-stop",
         "mqtt-disconnect",
     ]

@@ -48,25 +48,53 @@ class SemanticRuntimeTopicState:
 class SemanticRuntimeStateStore:
     """Injectable in-memory latest-state store keyed by stream topic."""
 
-    def __init__(self) -> None:
+    def __init__(self, coordinator=None) -> None:
         self._states: dict[str, SemanticRuntimeTopicState] = {}
+        self._lock = RLock()
+        self._coordinator = coordinator
 
     def get(self, topic: str) -> SemanticRuntimeTopicState | None:
-        return self._states.get(topic)
+        with self._lock:
+            return self._states.get(topic)
 
     def upsert(self, topic: str, state: SemanticRuntimeTopicState) -> None:
         if topic != state.temporal_profile.topic:
             raise ValueError("Runtime state topic does not match its store key")
-        self._states[topic] = state
+        with self._lock:
+            if self._states.get(topic) == state:
+                return
+            self._states[topic] = state
+        if self._coordinator is not None:
+            self._coordinator.mark_changed()
 
     def remove(self, topic: str) -> SemanticRuntimeTopicState | None:
-        return self._states.pop(topic, None)
+        with self._lock:
+            removed = self._states.pop(topic, None)
+        if removed is not None and self._coordinator is not None:
+            self._coordinator.mark_changed()
+        return removed
 
     def all(self) -> tuple[SemanticRuntimeTopicState, ...]:
-        return tuple(self._states[topic] for topic in sorted(self._states))
+        with self._lock:
+            return tuple(self._states[topic] for topic in sorted(self._states))
+
+    def snapshot(self) -> tuple[SemanticRuntimeTopicState, ...]:
+        return self.all()
+
+    def replace(self, states: tuple[SemanticRuntimeTopicState, ...]) -> None:
+        replacement = {state.temporal_profile.topic: state for state in states}
+        if len(replacement) != len(states):
+            raise ValueError("Runtime state snapshot contains duplicate topics")
+        with self._lock:
+            if self._states == replacement:
+                return
+            self._states = replacement
+        if self._coordinator is not None:
+            self._coordinator.mark_changed()
 
     def __len__(self) -> int:
-        return len(self._states)
+        with self._lock:
+            return len(self._states)
 
 
 @dataclass(frozen=True, slots=True)
@@ -114,6 +142,7 @@ class SemanticRuntimeOrchestrator:
         representation_builder: StabilityAwareRepresentationBuilder | None = None,
         class_scorer: RepresentationClassScorer | None = None,
         consensus_engine: MultiViewConsensusEngine | None = None,
+        state_coordinator=None,
     ) -> None:
         self.known_class_registry = known_class_registry
         self.decision_policy = decision_policy
@@ -129,6 +158,7 @@ class SemanticRuntimeOrchestrator:
             else NegativeMembershipConstraintStore()
         )
         self.feedback_lock = feedback_lock or RLock()
+        self.state_coordinator = state_coordinator
         self.temporal_profiler = temporal_profiler or TemporalStreamProfiler()
         self.refresh_policy = refresh_policy or SemanticRefreshPolicy()
         self.representation_builder = (
@@ -238,23 +268,34 @@ class SemanticRuntimeOrchestrator:
         previous_state: SemanticRuntimeTopicState | None,
         next_state: SemanticRuntimeTopicState,
     ) -> None:
-        previous_unknown = self.unknown_pool.get(topic)
-        try:
-            self.state_store.upsert(topic, next_state)
-            if next_state.decision.state is SemanticClassDecisionState.UNKNOWN:
-                self.unknown_pool.upsert(
-                    UnknownStreamEntry(
-                        topic=topic,
-                        embeddings=next_state.embeddings,
-                        decision=next_state.decision,
+        transaction = (
+            self.state_coordinator.transaction()
+            if self.state_coordinator is not None
+            else self.feedback_lock
+        )
+        with transaction:
+            previous_unknown_snapshot = self.unknown_pool.snapshot()
+            try:
+                self.state_store.upsert(topic, next_state)
+                if next_state.decision.state is SemanticClassDecisionState.UNKNOWN:
+                    self.unknown_pool.upsert(
+                        UnknownStreamEntry(
+                            topic=topic,
+                            embeddings=next_state.embeddings,
+                            decision=next_state.decision,
+                        )
                     )
+                else:
+                    self.unknown_pool.remove(topic)
+            except Exception as exc:
+                self._restore_state(topic, previous_state)
+                self.unknown_pool.replace(
+                    previous_unknown_snapshot.entries,
+                    previous_unknown_snapshot.version,
                 )
-            else:
-                self.unknown_pool.remove(topic)
-        except Exception as exc:
-            self._restore_state(topic, previous_state)
-            self._restore_unknown(topic, previous_unknown)
-            raise SemanticRuntimeProcessingError(topic, "state commit", exc) from exc
+                raise SemanticRuntimeProcessingError(
+                    topic, "state commit", exc
+                ) from exc
 
     def _restore_state(
         self, topic: str, previous: SemanticRuntimeTopicState | None

@@ -27,6 +27,7 @@ from services.semantic import (
     SemanticClassDecisionConfig,
     SemanticClassDecisionPolicy,
     SemanticDiscoveryConfig,
+    SemanticPersistenceConfig,
     SemanticProcessingConfig,
     build_semantic_application,
 )
@@ -66,6 +67,18 @@ def _build_default_semantic_application() -> SemanticApplication:
             debounce_seconds=config.SEMANTIC_DISCOVERY_DEBOUNCE_SECONDS,
             shutdown_timeout=config.SEMANTIC_DISCOVERY_SHUTDOWN_TIMEOUT,
         ),
+        persistence_config=SemanticPersistenceConfig(
+            enabled=config.SEMANTIC_PERSISTENCE_ENABLED,
+            state_key=config.SEMANTIC_PERSISTENCE_STATE_KEY,
+            save_debounce_seconds=(config.SEMANTIC_PERSISTENCE_SAVE_DEBOUNCE_SECONDS),
+            save_timeout=config.SEMANTIC_PERSISTENCE_SAVE_TIMEOUT,
+            restore_timeout=config.SEMANTIC_PERSISTENCE_RESTORE_TIMEOUT,
+            shutdown_flush_timeout=(config.SEMANTIC_PERSISTENCE_SHUTDOWN_FLUSH_TIMEOUT),
+            require_compatible_restore=(
+                config.SEMANTIC_PERSISTENCE_REQUIRE_COMPATIBLE_RESTORE
+            ),
+        ),
+        embedding_model_identifier=config.EMBEDDING_MODEL,
     )
 
 
