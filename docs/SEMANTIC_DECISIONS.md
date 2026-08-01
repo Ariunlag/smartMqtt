@@ -247,6 +247,31 @@ evidence aborts all six changes atomically. Negative recommendation constraints,
 UNKNOWN-pool lifecycle, reliability statistics, persistence, and production
 workflow integration remain separate work.
 
+## Decision: Apply reviewed feedback through class-wide eligibility constraints
+
+**Status:** Accepted
+
+**Context:** Prototype reconciliation applies corrected positive membership, but
+a removed topic also needs to remain ineligible for automatic recommendation to
+that semantic class until later positive correction.
+
+**Decision:** Record removed membership as a class-wide topic constraint across
+all representation views. Apply prototype reconciliation and constraint changes
+only after both have been prepared successfully. Later positive feedback for
+the same topic and class clears the matching constraint without affecting other
+class constraints.
+
+**Rationale:** Eligibility constraints preserve explicit negative feedback
+without distorting cosine similarities, votes, ranks, or decision thresholds.
+Atomic preparation prevents a failed prototype rebuild from leaving constraint
+state inconsistent with trusted evidence.
+
+**Consequences:** Recommendation filtering removes blocked classes while
+preserving the original candidate objects and order. If every candidate is
+blocked, this component returns no allowed candidates and does not automatically
+classify the topic as UNKNOWN. Persistence, API/UI, production integration,
+reliability learning, and threshold recalibration remain separate work.
+
 ## Decision: Assemble known classes only from complete trusted evidence
 
 **Status:** Accepted

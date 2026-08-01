@@ -51,6 +51,12 @@ from .semantic_class_decision import (
     SemanticClassDecisionReason,
     SemanticClassDecisionState,
 )
+from .semantic_feedback_workflow import (
+    NegativeMembershipConstraint,
+    NegativeMembershipConstraintStore,
+    SemanticFeedbackWorkflow,
+    SemanticFeedbackWorkflowResult,
+)
 from .semantic_refresh import (
     SemanticRefreshDecision,
     SemanticRefreshPolicy,
@@ -108,6 +114,8 @@ __all__ = [
     "MembershipFeedbackStore",
     "MultiViewConsensusEngine",
     "MultiViewConsensusResult",
+    "NegativeMembershipConstraint",
+    "NegativeMembershipConstraintStore",
     "RepresentationBuilder",
     "RepresentationClassCentroids",
     "RepresentationClassConsensus",
@@ -129,6 +137,8 @@ __all__ = [
     "SemanticClassDecisionPolicy",
     "SemanticClassDecisionReason",
     "SemanticClassDecisionState",
+    "SemanticFeedbackWorkflow",
+    "SemanticFeedbackWorkflowResult",
     "SemanticRefreshDecision",
     "SemanticRefreshPolicy",
     "SemanticRefreshReason",

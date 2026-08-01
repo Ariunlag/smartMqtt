@@ -119,6 +119,8 @@ reliability learning remain planned stages.
 - [x] Positive/negative member feedback evidence
 - [x] Apply positive reviewed membership to six-view class prototypes
 - [x] Safe prototype reconciliation after edited membership feedback
+- [x] Negative membership constraints
+- [x] Integrated semantic feedback application workflow
 
 These are isolated building blocks. The new semantic pipeline, temporal
 profiler, refresh policy, stability-aware builder, and representation class
@@ -128,7 +130,6 @@ stream pool is likewise an isolated in-memory foundation.
 
 ### Planned work
 
-- [ ] Negative-membership constraint handling during recommendation
 - [ ] Representation reliability statistics
 - [ ] Versioned adaptive recalibration
 - [ ] Production semantic workflow integration

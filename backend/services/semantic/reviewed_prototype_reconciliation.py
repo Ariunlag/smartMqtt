@@ -37,7 +37,21 @@ class ReviewedPrototypeReconciler:
         unknown_pool: UnknownStreamPool,
         evidence_store: TrustedClassEvidenceStore,
     ) -> ReviewedPrototypeReconciliationResult:
-        """Prepare all changed replacements before mutating the evidence store."""
+        """Prepare and commit all changed replacements atomically."""
+        result = self.prepare(review, unknown_pool, evidence_store)
+        changed = set(result.changed_representations)
+        for evidence in result.evidence:
+            if evidence.representation_name in changed:
+                evidence_store.upsert(evidence)
+        return result
+
+    def prepare(
+        self,
+        review: CandidateMembershipReview,
+        unknown_pool: UnknownStreamPool,
+        evidence_store: TrustedClassEvidenceStore,
+    ) -> ReviewedPrototypeReconciliationResult:
+        """Compute all replacements without mutating the evidence store."""
         prepared = []
         changed = []
         positive = set(review.positive_topics)
@@ -100,15 +114,12 @@ class ReviewedPrototypeReconciler:
             )
             changed.append(representation_name)
 
-        frozen_evidence = tuple(prepared)
-        for evidence in frozen_evidence:
-            evidence_store.upsert(evidence)
         return ReviewedPrototypeReconciliationResult(
             semantic_class_name=review.semantic_class_name,
             positive_topics=review.positive_topics,
             removed_topics=review.removed_topics,
             changed_representations=tuple(changed),
-            evidence=frozen_evidence,
+            evidence=tuple(prepared),
         )
 
     @staticmethod
