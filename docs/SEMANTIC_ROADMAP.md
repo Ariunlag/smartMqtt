@@ -154,7 +154,7 @@ snapshot recovery are now application-owned services.
 - [x] Startup restore before semantic processing
 - [x] Bounded debounced persistence writer
 - [x] Restart recovery integration test
-- [ ] Operational semantic diagnostics UI
+- [x] Operational semantic diagnostics UI
 - [ ] Full real-broker acceptance test
 - [ ] Multi-instance semantic ownership strategy
 - [ ] Snapshot retention and historical audit

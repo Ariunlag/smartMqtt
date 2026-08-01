@@ -476,3 +476,11 @@ superiority.
 - One application coordinator serializes authoritative publication, advances generation once per logical content-changing transaction, and captures immutable internally consistent snapshots. Embedding, HDBSCAN, serialization, and database I/O occur outside its lock.
 - Saves use one bounded debounced writer and a PostgreSQL generation guard, so an older generation cannot overwrite newer persisted state. Save failures leave the generation dirty for a later retry without stopping semantic processing.
 - Operational counters, tasks, queues, locks, MQTT objects, database clients, and transient errors are not persisted.
+
+## Semantic operations dashboard
+
+- The existing dashboard includes one additive, vector-free semantic operations panel immediately before candidate review; all MQTT, duplicate, graph, class, saved-class, and group workflows remain mounted and unchanged.
+- The panel reads the existing processing, discovery, persistence, candidate, class, and constraint endpoints through the existing semantic review API client. It creates no additional HTTP client or frontend dependency.
+- Each endpoint retains its latest successful value independently. One guarded five-second polling cycle uses settled results so a failed endpoint neither overlaps another poll nor clears healthy data from other endpoints.
+- Display state is limited to `DISABLED`, `STARTING`, `HEALTHY`, `BUSY`, `DEGRADED`, and `STOPPED`. Historical failure and retry counters remain diagnostic values and do not imply current degradation when the current error has cleared.
+- The panel exposes counts, lifecycle state, generations, and recovery state only. Embeddings, centroids, raw snapshots, database connection data, SQL, credentials, and model internals are never rendered.

@@ -485,6 +485,116 @@ button:focus-visible {
 }
 
 /* Diagnostic semantic candidate review */
+.semantic-operations {
+  padding: 1rem;
+  background: var(--box-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+
+.semantic-operations__header,
+.semantic-operations__card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.semantic-operations__header h2,
+.semantic-operations__header p,
+.semantic-operations__card h3,
+.semantic-operations__errors p {
+  margin: 0;
+}
+
+.semantic-operations__header p {
+  color: var(--muted-text);
+}
+
+.semantic-operations__grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+.semantic-operations__card {
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+}
+
+.semantic-operations__card h3 {
+  font-size: 1rem;
+}
+
+.semantic-operations__state {
+  padding: 0.15rem 0.45rem;
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  color: var(--muted-text);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.semantic-operations__state[data-state="HEALTHY"] {
+  color: var(--success);
+  border-color: var(--success);
+}
+
+.semantic-operations__state[data-state="BUSY"] {
+  color: var(--accent-dark);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.semantic-operations__state[data-state="DEGRADED"] {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
+.semantic-operations__card dl {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.4rem 0.75rem;
+  margin: 0.65rem 0 0;
+}
+
+.semantic-operations__card dl div {
+  min-width: 0;
+}
+
+.semantic-operations__card dt {
+  color: var(--muted-text);
+  font-size: 0.75rem;
+}
+
+.semantic-operations__card dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-weight: 700;
+}
+
+.semantic-operations__card-error,
+.semantic-operations__errors {
+  color: var(--danger);
+}
+
+.semantic-operations__card-error {
+  display: block;
+  margin-top: 0.5rem;
+  font-size: 0.75rem;
+}
+
+.semantic-operations__errors {
+  display: grid;
+  gap: 0.25rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+}
+
 .semantic-review {
   padding: 1rem;
   background: var(--box-bg);
