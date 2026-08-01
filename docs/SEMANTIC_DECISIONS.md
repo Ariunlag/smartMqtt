@@ -437,4 +437,12 @@ superiority.
 - A successful review atomically applies six-view prototype reconciliation and negative membership constraints through the domain workflow.
 - A pending candidate is removed only after its review succeeds. Validation or workflow failures preserve the candidate, prototypes, and constraints.
 - The semantic review runtime remains in memory, without persistence or automatic MQTT wiring.
-- The current API dependency retains an isolated module-level runtime for diagnostic use only. The next production-composition task must replace it with application-level dependency injection and share the `UnknownStreamPool`, `TrustedClassEvidenceStore`, and `NegativeMembershipConstraintStore` instances between the processing and review runtimes as applicable; it must not create a second production state path.
+
+## Shared semantic application composition
+
+- One `SemanticApplication` owns the processing runtime, review runtime, and in-memory semantic state for a FastAPI application instance.
+- Processing and review use the exact same `UnknownStreamPool`; review updates the application's shared `TrustedClassEvidenceStore` and `NegativeMembershipConstraintStore` through the shared feedback workflow.
+- The semantic application is attached to `app.state.semantic_application`. API modules resolve it through FastAPI dependencies and do not create independent production runtimes.
+- Reviewed prototypes are not yet synchronized into the processing runtime's explicit known-class registry. Class-name to class-ID mapping remains explicit, and no automatic class ID is generated.
+- Negative constraints are not yet applied during processing-runtime candidate eligibility.
+- Production MQTT ingestion remains unchanged; semantic processing integration is a separate next step.

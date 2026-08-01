@@ -44,6 +44,7 @@ from .reviewed_prototype_update import (
     ReviewedPrototypeUpdater,
     ReviewedPrototypeUpdateResult,
 )
+from .semantic_application import SemanticApplication, build_semantic_application
 from .semantic_class_decision import (
     SemanticClassDecision,
     SemanticClassDecisionConfig,
@@ -149,6 +150,7 @@ __all__ = [
     "ReviewedPrototypeReconciliationResult",
     "ReviewedPrototypeUpdateResult",
     "ReviewedPrototypeUpdater",
+    "SemanticApplication",
     "SemanticClassDecision",
     "SemanticClassDecisionConfig",
     "SemanticClassDecisionPolicy",
@@ -190,5 +192,6 @@ __all__ = [
     "UnknownStreamDiscoveryResult",
     "UnknownStreamEntry",
     "UnknownStreamPool",
+    "build_semantic_application",
     "normalize_text",
 ]

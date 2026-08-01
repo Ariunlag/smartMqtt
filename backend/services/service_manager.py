@@ -2,12 +2,11 @@ import asyncio
 import logging
 
 from config import config
-from services.mqtt.handler_setup import register_mqtt_handlers
-from services.mqtt.client import mqtt_client
-from services.influx.client import influx_client
 from services.database.postgres import postgres_client
 from services.database.qdrant import qdrant_client
 from services.dependency_monitor import DependencyMonitor
+from services.influx.client import influx_client
+from services.mqtt.client import mqtt_client
 from services.topic_manager import topic_manager
 
 logger = logging.getLogger(__name__)
@@ -42,6 +41,10 @@ class ServiceManager:
         dependency is temporarily unavailable."""
         loop = asyncio.get_running_loop()
         logger.info("[Startup] Using loop %s", id(loop))
+
+        # Import lazily so importing the FastAPI app does not construct the
+        # configured sentence-transformer embedding model.
+        from services.mqtt.handler_setup import register_mqtt_handlers
 
         register_mqtt_handlers()
         for service in self.services:

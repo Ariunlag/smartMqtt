@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from models.semantic_review_models import (
     CandidateIdentityModel,
     NegativeMembershipConstraintList,
@@ -15,6 +15,7 @@ from services.semantic import (
     CandidateConfirmationSource,
     CandidateIdentity,
     CandidateMembershipReview,
+    SemanticApplication,
 )
 from services.semantic.semantic_review_runtime import (
     PendingCandidateNotFoundError,
@@ -22,17 +23,24 @@ from services.semantic.semantic_review_runtime import (
 )
 
 router = APIRouter(prefix="/semantic-review", tags=["Semantic review"])
-# TODO(semantic composition): replace this diagnostic singleton at the production
-# composition root. That root must inject shared UnknownStreamPool,
-# TrustedClassEvidenceStore, and NegativeMembershipConstraintStore instances into
-# the processing and review runtimes as applicable, rather than creating a second
-# independent production state path.
-_runtime = SemanticReviewRuntime()
 
 
-def get_semantic_review_runtime() -> SemanticReviewRuntime:
-    """Return the default in-memory runtime; tests may override this dependency."""
-    return _runtime
+def get_semantic_application(request: Request) -> SemanticApplication:
+    """Return the semantic composition attached to this FastAPI app instance."""
+    application = getattr(request.app.state, "semantic_application", None)
+    if application is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Semantic application is not initialized",
+        )
+    return application
+
+
+def get_semantic_review_runtime(
+    application: Annotated[SemanticApplication, Depends(get_semantic_application)],
+) -> SemanticReviewRuntime:
+    """Resolve review state from the application-level composition root."""
+    return application.review_runtime
 
 
 @router.get("/candidates", response_model=SemanticReviewState)

@@ -133,8 +133,15 @@ stream pool is likewise an isolated in-memory foundation.
 - [x] Candidate-review backend API
 - [x] Candidate-review React MVP
 - [x] End-to-end semantic review workflow test
-- [ ] Production MQTT integration
-- [ ] Persistent semantic runtime state
+- [x] Shared semantic application composition
+- [x] Shared UNKNOWN pool between processing and review
+- [x] Shared prototype and constraint state for review workflow
+- [ ] Synchronize reviewed prototypes into the known-class registry
+- [ ] Apply negative constraints during runtime candidate eligibility
+- [ ] Wire SemanticRuntime into production MQTT ingestion
+- [ ] Trigger UNKNOWN discovery and pending-candidate refresh
+- [ ] Persist semantic application state
+- [ ] Restart recovery and full end-to-end system test
 - [ ] Representation reliability experiments
 - [ ] Versioned adaptive recalibration
 - [ ] Expanded hard benchmark and final TEST report
