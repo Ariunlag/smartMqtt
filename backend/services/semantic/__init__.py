@@ -63,6 +63,13 @@ from .semantic_refresh import (
     SemanticRefreshReason,
     SemanticRefreshReasonType,
 )
+from .semantic_runtime import (
+    SemanticRuntimeOrchestrator,
+    SemanticRuntimeProcessingError,
+    SemanticRuntimeProcessResult,
+    SemanticRuntimeStateStore,
+    SemanticRuntimeTopicState,
+)
 from .stability_aware_representations import StabilityAwareRepresentationBuilder
 from .stream_class import (
     ClassMatch,
@@ -143,6 +150,11 @@ __all__ = [
     "SemanticRefreshPolicy",
     "SemanticRefreshReason",
     "SemanticRefreshReasonType",
+    "SemanticRuntimeOrchestrator",
+    "SemanticRuntimeProcessResult",
+    "SemanticRuntimeProcessingError",
+    "SemanticRuntimeStateStore",
+    "SemanticRuntimeTopicState",
     "StabilityAwareRepresentationBuilder",
     "StreamClassEngine",
     "StreamClassMember",
