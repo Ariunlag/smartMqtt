@@ -1,7 +1,9 @@
 import os
+
 from dotenv import load_dotenv
 
-load_dotenv()  
+load_dotenv()
+
 
 class Config:
     def __init__(self):
@@ -33,13 +35,14 @@ class Config:
         self.EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
         self.EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "cpu")
 
-       # Thresholds for duplicate detection
+        # Thresholds for duplicate detection
         self.ID_THRESH = self._ratio("ID_THRESH", 0.90)
         self.MIN_POINTS = int(os.getenv("MIN_POINTS", 10))
 
-
         # Duplicate check delay (in seconds)
-        self.DUPE_CHECK_DELAY = int(os.getenv("DUPE_CHECK_DELAY", 60))  # default 1 minute
+        self.DUPE_CHECK_DELAY = int(
+            os.getenv("DUPE_CHECK_DELAY", 60)
+        )  # default 1 minute
 
         # threshold for group tags similarity (between 0 and 1)
         self.GROUP_TAG_THRESH = self._ratio("GROUP_TAG_THRESH", 0.85)
@@ -53,10 +56,37 @@ class Config:
         self.INGEST_QUEUE_MAXSIZE = int(os.getenv("INGEST_QUEUE_MAXSIZE", 1000))
         self.INGEST_WORKERS = int(os.getenv("INGEST_WORKERS", 4))
         # "drop_new" (reject newest) or "drop_oldest" (evict oldest to admit new)
-        self.INGEST_QUEUE_FULL_POLICY = os.getenv("INGEST_QUEUE_FULL_POLICY", "drop_new")
+        self.INGEST_QUEUE_FULL_POLICY = os.getenv(
+            "INGEST_QUEUE_FULL_POLICY", "drop_new"
+        )
         self.INGEST_MAX_RETRIES = int(os.getenv("INGEST_MAX_RETRIES", 0))
         self.INGEST_RETRY_DELAY = float(os.getenv("INGEST_RETRY_DELAY", 0.5))
         self.INGEST_METRICS_INTERVAL = float(os.getenv("INGEST_METRICS_INTERVAL", 30.0))
+
+        # Ordered semantic MQTT sidecar. Enabled by default; its model is still
+        # constructed lazily during FastAPI startup rather than module import.
+        self.SEMANTIC_PROCESSING_ENABLED = self._boolean(
+            "SEMANTIC_PROCESSING_ENABLED", True
+        )
+        self.SEMANTIC_QUEUE_MAXSIZE = int(os.getenv("SEMANTIC_QUEUE_MAXSIZE", "256"))
+        self.SEMANTIC_SHUTDOWN_DRAIN_TIMEOUT = float(
+            os.getenv("SEMANTIC_SHUTDOWN_DRAIN_TIMEOUT", "5.0")
+        )
+
+        # Debounced UNKNOWN discovery operational defaults. These values are
+        # scheduling defaults, not calibrated research thresholds.
+        self.SEMANTIC_DISCOVERY_ENABLED = self._boolean(
+            "SEMANTIC_DISCOVERY_ENABLED", True
+        )
+        self.SEMANTIC_DISCOVERY_DEBOUNCE_SECONDS = float(
+            os.getenv("SEMANTIC_DISCOVERY_DEBOUNCE_SECONDS", "1.0")
+        )
+        self.SEMANTIC_DISCOVERY_SHUTDOWN_TIMEOUT = float(
+            os.getenv("SEMANTIC_DISCOVERY_SHUTDOWN_TIMEOUT", "5.0")
+        )
+        self.SEMANTIC_DISCOVERY_MIN_CLUSTER_SIZE = int(
+            os.getenv("SEMANTIC_DISCOVERY_MIN_CLUSTER_SIZE", "3")
+        )
 
     @staticmethod
     def _ratio(name: str, default: float) -> float:
@@ -65,6 +95,18 @@ class Config:
         if not 0.0 <= value <= 1.0:
             raise ValueError(f"{name} must be between 0 and 1, got {value}")
         return value
+
+    @staticmethod
+    def _boolean(name: str, default: bool) -> bool:
+        value = os.getenv(name)
+        if value is None:
+            return default
+        normalized = value.strip().lower()
+        if normalized in {"1", "true", "yes", "on"}:
+            return True
+        if normalized in {"0", "false", "no", "off"}:
+            return False
+        raise ValueError(f"{name} must be a boolean, got {value!r}")
 
 
 # single instance used everywhere

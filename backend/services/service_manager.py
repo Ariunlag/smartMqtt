@@ -1,14 +1,17 @@
 import asyncio
 import logging
+from typing import TYPE_CHECKING
 
 from config import config
-from services.mqtt.handler_setup import register_mqtt_handlers
-from services.mqtt.client import mqtt_client
-from services.influx.client import influx_client
 from services.database.postgres import postgres_client
 from services.database.qdrant import qdrant_client
 from services.dependency_monitor import DependencyMonitor
+from services.influx.client import influx_client
+from services.mqtt.client import mqtt_client
 from services.topic_manager import topic_manager
+
+if TYPE_CHECKING:
+    from services.semantic import SemanticApplication
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +31,7 @@ class ServiceManager:
             max_delay=config.RECOVERY_MAX_DELAY,
             on_recover=self._on_recover,
         )
+        self._semantic_application: SemanticApplication | None = None
 
     async def _on_recover(self, name: str) -> None:
         # When MQTT (re)connects, restore subscriptions. Runs off the event loop
@@ -36,14 +40,21 @@ class ServiceManager:
             logger.info("MQTT connected — restoring subscriptions")
             await asyncio.to_thread(topic_manager.resubscribe_all)
 
-    async def startup(self):
+    async def startup(self, semantic_application: "SemanticApplication"):
         """Non-blocking startup: liveness is up immediately; dependencies are
         connected in the background so the app does not crash-loop when a
         dependency is temporarily unavailable."""
         loop = asyncio.get_running_loop()
         logger.info("[Startup] Using loop %s", id(loop))
 
-        register_mqtt_handlers()
+        # Import lazily so importing the FastAPI app does not construct the
+        # configured sentence-transformer embedding model.
+        from services.mqtt.handler_setup import register_mqtt_handlers
+
+        self._semantic_application = semantic_application
+        await semantic_application.discovery_service.start()
+        await semantic_application.processing_service.start()
+        register_mqtt_handlers(semantic_application.processing_service)
         for service in self.services:
             if hasattr(service, "set_loop"):
                 service.set_loop(loop)
@@ -56,8 +67,11 @@ class ServiceManager:
         logger.info("[Startup] Dependency monitor started")
 
     async def shutdown(self):
-        await self.monitor.stop()
         await mqtt_client.stop_ingestion()
+        if self._semantic_application is not None:
+            await self._semantic_application.processing_service.stop()
+            await self._semantic_application.discovery_service.stop()
+        await self.monitor.stop()
         for service in self.services:
             if hasattr(service, "disconnect"):
                 try:
@@ -67,6 +81,7 @@ class ServiceManager:
                         "disconnect failed: %s", service.__class__.__name__
                     )
         logger.info("[Shutdown] All services disconnected")
+        self._semantic_application = None
 
     async def check_all(self) -> dict[str, dict]:
         return await self.monitor.snapshot()

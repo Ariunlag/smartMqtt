@@ -1,5 +1,30 @@
 """Deterministic structural profiling and textual representations for SmartMQTT streams."""
 
+from .candidate_confirmation import (
+    CandidateConfirmation,
+    CandidateConfirmationSource,
+    CandidateConfirmationState,
+    CandidateConfirmationStore,
+    CandidateIdentity,
+)
+from .candidate_membership_review import (
+    CandidateMembershipReview,
+    CandidateMembershipReviewProcessor,
+    MembershipFeedbackEvidence,
+    MembershipFeedbackKind,
+    MembershipFeedbackPolarity,
+    MembershipFeedbackStore,
+)
+from .known_class_assembly import (
+    KnownClassAssembler,
+    KnownClassAssemblyRequest,
+    KnownClassAssemblyResult,
+)
+from .known_class_registry import (
+    KnownClassRegistry,
+    SemanticClassCatalog,
+    SemanticClassDefinition,
+)
 from .multi_view_consensus import (
     MultiViewConsensusEngine,
     MultiViewConsensusResult,
@@ -16,11 +41,57 @@ from .representation_class_scoring import (
 )
 from .representation_embedder import RepresentationEmbedder, RepresentationEmbeddings
 from .representations import RepresentationBuilder, StreamRepresentations
+from .reviewed_prototype_reconciliation import (
+    ReviewedPrototypeReconciler,
+    ReviewedPrototypeReconciliationResult,
+)
+from .reviewed_prototype_update import (
+    ReviewedPrototypeUpdater,
+    ReviewedPrototypeUpdateResult,
+)
+from .semantic_application import SemanticApplication, build_semantic_application
+from .semantic_class_decision import (
+    SemanticClassDecision,
+    SemanticClassDecisionConfig,
+    SemanticClassDecisionPolicy,
+    SemanticClassDecisionReason,
+    SemanticClassDecisionState,
+)
+from .semantic_discovery_service import (
+    SemanticDiscoveryConfig,
+    SemanticDiscoveryService,
+    SemanticDiscoveryStatus,
+)
+from .semantic_feedback_workflow import (
+    NegativeMembershipConstraint,
+    NegativeMembershipConstraintStore,
+    SemanticFeedbackWorkflow,
+    SemanticFeedbackWorkflowResult,
+)
+from .semantic_processing_service import (
+    SemanticProcessingConfig,
+    SemanticProcessingService,
+    SemanticProcessingStatus,
+)
 from .semantic_refresh import (
     SemanticRefreshDecision,
     SemanticRefreshPolicy,
     SemanticRefreshReason,
     SemanticRefreshReasonType,
+)
+from .semantic_review_runtime import (
+    PendingCandidateNotFoundError,
+    PendingSemanticCandidate,
+    PrototypeSummary,
+    SemanticReviewApplicationResult,
+    SemanticReviewRuntime,
+)
+from .semantic_runtime import (
+    SemanticRuntimeOrchestrator,
+    SemanticRuntimeProcessingError,
+    SemanticRuntimeProcessResult,
+    SemanticRuntimeStateStore,
+    SemanticRuntimeTopicState,
 )
 from .stability_aware_representations import StabilityAwareRepresentationBuilder
 from .stream_class import (
@@ -38,26 +109,94 @@ from .temporal_profile import (
     TemporalStreamProfile,
     TemporalStreamProfiler,
 )
+from .trusted_class_evidence import (
+    RepresentationClassPrototype,
+    TrustedClassEvidence,
+    TrustedClassEvidenceStore,
+    TrustedClassEvidenceUpdater,
+)
+from .unknown_stream_discovery import (
+    HDBSCANDiscoveryConfig,
+    RepresentationDiscoveryResult,
+    UnknownClusterCandidate,
+    UnknownStreamDiscoveryEngine,
+    UnknownStreamDiscoveryResult,
+)
+from .unknown_stream_pool import (
+    UnknownStreamEntry,
+    UnknownStreamPool,
+    UnknownStreamPoolSnapshot,
+)
 
 __all__ = [
+    "CandidateConfirmation",
+    "CandidateConfirmationSource",
+    "CandidateConfirmationState",
+    "CandidateConfirmationStore",
+    "CandidateIdentity",
+    "CandidateMembershipReview",
+    "CandidateMembershipReviewProcessor",
     "ClassMatch",
     "FieldProfile",
+    "HDBSCANDiscoveryConfig",
+    "KnownClassAssembler",
+    "KnownClassAssemblyRequest",
+    "KnownClassAssemblyResult",
+    "KnownClassRegistry",
+    "MembershipFeedbackEvidence",
+    "MembershipFeedbackKind",
+    "MembershipFeedbackPolarity",
+    "MembershipFeedbackStore",
     "MultiViewConsensusEngine",
     "MultiViewConsensusResult",
+    "NegativeMembershipConstraint",
+    "NegativeMembershipConstraintStore",
+    "PendingCandidateNotFoundError",
+    "PendingSemanticCandidate",
+    "PrototypeSummary",
     "RepresentationBuilder",
     "RepresentationClassCentroids",
     "RepresentationClassConsensus",
     "RepresentationClassEvidence",
     "RepresentationClassEvidenceMatrix",
+    "RepresentationClassPrototype",
     "RepresentationClassScorer",
     "RepresentationClassScores",
+    "RepresentationDiscoveryResult",
     "RepresentationEmbedder",
     "RepresentationEmbeddings",
     "RepresentationViewWinner",
+    "ReviewedPrototypeReconciler",
+    "ReviewedPrototypeReconciliationResult",
+    "ReviewedPrototypeUpdateResult",
+    "ReviewedPrototypeUpdater",
+    "SemanticApplication",
+    "SemanticClassCatalog",
+    "SemanticClassDecision",
+    "SemanticClassDecisionConfig",
+    "SemanticClassDecisionPolicy",
+    "SemanticClassDecisionReason",
+    "SemanticClassDecisionState",
+    "SemanticClassDefinition",
+    "SemanticDiscoveryConfig",
+    "SemanticDiscoveryService",
+    "SemanticDiscoveryStatus",
+    "SemanticFeedbackWorkflow",
+    "SemanticFeedbackWorkflowResult",
+    "SemanticProcessingConfig",
+    "SemanticProcessingService",
+    "SemanticProcessingStatus",
     "SemanticRefreshDecision",
     "SemanticRefreshPolicy",
     "SemanticRefreshReason",
     "SemanticRefreshReasonType",
+    "SemanticReviewApplicationResult",
+    "SemanticReviewRuntime",
+    "SemanticRuntimeOrchestrator",
+    "SemanticRuntimeProcessResult",
+    "SemanticRuntimeProcessingError",
+    "SemanticRuntimeStateStore",
+    "SemanticRuntimeTopicState",
     "StabilityAwareRepresentationBuilder",
     "StreamClassEngine",
     "StreamClassMember",
@@ -73,5 +212,15 @@ __all__ = [
     "TemporalProfileUpdate",
     "TemporalStreamProfile",
     "TemporalStreamProfiler",
+    "TrustedClassEvidence",
+    "TrustedClassEvidenceStore",
+    "TrustedClassEvidenceUpdater",
+    "UnknownClusterCandidate",
+    "UnknownStreamDiscoveryEngine",
+    "UnknownStreamDiscoveryResult",
+    "UnknownStreamEntry",
+    "UnknownStreamPool",
+    "UnknownStreamPoolSnapshot",
+    "build_semantic_application",
     "normalize_text",
 ]

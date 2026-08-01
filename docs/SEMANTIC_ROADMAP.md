@@ -45,27 +45,43 @@ RepresentationClassEvidenceMatrix
 Equal-view multi-view consensus
         |
         v
-KNOWN / UNCERTAIN / UNKNOWN (planned)
+KNOWN / UNCERTAIN / UNKNOWN decision policy
         |
         v
-UNKNOWN pool
+        +--> KNOWN / UNCERTAIN
+        |
+        +--> UNKNOWN
+                 |
+                 v
+          UNKNOWN stream pool
+                 |
+                 v
+          Representation-specific HDBSCAN candidate discovery
         |
         v
-HDBSCAN candidate-class discovery
+Explicit candidate confirmation / rejection
         |
         v
-Confirmation / feedback
+Trusted representation-specific prototype update
         |
         v
-Centroid or prototype updates
+Six-view completeness check
+        |
+        +--> incomplete -> retain evidence
+        |
+        v
+RepresentationClassCentroids
+        |
+        v
+Existing known-class scoring
         |
         v
 Representation reliability learning
 ```
 
 Only the foundation stages identified as completed below currently exist.
-Automatic builder invocation, embedding refresh integration, class decision,
-discovery, feedback, and reliability learning remain planned stages.
+Automatic builder invocation, embedding refresh integration, feedback, and
+reliability learning remain planned stages.
 
 ## Implementation status
 
@@ -87,24 +103,78 @@ discovery, feedback, and reliability learning remain planned stages.
 - [x] Stability-aware representation generation
 - [x] Representation-specific class scoring
 - [x] Multi-view consensus
+- [x] KNOWN / UNCERTAIN / UNKNOWN decision policy
+- [x] UNKNOWN stream pool
+- [x] HDBSCAN candidate-class discovery foundation
+- [x] Human/system confirmation flow foundation
+- [x] Trusted feedback-driven representation prototype updates
+- [x] Full six-view known-class assembly from trusted evidence
+- [x] Controlled semantic benchmark foundation
+- [x] Semantic experiment runner
+- [x] Initial known/open-world evaluation metrics
+- [x] Threshold calibration protocol
+- [x] Frozen-config benchmark execution
+- [x] Recorded semantic calibration Pareto-frontier artifact and report
+- [x] Editable candidate membership review
+- [x] Positive/negative member feedback evidence
+- [x] Apply positive reviewed membership to six-view class prototypes
+- [x] Safe prototype reconciliation after edited membership feedback
+- [x] Negative membership constraints
+- [x] Integrated semantic feedback application workflow
+- [x] Reviewed prototype synchronization into the live known-class registry
+- [x] Negative-constraint filtering during runtime candidate eligibility
+- [x] Production MQTT semantic sidecar
+- [x] Bounded isolated semantic processing queue
+- [x] Shared live runtime processing from MQTT observations
+- [x] Automatic UNKNOWN-pool discovery trigger
+- [x] Debounced and stale-safe HDBSCAN execution
+- [x] Automatic publication of pending review candidates
 
-These are isolated building blocks. The new semantic pipeline, temporal
-profiler, refresh policy, stability-aware builder, and representation class
-scorer and equal-view consensus engine are not currently wired into the default
-production MQTT ingestion path.
+The semantic runtime now consumes MQTT observations through an isolated,
+bounded sidecar after the existing primary handlers. It updates the shared
+in-memory runtime and UNKNOWN pool without blocking or retrying the primary
+InfluxDB/WebSocket pipeline. Discovery scheduling and persistence remain
+separate work.
 
 ### Planned work
 
-- [ ] KNOWN / UNCERTAIN / UNKNOWN decision policy
-- [ ] UNKNOWN stream pool
-- [ ] HDBSCAN candidate-class discovery
-- [ ] Human/system confirmation flow
+- [x] Candidate-review backend API
+- [x] Candidate-review React MVP
+- [x] End-to-end semantic review workflow test
+- [x] Shared semantic application composition
+- [x] Shared UNKNOWN pool between processing and review
+- [x] Shared prototype and constraint state for review workflow
+- [x] Synchronize reviewed prototypes into the known-class registry
+- [x] Apply negative constraints during runtime candidate eligibility
+- [x] Wire SemanticRuntime into production MQTT ingestion
+- [x] Trigger UNKNOWN discovery from shared pool
+- [x] Publish pending discovery candidates to review runtime
+- [ ] Persist semantic application state
+- [ ] Restart recovery
+- [ ] Operational semantic diagnostics UI
+- [ ] Full real-broker acceptance test
+- [ ] Representation reliability experiments
+- [ ] Versioned adaptive recalibration
+- [ ] Expanded hard benchmark and final TEST report
+- [ ] Semantic benchmark experiment runner and metrics
+- [ ] Threshold calibration protocol
+- [ ] Frozen-config benchmark execution
+- [ ] HDBSCAN discovery evaluation
+- [ ] Full benchmark result report
 - [ ] Feedback-driven online class updates
 - [ ] Representation reliability learning
 - [ ] Multi-prototype semantic classes
 - [ ] Research/diagnostic backend API
 - [ ] Research/diagnostic React UI
-- [ ] Production MQTT integration of the new semantic pipeline
+
+## Research and evaluation
+
+The controlled semantic benchmark foundation supplies deterministic structured
+stream scenarios and explicit known/unseen ground truth for later evaluation.
+It does not run semantic services or calculate metrics. Planned experiments
+will compare static single-representation and six-view baselines with
+temporal/stability-aware and full open-world workflows. Metrics and an
+experiment runner remain planned.
 
 ## Known-class matching and unknown-class discovery
 
@@ -120,9 +190,15 @@ confirmation.
 Centroids or prototypes and clustering solve different problems:
 
 - Centroids or prototypes support matching against known classes.
-- HDBSCAN is planned for novel or unknown-class discovery.
+- HDBSCAN provides representation-specific candidate discovery for UNKNOWN
+  streams; semantic class creation remains planned.
 
-HDBSCAN and the UNKNOWN workflow are not currently implemented.
+The UNKNOWN stream pool retains the latest UNKNOWN evidence in memory.
+Representation-specific HDBSCAN discovery now exposes candidate structure and
+noise independently for all six views. Candidate clusters are not semantic
+classes. Explicit HUMAN or SYSTEM confirmation/rejection records trusted
+feedback without creating or updating classes; class updates and the remaining
+UNKNOWN workflow are still planned.
 
 ## Temporal semantic direction
 
@@ -150,7 +226,7 @@ Raw observations
     -> bounded temporal evidence
     -> deterministic semantic refresh decision
     -> stability-aware semantic text
-    -> embedding refresh integration (planned)
+    -> embedding refresh through the ordered MQTT semantic sidecar
 ```
 
 The current policy requests initialization on the first observation, ignores
@@ -163,8 +239,8 @@ value, stable replacement, persistent disappearance, and reappearance after
 persistent disappearance. `SemanticRefreshPolicy` decides when rebuilding is
 justified;
 `StabilityAwareRepresentationBuilder` determines the stable semantic text from
-`TemporalStreamProfile`. Automatic invocation and re-embedding are not
-integrated, and these components remain isolated from the production MQTT path.
+`TemporalStreamProfile`. The application-owned MQTT sidecar now invokes this
+runtime workflow without changing the primary ingestion pipeline.
 
 ## Representation strategy
 
@@ -185,8 +261,16 @@ The equal-view consensus baseline preserves the six view winners and summarizes
 each class with its top-1 vote count, mean rank, and unweighted mean similarity.
 It ranks classes lexicographically by votes descending, mean rank ascending,
 mean similarity descending, and class ID ascending. Exact per-view score ties
-use class ID ordering only for reproducibility. No weighted score or class
-acceptance/rejection decision exists.
+use class ID ordering only for reproducibility. The consensus engine produces
+no weighted score and makes no class acceptance/rejection decision itself.
+
+The open-world decision policy applies explicitly configured vote, absolute
+similarity, and top-versus-runner-up similarity-margin thresholds. `UNKNOWN`
+represents no known classes or clearly weak absolute evidence; `KNOWN` requires
+all configured acceptance criteria; `UNCERTAIN` preserves the middle or
+ambiguous region. Thresholds have no built-in recommended values and require
+later empirical calibration. The policy does not populate an UNKNOWN pool or
+assign classes in the production path.
 
 The project intentionally does not assign arbitrary hand-tuned weights such as
 `0.5 * key_only + 0.3 * schema + ...`. Representation usefulness may vary by
