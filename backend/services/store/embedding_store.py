@@ -1,5 +1,4 @@
 import numpy as np
-
 from services.database.postgres import postgres_client
 from services.database.qdrant import (
     GROUP_COLLECTION,
@@ -7,7 +6,7 @@ from services.database.qdrant import (
     TOPIC_COLLECTION,
     qdrant_client,
 )
-
+from services.store.canonical_identity_store import canonical_identity_store
 
 # Serializes concurrent group assignment so the nearest-centroid read and the
 # subsequent group create/centroid update cannot race (safe across workers).
@@ -15,6 +14,9 @@ GROUP_ASSIGNMENT_LOCK = 91847362
 
 
 class TopicEmbeddingStore:
+    def __init__(self, identity_store=canonical_identity_store) -> None:
+        self.identity_store = identity_store
+
     def add(self, item: dict) -> dict:
         qdrant_client.upsert(
             TOPIC_COLLECTION,
@@ -40,18 +42,29 @@ class TopicEmbeddingStore:
         embedding: list[float],
         limit: int = 10,
     ) -> list[dict]:
+        # Bounded over-fetch prevents a dense prefix of inactive aliases from
+        # starving the requested active result set. PostgreSQL remains the
+        # durable authority; Qdrant vectors are retained for audit purposes.
+        points = qdrant_client.nearest_many(
+            TOPIC_COLLECTION,
+            embedding,
+            limit=min(max(limit * 8, 64), 256),
+        )
+        topics = [point.payload["topic"] for point in points]
+        identities = self.identity_store.resolve_many(topics + [topic])
+        source_root = identities.get(topic, topic)
         return [
             {
                 "topic": point.payload["topic"],
                 "embedding": point.vector,
                 "tags": point.payload.get("tags", {}),
             }
-            for point in qdrant_client.nearest_many(
-                TOPIC_COLLECTION,
-                embedding,
-                limit=limit + 1,
-            )
+            for point in points
             if point.payload["topic"] != topic
+            and identities.get(point.payload["topic"], point.payload["topic"])
+            == point.payload["topic"]
+            and identities.get(point.payload["topic"], point.payload["topic"])
+            != source_root
         ][:limit]
 
 
@@ -94,9 +107,7 @@ class TagSetStore:
             # Hold a transaction-scoped lock across the read + writes so two
             # similar tags arriving concurrently cannot each create a group or
             # clobber each other's centroid. Released automatically on commit.
-            conn.execute(
-                "SELECT pg_advisory_xact_lock(%s)", (GROUP_ASSIGNMENT_LOCK,)
-            )
+            conn.execute("SELECT pg_advisory_xact_lock(%s)", (GROUP_ASSIGNMENT_LOCK,))
 
             nearest = qdrant_client.nearest(GROUP_COLLECTION, vector)
             if nearest and nearest.score >= threshold:
@@ -158,10 +169,12 @@ class TagSetStore:
             """
             SELECT g.id,
                    array_agg(DISTINCT gv.tag_value ORDER BY gv.tag_value) AS tags,
-                   count(DISTINCT gt.topic) AS topic_count
+                   count(DISTINCT COALESCE(identity.canonical_topic, gt.topic))
+                       AS topic_count
             FROM tag_groups g
             JOIN tag_group_values gv ON gv.group_id = g.id
             LEFT JOIN tag_group_topics gt ON gt.group_id = g.id
+            LEFT JOIN duplicate_canonical_topics identity ON identity.topic = gt.topic
             GROUP BY g.id
             ORDER BY g.id
             """
@@ -178,8 +191,12 @@ class TagSetStore:
     def get_topics(self, set_id: str) -> list[str]:
         rows = postgres_client.fetch_all(
             """
-            SELECT topic FROM tag_group_topics
-            WHERE group_id = %s ORDER BY topic
+            SELECT DISTINCT COALESCE(identity.canonical_topic, membership.topic) AS topic
+            FROM tag_group_topics membership
+            LEFT JOIN duplicate_canonical_topics identity
+                ON identity.topic = membership.topic
+            WHERE membership.group_id = %s
+            ORDER BY topic
             """,
             (self._numeric_id(set_id),),
         )

@@ -27,6 +27,7 @@ APP_TABLES = [
     "tag_group_values",
     "tag_group_topics",
     "semantic_application_state",
+    "duplicate_canonical_topics",
 ]
 
 
@@ -70,7 +71,7 @@ def pg_url():
     try:
         with psycopg.connect(url, connect_timeout=3) as conn:
             conn.execute("SELECT 1")
-    except Exception as exc:  # pragma: no cover - environment dependent
+    except Exception as exc:  # noqa: BLE001  # pragma: no cover - environment dependent
         pytest.skip(f"test database not reachable: {exc}")
     _drop_everything(url)
     yield url
@@ -79,7 +80,7 @@ def pg_url():
 
 def test_clean_database_upgrades_to_head(pg_url):
     command.upgrade(_make_config(pg_url), "head")
-    assert _alembic_version(pg_url) == "0002_semantic_application_state"
+    assert _alembic_version(pg_url) == "0003_duplicate_canonical_id"
     for table in APP_TABLES:
         assert _table_exists(pg_url, table), table
 
@@ -97,7 +98,7 @@ def test_existing_schema_adopts_baseline_without_data_loss(pg_url):
 
     command.upgrade(_make_config(pg_url), "head")
 
-    assert _alembic_version(pg_url) == "0002_semantic_application_state"
+    assert _alembic_version(pg_url) == "0003_duplicate_canonical_id"
     with psycopg.connect(pg_url) as conn:
         row = conn.execute("SELECT topic FROM streams").fetchone()
     assert row[0] == "keep/me"  # data preserved
@@ -107,7 +108,7 @@ def test_repeated_upgrade_is_idempotent(pg_url):
     cfg = _make_config(pg_url)
     command.upgrade(cfg, "head")
     command.upgrade(cfg, "head")  # must not error
-    assert _alembic_version(pg_url) == "0002_semantic_application_state"
+    assert _alembic_version(pg_url) == "0003_duplicate_canonical_id"
 
 
 def test_downgrade_removes_baseline(pg_url):

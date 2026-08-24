@@ -1,20 +1,37 @@
-from fastapi import APIRouter, HTTPException
-from models.api_models import DupeListResponse, DupeRecord, ConfirmDupeRequest, DupeAction
+from fastapi import APIRouter, HTTPException, Request
+from models.api_models import (
+    ConfirmDupeRequest,
+    DupeAction,
+    DupeListResponse,
+    DupeRecord,
+)
 from services.dupe_manager import dupe_manager
+from services.duplicate.canonicalization_service import (
+    DuplicateCanonicalizationConflict,
+)
 
 router = APIRouter(tags=["Duplicates"])
+
 
 @router.get("/duplicates", response_model=DupeListResponse)
 async def list_pending_dupes():
     return DupeListResponse(duplicates=dupe_manager.list_pending())
 
+
 @router.post("/duplicate-confirm", response_model=DupeRecord)
-async def confirm_dupe(req: ConfirmDupeRequest):
+async def confirm_dupe(req: ConfirmDupeRequest, request: Request):
     topic_a, topic_b = req.topics
 
     if req.action == DupeAction.UNSUBSCRIBE:
         try:
-            rec = dupe_manager.confirm_duplicate(topic_a, topic_b, req.target)
+            rec = dupe_manager.confirm_duplicate(
+                topic_a,
+                topic_b,
+                req.target,
+                request.app.state.semantic_application,
+            )
+        except DuplicateCanonicalizationConflict as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
     elif req.action == DupeAction.KEEP_BOTH:
@@ -26,3 +43,24 @@ async def confirm_dupe(req: ConfirmDupeRequest):
         raise HTTPException(status_code=404, detail="Duplicate pair not found")
 
     return rec
+
+
+@router.get("/duplicate-identity/{topic:path}")
+async def duplicate_identity(topic: str, request: Request):
+    identity = request.app.state.semantic_application.canonical_identity_store.get(
+        topic
+    )
+    return {
+        "topic": identity.topic,
+        "canonical_topic": identity.canonical_topic,
+        "state": "DUPLICATE_ALIAS" if identity.is_alias else "ACTIVE_CANONICAL",
+    }
+
+
+@router.get("/duplicate-identity-diagnostics")
+async def duplicate_identity_diagnostics(request: Request):
+    return {
+        "legacy_unresolved_confirmations": (
+            request.app.state.semantic_application.canonical_identity_store.legacy_unresolved_confirmations()
+        )
+    }
