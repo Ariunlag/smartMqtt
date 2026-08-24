@@ -122,7 +122,7 @@ class SemanticThresholdCalibrator:
         ]
         correct = sum(
             decision.state is SemanticClassDecisionState.KNOWN
-            and decision.candidate.class_name == item.expected_class_name
+            and decision.class_name == item.expected_class_name
             for item, decision in known
         )
         unknown = [
@@ -137,20 +137,20 @@ class SemanticThresholdCalibrator:
             true_positive = sum(
                 item.expected_class_name == label
                 and decision.state is SemanticClassDecisionState.KNOWN
-                and decision.candidate.class_name == label
+                and decision.class_name == label
                 for item, decision in known
             )
             false_positive = sum(
                 item.expected_class_name != label
                 and decision.state is SemanticClassDecisionState.KNOWN
-                and decision.candidate.class_name == label
+                and decision.class_name == label
                 for item, decision in known
             )
             false_negative = sum(
                 item.expected_class_name == label
                 and not (
                     decision.state is SemanticClassDecisionState.KNOWN
-                    and decision.candidate.class_name == label
+                    and decision.class_name == label
                 )
                 for item, decision in known
             )

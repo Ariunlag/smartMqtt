@@ -119,9 +119,10 @@ def test_numeric_variation_without_refresh_reuses_semantics_and_embedding():
     assert second.temporal_update.profile.observation_count == 2
     assert second.representations is first.representations
     assert second.embeddings is first.embeddings
-    assert second.evidence is first.evidence
-    assert second.consensus is first.consensus
-    assert second.decision is first.decision
+    assert second.evidence == first.evidence
+    assert second.consensus == first.consensus
+    assert second.decision == first.decision
+    assert second.evidence is not first.evidence
     assert len(model.calls) == 1
 
 

@@ -246,7 +246,7 @@ class SemanticDiscoveryService:
         with self._state_lock:
             self._published_count += 1
             self._last_processed_version = snapshot.version
-            self._candidate_count = 0
+            self._candidate_count = len(self.review_runtime.list_candidates())
             self._noise_topic_count = len(snapshot.entries)
             self._last_error_message = None
 

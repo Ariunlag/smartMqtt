@@ -2,11 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from contextlib import nullcontext
+from dataclasses import dataclass, replace
 from threading import RLock
+from typing import TYPE_CHECKING
 
 from .candidate_confirmation import CandidateIdentity
 from .candidate_membership_review import CandidateMembershipReview
+from .confirmed_membership import (
+    ConfirmedSemanticMembership,
+    ConfirmedSemanticMembershipStore,
+)
 from .known_class_assembly import KnownClassAssembler, KnownClassAssemblyRequest
 from .known_class_registry import (
     KnownClassRegistry,
@@ -25,6 +31,11 @@ from .unknown_stream_discovery import (
 )
 from .unknown_stream_pool import UnknownStreamEntry, UnknownStreamPool
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from .semantic_runtime import SemanticRuntimeOrchestrator
+
 
 class PendingCandidateNotFoundError(LookupError):
     """Raised when a review targets an identity that is not pending."""
@@ -36,6 +47,11 @@ class PendingSemanticCandidate:
 
     identity: CandidateIdentity
     candidate_index: int | None = None
+    retained_after_review: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.retained_after_review, bool):
+            raise TypeError("retained_after_review must be a boolean")
 
 
 @dataclass(frozen=True, slots=True)
@@ -73,6 +89,8 @@ class SemanticReviewRuntime:
         unknown_pool: UnknownStreamPool | None = None,
         evidence_store: TrustedClassEvidenceStore | None = None,
         constraint_store: NegativeMembershipConstraintStore | None = None,
+        confirmed_membership_store: ConfirmedSemanticMembershipStore | None = None,
+        processing_runtime: SemanticRuntimeOrchestrator | None = None,
         workflow: SemanticFeedbackWorkflow | None = None,
         known_class_registry: KnownClassRegistry | None = None,
         class_catalog: SemanticClassCatalog | None = None,
@@ -93,6 +111,12 @@ class SemanticReviewRuntime:
             if constraint_store is not None
             else NegativeMembershipConstraintStore()
         )
+        self.confirmed_membership_store = (
+            confirmed_membership_store
+            if confirmed_membership_store is not None
+            else ConfirmedSemanticMembershipStore()
+        )
+        self.processing_runtime = processing_runtime
         self.workflow = workflow or SemanticFeedbackWorkflow()
         self.known_class_registry = known_class_registry
         self.class_catalog = class_catalog
@@ -102,6 +126,11 @@ class SemanticReviewRuntime:
         self._pending: dict[CandidateIdentity, PendingSemanticCandidate] = {}
         self._suppressed: set[CandidateIdentity] = set()
         self._pending_lock = RLock()
+        self._discovery_requester: Callable[[], bool] | None = None
+
+    def set_discovery_requester(self, requester: Callable[[], bool]) -> None:
+        """Attach the existing bounded discovery coordinator request hook."""
+        self._discovery_requester = requester
 
     def register_unknown_entry(self, entry: UnknownStreamEntry) -> None:
         """Insert or replace UNKNOWN evidence for an integration caller."""
@@ -138,6 +167,21 @@ class SemanticReviewRuntime:
                 for identity, candidate in pending.items()
                 if identity not in self._suppressed
             }
+            retained = {
+                identity: candidate
+                for identity, candidate in self._pending.items()
+                if candidate.retained_after_review
+            }
+            replacement = {
+                **replacement,
+                **{
+                    identity: replace(
+                        replacement.get(identity, candidate),
+                        retained_after_review=True,
+                    )
+                    for identity, candidate in retained.items()
+                },
+            }
             if self._pending == replacement:
                 return
             self._pending = replacement
@@ -145,11 +189,16 @@ class SemanticReviewRuntime:
             self.state_coordinator.mark_changed()
 
     def clear_candidates(self) -> None:
-        """Atomically remove every pending discovery candidate."""
+        """Remove discovery candidates while preserving disjoint reviewed state."""
         with self._pending_lock:
-            if not self._pending:
+            replacement = {
+                identity: candidate
+                for identity, candidate in self._pending.items()
+                if candidate.retained_after_review
+            }
+            if self._pending == replacement:
                 return
-            self._pending = {}
+            self._pending = replacement
         if self.state_coordinator is not None:
             self.state_coordinator.mark_changed()
 
@@ -207,13 +256,14 @@ class SemanticReviewRuntime:
         review: CandidateMembershipReview,
         class_id: str | None = None,
     ) -> SemanticReviewApplicationResult:
-        """Apply a valid pending review and remove its candidate on success."""
+        """Apply authoritative feedback and reconcile all shared state atomically."""
         transaction = (
             self.state_coordinator.transaction()
             if self.state_coordinator is not None
-            else self._pending_lock
+            else nullcontext()
         )
-        with transaction, self._pending_lock:
+        result: SemanticReviewApplicationResult
+        with self._pending_lock, self.feedback_lock, transaction:
             if review.identity not in self._pending:
                 raise PendingCandidateNotFoundError("Candidate is not pending")
 
@@ -225,46 +275,113 @@ class SemanticReviewRuntime:
             if not isinstance(class_id, str) or not class_id.strip():
                 raise ValueError("class_id must be a non-empty string")
 
-            with self.feedback_lock:
-                evidence_before = self.evidence_store.snapshot()
-                constraints_before = self.constraint_store.snapshot()
-                catalog_before = self.class_catalog.snapshot()
-                registry_before = self.known_class_registry.snapshot()
-                try:
-                    self.class_catalog.register(
-                        SemanticClassDefinition(class_id, review.semantic_class_name)
+            evidence_before = self.evidence_store.snapshot()
+            constraints_before = self.constraint_store.snapshot()
+            memberships_before = self.confirmed_membership_store.snapshot()
+            catalog_before = self.class_catalog.snapshot()
+            registry_before = self.known_class_registry.snapshot()
+            unknown_before = self.unknown_pool.snapshot()
+            review_before = self.snapshot_review_state()
+            runtime_before = (
+                self.processing_runtime.state_store.snapshot()
+                if self.processing_runtime is not None
+                else ()
+            )
+            context_generation = (
+                self.processing_runtime.semantic_context_generation
+                if self.processing_runtime is not None
+                else None
+            )
+            context_before = (
+                context_generation.generation if context_generation is not None else 0
+            )
+            try:
+                self.class_catalog.register(
+                    SemanticClassDefinition(class_id, review.semantic_class_name)
+                )
+                workflow_result = self._apply_workflow(review)
+                assembly = self.assembler.assemble(
+                    KnownClassAssemblyRequest(class_id, review.semantic_class_name),
+                    self.evidence_store,
+                )
+                if not assembly.is_complete:
+                    missing = ", ".join(assembly.missing_representations)
+                    raise ValueError(
+                        f"Cannot publish incomplete known class '{class_id}'; "
+                        f"missing representations: {missing}"
                     )
-                    workflow_result = self._apply_workflow(review)
-                    assembly = self.assembler.assemble(
-                        KnownClassAssemblyRequest(class_id, review.semantic_class_name),
-                        self.evidence_store,
-                    )
-                    if not assembly.is_complete:
-                        missing = ", ".join(assembly.missing_representations)
-                        raise ValueError(
-                            f"Cannot publish incomplete known class '{class_id}'; "
-                            f"missing representations: {missing}"
+                self.known_class_registry.upsert(assembly.centroids)
+                for topic in review.removed_topics:
+                    existing = self.confirmed_membership_store.get(topic)
+                    if (
+                        existing is not None
+                        and existing.class_id == class_id
+                        and existing.semantic_class_name == review.semantic_class_name
+                    ):
+                        self.confirmed_membership_store.remove(topic)
+                for topic in review.positive_topics:
+                    self.confirmed_membership_store.upsert(
+                        ConfirmedSemanticMembership(
+                            topic=topic,
+                            class_id=class_id,
+                            semantic_class_name=review.semantic_class_name,
                         )
-                    self.known_class_registry.upsert(assembly.centroids)
-                    result = self._result(class_id, workflow_result, True)
-                    self._suppress_and_remove(review.identity)
-                    return result
-                except Exception:
+                    )
+                for topic in review.positive_topics:
+                    self.unknown_pool.remove(topic)
+                if self.processing_runtime is not None:
+                    self.processing_runtime.reconcile_context(
+                        review.positive_topics + review.removed_topics,
+                        coordinated=True,
+                    )
+                    self.processing_runtime.remove_stale_unknown_entries()
+                self._invalidate_after_review(review)
+                result = self._result(class_id, workflow_result, True)
+            except Exception:
+                restore_context = (
+                    context_generation.restore(context_before)
+                    if context_generation is not None
+                    else nullcontext()
+                )
+                with restore_context:
                     self.evidence_store.replace(evidence_before)
                     self.constraint_store.replace(constraints_before)
+                    self.confirmed_membership_store.replace(memberships_before)
                     self.class_catalog.replace(catalog_before)
                     self.known_class_registry.replace(registry_before)
-                    raise
+                    self.unknown_pool.replace(
+                        unknown_before.entries,
+                        unknown_before.version,
+                    )
+                    self.replace_review_state(review_before)
+                    if self.processing_runtime is not None:
+                        self.processing_runtime.state_store.replace(runtime_before)
+                raise
+        if self._discovery_requester is not None:
+            self._discovery_requester()
+        return result
 
     def _apply_workflow(
         self, review: CandidateMembershipReview
     ) -> SemanticFeedbackWorkflowResult:
-        return self.workflow.apply_review(
+        args = (
             review,
             self.unknown_pool,
             self.evidence_store,
             self.constraint_store,
         )
+        if self.processing_runtime is None:
+            return self.workflow.apply_review(*args)
+        return self.workflow.apply_review(*args, self._resolve_embeddings)
+
+    def _resolve_embeddings(self, topic: str):
+        entry = self.unknown_pool.get(topic)
+        if entry is not None:
+            return entry.embeddings
+        if self.processing_runtime is None:
+            return None
+        state = self.processing_runtime.state_store.get(topic)
+        return state.embeddings if state is not None else None
 
     @staticmethod
     def _result(
@@ -300,5 +417,22 @@ class SemanticReviewRuntime:
         changed = identity not in self._suppressed or identity in self._pending
         self._suppressed.add(identity)
         self._pending.pop(identity, None)
+        if changed and self.state_coordinator is not None:
+            self.state_coordinator.mark_changed()
+
+    def _invalidate_after_review(self, review: CandidateMembershipReview) -> None:
+        """Suppress the reviewed identity and drop overlapping stale candidates."""
+        positive = set(review.positive_topics)
+        replacement = {
+            identity: replace(candidate, retained_after_review=True)
+            for identity, candidate in self._pending.items()
+            if identity != review.identity
+            and not (positive & set(identity.member_topics))
+        }
+        changed = (
+            self._pending != replacement or review.identity not in self._suppressed
+        )
+        self._pending = replacement
+        self._suppressed.add(review.identity)
         if changed and self.state_coordinator is not None:
             self.state_coordinator.mark_changed()

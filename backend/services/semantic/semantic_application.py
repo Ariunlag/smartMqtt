@@ -8,6 +8,7 @@ from threading import RLock
 
 from services.embedding.base_model import BaseEmbeddingModel
 
+from .confirmed_membership import ConfirmedSemanticMembershipStore
 from .known_class_assembly import KnownClassAssembler
 from .known_class_registry import (
     KnownClassRegistry,
@@ -20,6 +21,7 @@ from .representation_class_scoring import (
     RepresentationClassScorer,
 )
 from .semantic_class_decision import SemanticClassDecisionPolicy
+from .semantic_context import SemanticContextGeneration
 from .semantic_discovery_service import (
     SemanticDiscoveryConfig,
     SemanticDiscoveryService,
@@ -70,6 +72,7 @@ class SemanticApplication:
     unknown_pool: UnknownStreamPool
     evidence_store: TrustedClassEvidenceStore
     constraint_store: NegativeMembershipConstraintStore
+    confirmed_membership_store: ConfirmedSemanticMembershipStore
     feedback_workflow: SemanticFeedbackWorkflow
     known_class_registry: KnownClassRegistry
     class_catalog: SemanticClassCatalog
@@ -79,10 +82,12 @@ class SemanticApplication:
     processing_service: SemanticProcessingService
     review_runtime: SemanticReviewRuntime
     state_coordinator: SemanticStateCoordinator
+    semantic_context_generation: SemanticContextGeneration
     persistence_service: SemanticPersistenceService
 
     def snapshot(self) -> SemanticApplicationSnapshot:
         """Capture every authoritative store at one coordinator generation."""
+        self.processing_runtime.remove_stale_unknown_entries()
         with self.state_coordinator.lock:
             review = self.review_runtime.snapshot_review_state()
             return SemanticApplicationSnapshot(
@@ -110,10 +115,14 @@ class SemanticApplication:
                     },
                 ),
                 generation=self.state_coordinator.generation,
+                semantic_context_generation=(
+                    self.semantic_context_generation.generation
+                ),
                 runtime_states=self.processing_runtime.state_store.snapshot(),
                 unknown_pool=self.unknown_pool.snapshot(),
                 trusted_evidence=self.evidence_store.snapshot(),
                 constraints=self.constraint_store.snapshot(),
+                confirmed_memberships=self.confirmed_membership_store.snapshot(),
                 known_classes=self.known_class_registry.snapshot(),
                 class_catalog=self.class_catalog.snapshot(),
                 pending_candidates=review.pending_candidates,
@@ -126,13 +135,19 @@ class SemanticApplication:
         previous = self.snapshot()
         review_snapshot_type = type(self.review_runtime.snapshot_review_state())
         try:
-            with self.state_coordinator.restore(snapshot.generation):
+            with (
+                self.state_coordinator.restore(snapshot.generation),
+                self.semantic_context_generation.restore(
+                    snapshot.semantic_context_generation
+                ),
+            ):
                 self.processing_runtime.state_store.replace(snapshot.runtime_states)
                 self.unknown_pool.replace(
                     snapshot.unknown_pool.entries, snapshot.unknown_pool.version
                 )
                 self.evidence_store.replace(snapshot.trusted_evidence)
                 self.constraint_store.replace(snapshot.constraints)
+                self.confirmed_membership_store.replace(snapshot.confirmed_memberships)
                 self.known_class_registry.replace(snapshot.known_classes)
                 self.class_catalog.replace(snapshot.class_catalog)
                 self.review_runtime.replace_review_state(
@@ -142,13 +157,19 @@ class SemanticApplication:
                     )
                 )
         except Exception:
-            with self.state_coordinator.restore(previous.generation):
+            with (
+                self.state_coordinator.restore(previous.generation),
+                self.semantic_context_generation.restore(
+                    previous.semantic_context_generation
+                ),
+            ):
                 self.processing_runtime.state_store.replace(previous.runtime_states)
                 self.unknown_pool.replace(
                     previous.unknown_pool.entries, previous.unknown_pool.version
                 )
                 self.evidence_store.replace(previous.trusted_evidence)
                 self.constraint_store.replace(previous.constraints)
+                self.confirmed_membership_store.replace(previous.confirmed_memberships)
                 self.known_class_registry.replace(previous.known_classes)
                 self.class_catalog.replace(previous.class_catalog)
                 self.review_runtime.replace_review_state(
@@ -169,6 +190,7 @@ def build_semantic_application(
     unknown_pool: UnknownStreamPool | None = None,
     evidence_store: TrustedClassEvidenceStore | None = None,
     constraint_store: NegativeMembershipConstraintStore | None = None,
+    confirmed_membership_store: ConfirmedSemanticMembershipStore | None = None,
     feedback_workflow: SemanticFeedbackWorkflow | None = None,
     known_class_registry: KnownClassRegistry | None = None,
     class_catalog: SemanticClassCatalog | None = None,
@@ -187,6 +209,7 @@ def build_semantic_application(
     discovery_config: SemanticDiscoveryConfig | None = None,
     review_runtime: SemanticReviewRuntime | None = None,
     state_coordinator: SemanticStateCoordinator | None = None,
+    semantic_context_generation: SemanticContextGeneration | None = None,
     persistence_repository: SemanticStateRepository | None = None,
     persistence_config: SemanticPersistenceConfig | None = None,
     persistence_serializer: SemanticSnapshotSerializer | None = None,
@@ -206,6 +229,7 @@ def build_semantic_application(
     coordinator = (
         state_coordinator or inherited_coordinator or SemanticStateCoordinator()
     )
+    context_generation = semantic_context_generation or SemanticContextGeneration()
     injected_review_runtime = review_runtime or (
         discovery_service.review_runtime if discovery_service is not None else None
     )
@@ -233,7 +257,16 @@ def build_semantic_application(
         else (
             injected_review_runtime.constraint_store
             if injected_review_runtime is not None
-            else NegativeMembershipConstraintStore(coordinator)
+            else NegativeMembershipConstraintStore(coordinator, context_generation)
+        )
+    )
+    shared_confirmed_membership_store = (
+        confirmed_membership_store
+        if confirmed_membership_store is not None
+        else (
+            injected_review_runtime.confirmed_membership_store
+            if injected_review_runtime is not None
+            else ConfirmedSemanticMembershipStore(coordinator, context_generation)
         )
     )
     shared_feedback_workflow = (
@@ -253,9 +286,15 @@ def build_semantic_application(
             injected_review_runtime.known_class_registry
             if injected_review_runtime is not None
             and injected_review_runtime.known_class_registry is not None
-            else KnownClassRegistry(coordinator=coordinator)
+            else KnownClassRegistry(
+                coordinator=coordinator,
+                context_generation=context_generation,
+            )
         )
     )
+    shared_constraint_store.set_context_generation(context_generation)
+    shared_confirmed_membership_store.set_context_generation(context_generation)
+    shared_known_class_registry.set_context_generation(context_generation)
     with coordinator.restore(coordinator.generation):
         for known_class in initial_known_classes:
             shared_known_class_registry.upsert(known_class)
@@ -291,6 +330,8 @@ def build_semantic_application(
         ),
         unknown_pool=shared_unknown_pool,
         constraint_store=shared_constraint_store,
+        confirmed_membership_store=shared_confirmed_membership_store,
+        semantic_context_generation=context_generation,
         feedback_lock=shared_feedback_lock,
         temporal_profiler=temporal_profiler,
         refresh_policy=refresh_policy,
@@ -303,6 +344,8 @@ def build_semantic_application(
         unknown_pool=shared_unknown_pool,
         evidence_store=shared_evidence_store,
         constraint_store=shared_constraint_store,
+        confirmed_membership_store=shared_confirmed_membership_store,
+        processing_runtime=processing_runtime,
         workflow=shared_feedback_workflow,
         known_class_registry=shared_known_class_registry,
         class_catalog=shared_class_catalog,
@@ -316,12 +359,20 @@ def build_semantic_application(
         raise ValueError("review_runtime must reference application evidence")
     if shared_review_runtime.constraint_store is not shared_constraint_store:
         raise ValueError("review_runtime must reference application constraints")
+    if (
+        shared_review_runtime.confirmed_membership_store
+        is not shared_confirmed_membership_store
+    ):
+        raise ValueError("review_runtime must reference application memberships")
     if shared_review_runtime.workflow is not shared_feedback_workflow:
         raise ValueError("review_runtime must reference application workflow")
     if shared_review_runtime.known_class_registry is not shared_known_class_registry:
         raise ValueError("review_runtime must reference application registry")
     if shared_review_runtime.class_catalog is not shared_class_catalog:
         raise ValueError("review_runtime must reference application catalog")
+    # An injected discovery/review service may come from another composition root.
+    # Rebind it to this application's runtime while preserving its shared stores.
+    shared_review_runtime.processing_runtime = processing_runtime
     shared_discovery_engine = discovery_engine or (
         discovery_service.discovery_engine
         if discovery_service is not None
@@ -345,6 +396,7 @@ def build_semantic_application(
         )
     if shared_discovery_service.discovery_engine is not shared_discovery_engine:
         raise ValueError("discovery_service must reference the application engine")
+    shared_review_runtime.set_discovery_requester(shared_discovery_service.request)
     shared_processing_service = processing_service or SemanticProcessingService(
         processing_runtime,
         config=processing_config,
@@ -358,6 +410,7 @@ def build_semantic_application(
         shared_unknown_pool,
         shared_evidence_store,
         shared_constraint_store,
+        shared_confirmed_membership_store,
         shared_known_class_registry,
         shared_class_catalog,
         processing_runtime.state_store,
@@ -402,6 +455,7 @@ def build_semantic_application(
         unknown_pool=shared_unknown_pool,
         evidence_store=shared_evidence_store,
         constraint_store=shared_constraint_store,
+        confirmed_membership_store=shared_confirmed_membership_store,
         feedback_workflow=shared_feedback_workflow,
         known_class_registry=shared_known_class_registry,
         class_catalog=shared_class_catalog,
@@ -411,6 +465,7 @@ def build_semantic_application(
         processing_service=shared_processing_service,
         review_runtime=shared_review_runtime,
         state_coordinator=coordinator,
+        semantic_context_generation=context_generation,
         persistence_service=persistence_service,
     )
     holder["application"] = application

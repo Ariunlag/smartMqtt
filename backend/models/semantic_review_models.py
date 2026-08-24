@@ -130,6 +130,7 @@ class SemanticTopicStateModel(BaseModel):
     topic: str
     state: str
     class_id: str | None
+    source: str
     reasons: tuple[str, ...]
 
 

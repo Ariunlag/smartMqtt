@@ -123,6 +123,11 @@ reliability learning remain planned stages.
 - [x] Integrated semantic feedback application workflow
 - [x] Reviewed prototype synchronization into the live known-class registry
 - [x] Negative-constraint filtering during runtime candidate eligibility
+- [x] Authoritative reviewed topic-to-class membership
+- [x] Confirmed human-membership precedence in live decisions
+- [x] Cached-embedding re-scoring after registry or feedback changes
+- [x] Reviewed-positive UNKNOWN cleanup and stale-candidate invalidation
+- [x] Atomic feedback reconciliation across shared semantic state
 - [x] Production MQTT semantic sidecar
 - [x] Bounded isolated semantic processing queue
 - [x] Shared live runtime processing from MQTT observations
@@ -349,6 +354,15 @@ Operational verification uses two additive vector-free endpoints: one reports
 topic decision metadata and one requests a coalesced persistence retry after a
 repository outage. Neither endpoint changes semantic scoring or threshold
 behavior. See `docs/REAL_STACK_ACCEPTANCE.md` for the command and runbook.
+
+Human-confirmed decisions now expose explicit vector-free class identity while
+remaining distinct from automated classifier evidence. Classification-relevant
+registry, prototype, membership, and constraint changes advance a persisted
+semantic-context generation. Direct review members are reconciled atomically;
+other cached topics are explicitly stale until their existing six embeddings
+are lazily re-scored. The processing/review lock order is covered by a
+deterministic concurrent MQTT-versus-review regression test, and embedding work
+remains outside the shared semantic coordinator lock.
 
 Real-broker acceptance completed on 2026-07-31 with run ID
 `codex-20260731`. All phases passed against the real Compose stack. The reviewed

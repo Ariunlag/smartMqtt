@@ -4,12 +4,19 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import RLock
+from typing import TYPE_CHECKING
 
 from .candidate_membership_review import CandidateMembershipReview
 from .multi_view_consensus import RepresentationClassConsensus
 from .reviewed_prototype_reconciliation import ReviewedPrototypeReconciler
+from .semantic_context import SemanticContextGeneration
 from .trusted_class_evidence import TrustedClassEvidence, TrustedClassEvidenceStore
 from .unknown_stream_pool import UnknownStreamPool
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from .representation_embedder import RepresentationEmbeddings
 
 
 @dataclass(frozen=True, slots=True)
@@ -32,10 +39,20 @@ class NegativeMembershipConstraint:
 class NegativeMembershipConstraintStore:
     """Latest class-wide negative membership constraints."""
 
-    def __init__(self, coordinator=None) -> None:
+    def __init__(
+        self,
+        coordinator=None,
+        context_generation: SemanticContextGeneration | None = None,
+    ) -> None:
         self._constraints: dict[tuple[str, str], NegativeMembershipConstraint] = {}
         self._lock = RLock()
         self._coordinator = coordinator
+        self._context_generation = context_generation
+
+    def set_context_generation(
+        self, context_generation: SemanticContextGeneration
+    ) -> None:
+        self._context_generation = context_generation
 
     def upsert(self, constraint: NegativeMembershipConstraint) -> None:
         with self._lock:
@@ -43,6 +60,8 @@ class NegativeMembershipConstraintStore:
             if self._constraints.get(key) == constraint:
                 return
             self._constraints[key] = constraint
+            if self._context_generation is not None:
+                self._context_generation.advance()
         if self._coordinator is not None:
             self._coordinator.mark_changed()
 
@@ -61,6 +80,8 @@ class NegativeMembershipConstraintStore:
     ) -> NegativeMembershipConstraint | None:
         with self._lock:
             removed = self._constraints.pop(self._key(topic, semantic_class_name), None)
+            if removed is not None and self._context_generation is not None:
+                self._context_generation.advance()
         if removed is not None and self._coordinator is not None:
             self._coordinator.mark_changed()
         return removed
@@ -88,6 +109,8 @@ class NegativeMembershipConstraintStore:
             if self._constraints == replacement:
                 return
             self._constraints = replacement
+            if self._context_generation is not None:
+                self._context_generation.advance()
         if self._coordinator is not None:
             self._coordinator.mark_changed()
 
@@ -142,12 +165,15 @@ class SemanticFeedbackWorkflow:
         unknown_pool: UnknownStreamPool,
         evidence_store: TrustedClassEvidenceStore,
         constraint_store: NegativeMembershipConstraintStore,
+        embedding_resolver: Callable[[str], RepresentationEmbeddings | None]
+        | None = None,
     ) -> SemanticFeedbackWorkflowResult:
         """Prepare every change before committing either store."""
         reconciliation = self.reconciler.prepare(
             review,
             unknown_pool,
             evidence_store,
+            embedding_resolver,
         )
         constraints_added = tuple(
             constraint

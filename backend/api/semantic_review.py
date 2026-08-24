@@ -162,16 +162,17 @@ def topic_states(
     application: Annotated[SemanticApplication, Depends(get_semantic_application)],
 ) -> SemanticTopicStateList:
     """Expose deterministic decision metadata without vectors or representations."""
-    states = application.processing_runtime.state_store.all()
+    states = application.processing_runtime.current_states()
     return SemanticTopicStateList(
         topics=tuple(
             SemanticTopicStateModel(
                 topic=state.temporal_profile.topic,
                 state=state.decision.state.value,
-                class_id=(
-                    state.decision.candidate.class_id
-                    if state.decision.candidate is not None
-                    else None
+                class_id=state.decision.class_id,
+                source=(
+                    "HUMAN"
+                    if state.decision.confirmed_class_id is not None
+                    else "AUTOMATED"
                 ),
                 reasons=tuple(reason.value for reason in state.decision.reasons),
             )

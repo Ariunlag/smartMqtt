@@ -15,6 +15,10 @@ from .candidate_membership_review import (
     MembershipFeedbackPolarity,
     MembershipFeedbackStore,
 )
+from .confirmed_membership import (
+    ConfirmedSemanticMembership,
+    ConfirmedSemanticMembershipStore,
+)
 from .known_class_assembly import (
     KnownClassAssembler,
     KnownClassAssemblyRequest,
@@ -57,6 +61,7 @@ from .semantic_class_decision import (
     SemanticClassDecisionReason,
     SemanticClassDecisionState,
 )
+from .semantic_context import SemanticContextGeneration
 from .semantic_discovery_service import (
     SemanticDiscoveryConfig,
     SemanticDiscoveryService,
@@ -162,6 +167,8 @@ __all__ = [
     "CandidateMembershipReview",
     "CandidateMembershipReviewProcessor",
     "ClassMatch",
+    "ConfirmedSemanticMembership",
+    "ConfirmedSemanticMembershipStore",
     "FieldProfile",
     "HDBSCANDiscoveryConfig",
     "InMemorySemanticStateRepository",
@@ -206,6 +213,7 @@ __all__ = [
     "SemanticClassDecisionReason",
     "SemanticClassDecisionState",
     "SemanticClassDefinition",
+    "SemanticContextGeneration",
     "SemanticDiscoveryConfig",
     "SemanticDiscoveryService",
     "SemanticDiscoveryStatus",

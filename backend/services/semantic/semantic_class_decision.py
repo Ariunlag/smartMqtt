@@ -31,6 +31,7 @@ class SemanticClassDecisionReason(str, Enum):
     BELOW_KNOWN_SIMILARITY = "BELOW_KNOWN_SIMILARITY"
     INSUFFICIENT_SIMILARITY_MARGIN = "INSUFFICIENT_SIMILARITY_MARGIN"
     KNOWN_CRITERIA_MET = "KNOWN_CRITERIA_MET"
+    HUMAN_CONFIRMED_MEMBERSHIP = "HUMAN_CONFIRMED_MEMBERSHIP"
 
 
 @dataclass(frozen=True, slots=True)
@@ -98,6 +99,50 @@ class SemanticClassDecision:
     runner_up: RepresentationClassConsensus | None
     similarity_margin: float | None
     reasons: tuple[SemanticClassDecisionReason, ...]
+    confirmed_class_id: str | None = None
+    confirmed_class_name: str | None = None
+
+    def __post_init__(self) -> None:
+        human_confirmed = self.reasons == (
+            SemanticClassDecisionReason.HUMAN_CONFIRMED_MEMBERSHIP,
+        )
+        if human_confirmed:
+            if self.state is not SemanticClassDecisionState.KNOWN:
+                raise ValueError("Human-confirmed membership requires KNOWN state")
+            if self.candidate is not None or self.runner_up is not None:
+                raise ValueError(
+                    "Human-confirmed membership cannot contain classifier candidates"
+                )
+            identities = (self.confirmed_class_id, self.confirmed_class_name)
+            for name, value in zip(
+                ("confirmed_class_id", "confirmed_class_name"),
+                identities,
+                strict=True,
+            ):
+                if not isinstance(value, str) or not value.strip():
+                    raise ValueError(
+                        f"{name} is required for human-confirmed membership"
+                    )
+        elif (
+            self.confirmed_class_id is not None or self.confirmed_class_name is not None
+        ):
+            raise ValueError(
+                "Confirmed class identity is reserved for human-confirmed membership"
+            )
+
+    @property
+    def class_id(self) -> str | None:
+        """Return class identity without inventing automated evidence."""
+        if self.confirmed_class_id is not None:
+            return self.confirmed_class_id
+        return self.candidate.class_id if self.candidate is not None else None
+
+    @property
+    def class_name(self) -> str | None:
+        """Return class name for automated or authoritative decisions."""
+        if self.confirmed_class_name is not None:
+            return self.confirmed_class_name
+        return self.candidate.class_name if self.candidate is not None else None
 
 
 class SemanticClassDecisionPolicy:

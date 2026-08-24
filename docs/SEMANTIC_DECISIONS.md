@@ -468,7 +468,7 @@ superiority.
 
 ## Durable semantic application state
 
-- PostgreSQL is the authoritative semantic snapshot store. One versioned JSONB snapshot keeps runtime state, UNKNOWN evidence, reviewed prototypes, constraints, class identity, and review publication state within one database transaction rather than creating cross-database partial commits.
+- PostgreSQL is the authoritative semantic snapshot store. One versioned JSONB snapshot keeps runtime state, UNKNOWN evidence, reviewed prototypes, constraints, confirmed topic membership, class identity, and review publication state within one database transaction rather than creating cross-database partial commits.
 - Existing Qdrant behavior is unchanged in this persistence phase.
 - Persistence uses an explicit fixed-whitelist JSON serializer and never Python pickle or executable object deserialization.
 - Restore completes before discovery and semantic processing start. Model-fingerprint or six-view representation-contract incompatibility prevents persisted vectors from being applied.
@@ -476,6 +476,20 @@ superiority.
 - One application coordinator serializes authoritative publication, advances generation once per logical content-changing transaction, and captures immutable internally consistent snapshots. Embedding, HDBSCAN, serialization, and database I/O occur outside its lock.
 - Saves use one bounded debounced writer and a PostgreSQL generation guard, so an older generation cannot overwrite newer persisted state. Save failures leave the generation dirty for a later retry without stopping semantic processing.
 - Operational counters, tasks, queues, locks, MQTT objects, database clients, and transient errors are not persisted.
+
+## Authoritative reviewed membership and live consistency
+
+- A successful human review records an explicit topic-to-class membership for every kept or added topic. This membership takes precedence over automated scoring until a later review removes or replaces it.
+- A `HUMAN_CONFIRMED` `KNOWN` decision carries explicit confirmed class ID and class name metadata. Its classifier candidate, runner-up, similarity margin, votes, and ranks remain absent, so downstream consumers can identify the class without mistaking feedback for automated evidence.
+- Reviewed positive topics leave the UNKNOWN pool immediately. Removed topics lose matching confirmed membership and retain their negative class constraint, so cached evidence can be evaluated against other classes.
+- Review publication, prototypes, constraints, confirmed memberships, UNKNOWN entries, cached runtime decisions, and pending-candidate state are one coordinated transaction. A late reconciliation failure restores every store and its previous generation.
+- A review invalidates its exact candidate and overlapping pending candidates whose positive members are no longer UNKNOWN. Disjoint pending candidates are explicitly retained across later discovery replacement until they are reviewed or a later review overlaps them. The existing discovery coordinator is then requested outside the state lock to publish candidates from the updated pool.
+- Registry/prototype, confirmed-membership, and negative-constraint changes advance a classification-context generation. Every cached topic state records the generation used for its evidence, consensus, and decision. Directly reviewed topics are reconciled before review success; unrelated stale topics are explicitly detectable and lazily re-scored before diagnostic use.
+- Context-only reconciliation reuses the exact cached representations and six embeddings. It does not rebuild text or call the embedding model. Stale UNKNOWN entries are excluded from discovery until their cached embeddings are re-scored against the current context.
+- Processing acquires a per-topic lock before the shared feedback lock and coordinator transaction. Review acquires the pending-candidate lock, then the feedback lock, then the coordinator transaction; coordinated reconciliation never waits for a topic lock. Embedding occurs before the shared feedback/coordinator critical section. This ordering prevents a concurrent MQTT commit from overwriting authoritative feedback without placing expensive embedding work under the application-wide lock.
+- Topic-state API responses expose only the decision source (`HUMAN` or `AUTOMATED`) and vector-free class metadata. Embeddings and prototype vectors remain internal.
+- Snapshot schema version 3 includes confirmed membership and the semantic-context generation on both the application and cached topic states. Version 1 and 2 snapshots remain readable; legacy cached decisions are conservatively marked stale, stale UNKNOWN evidence is not republished, and version 1 restores with an empty confirmed-membership set.
+- Duplicate/group synchronization remains an explicit integration boundary; this change does not infer semantic membership from duplicate groups or alter existing duplicate workflows.
 
 ## Semantic operations dashboard
 

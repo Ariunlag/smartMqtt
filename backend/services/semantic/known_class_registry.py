@@ -6,19 +6,29 @@ from dataclasses import dataclass
 from threading import RLock
 
 from .representation_class_scoring import RepresentationClassCentroids
+from .semantic_context import SemanticContextGeneration
 
 
 class KnownClassRegistry:
     """Latest immutable six-view centroids keyed explicitly by class ID."""
 
     def __init__(
-        self, initial: tuple[RepresentationClassCentroids, ...] = (), coordinator=None
+        self,
+        initial: tuple[RepresentationClassCentroids, ...] = (),
+        coordinator=None,
+        context_generation: SemanticContextGeneration | None = None,
     ) -> None:
         self._classes: dict[str, RepresentationClassCentroids] = {}
         self._lock = RLock()
         self._coordinator = coordinator
+        self._context_generation = context_generation
         for known_class in initial:
             self.upsert(known_class)
+
+    def set_context_generation(
+        self, context_generation: SemanticContextGeneration
+    ) -> None:
+        self._context_generation = context_generation
 
     def upsert(self, known_class: RepresentationClassCentroids) -> None:
         if not isinstance(known_class, RepresentationClassCentroids):
@@ -26,6 +36,8 @@ class KnownClassRegistry:
         with self._lock:
             changed = self._classes.get(known_class.class_id) != known_class
             self._classes[known_class.class_id] = known_class
+            if changed and self._context_generation is not None:
+                self._context_generation.advance()
         if changed and self._coordinator is not None:
             self._coordinator.mark_changed()
 
@@ -36,6 +48,8 @@ class KnownClassRegistry:
     def remove(self, class_id: str) -> RepresentationClassCentroids | None:
         with self._lock:
             removed = self._classes.pop(class_id, None)
+            if removed is not None and self._context_generation is not None:
+                self._context_generation.advance()
         if removed is not None and self._coordinator is not None:
             self._coordinator.mark_changed()
         return removed
@@ -55,6 +69,8 @@ class KnownClassRegistry:
             if self._classes == replacement:
                 return
             self._classes = replacement
+            if self._context_generation is not None:
+                self._context_generation.advance()
         if self._coordinator is not None:
             self._coordinator.mark_changed()
 

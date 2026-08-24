@@ -308,6 +308,7 @@ def test_topic_state_endpoint_reports_decision_metadata_without_vectors():
                 "topic": "sensor/acceptance",
                 "state": "UNKNOWN",
                 "class_id": None,
+                "source": "AUTOMATED",
                 "reasons": ["NO_KNOWN_CLASSES"],
             }
         ]

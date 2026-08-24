@@ -187,7 +187,7 @@ def test_catalog_rejects_id_or_name_conflicts_without_changing_mapping():
     assert catalog.snapshot() == (SemanticClassDefinition("a", "Alpha"),)
 
 
-def test_runtime_reads_new_registry_snapshot_only_on_refresh():
+def test_runtime_rescores_cached_embeddings_when_registry_changes():
     model = MutableEmbeddingModel()
     application = _application(model=model, classes=(_known("a", "Alpha"),))
     first = application.processing_runtime.process(_profile("topic"))
@@ -200,7 +200,7 @@ def test_runtime_reads_new_registry_snapshot_only_on_refresh():
 
     assert tuple(row.class_id for row in first.evidence.rows) == ("a",)
     assert cached.refreshed is False
-    assert cached.evidence is first.evidence
+    assert tuple(row.class_id for row in cached.evidence.rows) == ("a", "b")
     assert tuple(row.class_id for row in refreshed.evidence.rows) == ("a", "b")
     assert len(model.calls) == 2
 
@@ -390,4 +390,7 @@ def test_end_to_end_review_publishes_class_then_constraint_blocks_live_decision(
         _profile("D", {"reading": 1.0, "quality": 1.0, "status": 1.0})
     )
     assert eligible_again.decision.state is SemanticClassDecisionState.KNOWN
-    assert eligible_again.decision.candidate.class_id == "temperature"
+    assert eligible_again.decision.candidate is None
+    assert eligible_again.decision.reasons == (
+        SemanticClassDecisionReason.HUMAN_CONFIRMED_MEMBERSHIP,
+    )

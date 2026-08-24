@@ -114,6 +114,10 @@ def test_application_owns_exact_shared_runtime_objects():
     assert application.unknown_pool is unknown_pool
     assert application.evidence_store is evidence_store
     assert application.constraint_store is constraint_store
+    assert (
+        application.processing_runtime.confirmed_membership_store
+        is application.confirmed_membership_store
+    )
     assert application.feedback_workflow is workflow
     assert (
         application.processing_runtime.known_class_registry
@@ -125,6 +129,10 @@ def test_application_owns_exact_shared_runtime_objects():
     assert application.review_runtime.unknown_pool is application.unknown_pool
     assert application.review_runtime.evidence_store is application.evidence_store
     assert application.review_runtime.constraint_store is application.constraint_store
+    assert (
+        application.review_runtime.confirmed_membership_store
+        is application.confirmed_membership_store
+    )
     assert application.review_runtime.workflow is application.feedback_workflow
     assert (
         application.review_runtime.known_class_registry
@@ -192,6 +200,12 @@ def test_api_review_updates_shared_evidence_constraints_and_persists_across_requ
     assert application.constraint_store.is_blocked("B", "Temperature")
     assert not application.constraint_store.is_blocked("A", "Temperature")
     assert application.constraint_store.is_blocked("A", "Humidity")
+    assert tuple(
+        membership.topic for membership in application.confirmed_membership_store.all()
+    ) == ("A", "C")
+    assert application.unknown_pool.get("A") is None
+    assert application.unknown_pool.get("C") is None
+    assert application.unknown_pool.get("B") is not None
     assert constraints.json()["constraints"] == [
         {"topic": "A", "semantic_class_name": "Humidity"},
         {"topic": "B", "semantic_class_name": "Temperature"},
