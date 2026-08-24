@@ -4,12 +4,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from threading import RLock
+from typing import TYPE_CHECKING
 
 from .candidate_membership_review import CandidateMembershipReview
 from .multi_view_consensus import RepresentationClassConsensus
 from .reviewed_prototype_reconciliation import ReviewedPrototypeReconciler
 from .trusted_class_evidence import TrustedClassEvidence, TrustedClassEvidenceStore
 from .unknown_stream_pool import UnknownStreamPool
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from .representation_embedder import RepresentationEmbeddings
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,12 +148,15 @@ class SemanticFeedbackWorkflow:
         unknown_pool: UnknownStreamPool,
         evidence_store: TrustedClassEvidenceStore,
         constraint_store: NegativeMembershipConstraintStore,
+        embedding_resolver: Callable[[str], RepresentationEmbeddings | None]
+        | None = None,
     ) -> SemanticFeedbackWorkflowResult:
         """Prepare every change before committing either store."""
         reconciliation = self.reconciler.prepare(
             review,
             unknown_pool,
             evidence_store,
+            embedding_resolver,
         )
         constraints_added = tuple(
             constraint

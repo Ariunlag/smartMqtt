@@ -104,9 +104,25 @@ def test_schema_version_and_complete_empty_application_round_trip():
     record = serializer.serialize(snapshot)
     restored = serializer.deserialize(record, expected_model_fingerprint="model-fp")
 
-    assert record.schema_version == 1
+    assert record.schema_version == 2
     assert restored == snapshot
     assert restored.runtime_states == ()
+
+
+def test_version_one_snapshot_migrates_with_empty_confirmed_memberships():
+    serializer = SemanticSnapshotSerializer()
+    current = serializer.serialize(_application().snapshot())
+    legacy_payload = dict(current.payload)
+    legacy_payload.pop("confirmed_memberships")
+    legacy = replace(current, schema_version=1, payload=legacy_payload)
+
+    restored = serializer.deserialize(
+        legacy,
+        expected_model_fingerprint="model-fp",
+    )
+
+    assert restored.metadata.schema_version == 2
+    assert restored.confirmed_memberships == ()
 
 
 def test_runtime_temporal_six_view_evidence_consensus_and_unknown_round_trip():
@@ -162,7 +178,7 @@ def test_incompatible_schema_model_and_contract_are_rejected(field):
     serializer = SemanticSnapshotSerializer()
     record = serializer.serialize(_application().snapshot())
     if field == "schema_version":
-        record = replace(record, schema_version=2)
+        record = replace(record, schema_version=3)
         error = SemanticSnapshotValidationError
         kwargs = {"expected_model_fingerprint": "model-fp"}
     elif field == "model":
@@ -387,7 +403,7 @@ def test_persistence_status_endpoint_is_vector_free_and_uses_application_state()
 
     assert response.status_code == 200
     body = response.json()
-    assert body["schema_version"] == 1
+    assert body["schema_version"] == 2
     assert body["current_generation"] == 1
     assert "payload" not in body
     assert "vectors" not in body
@@ -452,6 +468,9 @@ async def test_full_restart_recovers_reviewed_class_constraints_and_discovery_st
     snapshot_a = first.snapshot()
     assert first.known_class_registry.get("related-sensor") is not None
     assert first.constraint_store.is_blocked("related/A", "Related Sensor")
+    assert tuple(
+        membership.topic for membership in first.confirmed_membership_store.snapshot()
+    ) == ("related/B", "related/C")
     assert await first.persistence_service.flush()
     await first.processing_service.stop()
     await first.discovery_service.stop()
@@ -464,6 +483,7 @@ async def test_full_restart_recovers_reviewed_class_constraints_and_discovery_st
     assert restored.unknown_pool == snapshot_a.unknown_pool
     assert restored.trusted_evidence == snapshot_a.trusted_evidence
     assert restored.constraints == snapshot_a.constraints
+    assert restored.confirmed_memberships == snapshot_a.confirmed_memberships
     assert restored.known_classes == snapshot_a.known_classes
     assert restored.class_catalog == snapshot_a.class_catalog
     assert restored.pending_candidates == snapshot_a.pending_candidates

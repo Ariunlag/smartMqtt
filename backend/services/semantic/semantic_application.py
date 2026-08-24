@@ -8,6 +8,7 @@ from threading import RLock
 
 from services.embedding.base_model import BaseEmbeddingModel
 
+from .confirmed_membership import ConfirmedSemanticMembershipStore
 from .known_class_assembly import KnownClassAssembler
 from .known_class_registry import (
     KnownClassRegistry,
@@ -70,6 +71,7 @@ class SemanticApplication:
     unknown_pool: UnknownStreamPool
     evidence_store: TrustedClassEvidenceStore
     constraint_store: NegativeMembershipConstraintStore
+    confirmed_membership_store: ConfirmedSemanticMembershipStore
     feedback_workflow: SemanticFeedbackWorkflow
     known_class_registry: KnownClassRegistry
     class_catalog: SemanticClassCatalog
@@ -114,6 +116,7 @@ class SemanticApplication:
                 unknown_pool=self.unknown_pool.snapshot(),
                 trusted_evidence=self.evidence_store.snapshot(),
                 constraints=self.constraint_store.snapshot(),
+                confirmed_memberships=self.confirmed_membership_store.snapshot(),
                 known_classes=self.known_class_registry.snapshot(),
                 class_catalog=self.class_catalog.snapshot(),
                 pending_candidates=review.pending_candidates,
@@ -133,6 +136,7 @@ class SemanticApplication:
                 )
                 self.evidence_store.replace(snapshot.trusted_evidence)
                 self.constraint_store.replace(snapshot.constraints)
+                self.confirmed_membership_store.replace(snapshot.confirmed_memberships)
                 self.known_class_registry.replace(snapshot.known_classes)
                 self.class_catalog.replace(snapshot.class_catalog)
                 self.review_runtime.replace_review_state(
@@ -149,6 +153,7 @@ class SemanticApplication:
                 )
                 self.evidence_store.replace(previous.trusted_evidence)
                 self.constraint_store.replace(previous.constraints)
+                self.confirmed_membership_store.replace(previous.confirmed_memberships)
                 self.known_class_registry.replace(previous.known_classes)
                 self.class_catalog.replace(previous.class_catalog)
                 self.review_runtime.replace_review_state(
@@ -169,6 +174,7 @@ def build_semantic_application(
     unknown_pool: UnknownStreamPool | None = None,
     evidence_store: TrustedClassEvidenceStore | None = None,
     constraint_store: NegativeMembershipConstraintStore | None = None,
+    confirmed_membership_store: ConfirmedSemanticMembershipStore | None = None,
     feedback_workflow: SemanticFeedbackWorkflow | None = None,
     known_class_registry: KnownClassRegistry | None = None,
     class_catalog: SemanticClassCatalog | None = None,
@@ -236,6 +242,15 @@ def build_semantic_application(
             else NegativeMembershipConstraintStore(coordinator)
         )
     )
+    shared_confirmed_membership_store = (
+        confirmed_membership_store
+        if confirmed_membership_store is not None
+        else (
+            injected_review_runtime.confirmed_membership_store
+            if injected_review_runtime is not None
+            else ConfirmedSemanticMembershipStore(coordinator)
+        )
+    )
     shared_feedback_workflow = (
         feedback_workflow
         if feedback_workflow is not None
@@ -291,6 +306,7 @@ def build_semantic_application(
         ),
         unknown_pool=shared_unknown_pool,
         constraint_store=shared_constraint_store,
+        confirmed_membership_store=shared_confirmed_membership_store,
         feedback_lock=shared_feedback_lock,
         temporal_profiler=temporal_profiler,
         refresh_policy=refresh_policy,
@@ -303,6 +319,8 @@ def build_semantic_application(
         unknown_pool=shared_unknown_pool,
         evidence_store=shared_evidence_store,
         constraint_store=shared_constraint_store,
+        confirmed_membership_store=shared_confirmed_membership_store,
+        processing_runtime=processing_runtime,
         workflow=shared_feedback_workflow,
         known_class_registry=shared_known_class_registry,
         class_catalog=shared_class_catalog,
@@ -316,12 +334,20 @@ def build_semantic_application(
         raise ValueError("review_runtime must reference application evidence")
     if shared_review_runtime.constraint_store is not shared_constraint_store:
         raise ValueError("review_runtime must reference application constraints")
+    if (
+        shared_review_runtime.confirmed_membership_store
+        is not shared_confirmed_membership_store
+    ):
+        raise ValueError("review_runtime must reference application memberships")
     if shared_review_runtime.workflow is not shared_feedback_workflow:
         raise ValueError("review_runtime must reference application workflow")
     if shared_review_runtime.known_class_registry is not shared_known_class_registry:
         raise ValueError("review_runtime must reference application registry")
     if shared_review_runtime.class_catalog is not shared_class_catalog:
         raise ValueError("review_runtime must reference application catalog")
+    # An injected discovery/review service may come from another composition root.
+    # Rebind it to this application's runtime while preserving its shared stores.
+    shared_review_runtime.processing_runtime = processing_runtime
     shared_discovery_engine = discovery_engine or (
         discovery_service.discovery_engine
         if discovery_service is not None
@@ -345,6 +371,7 @@ def build_semantic_application(
         )
     if shared_discovery_service.discovery_engine is not shared_discovery_engine:
         raise ValueError("discovery_service must reference the application engine")
+    shared_review_runtime.set_discovery_requester(shared_discovery_service.request)
     shared_processing_service = processing_service or SemanticProcessingService(
         processing_runtime,
         config=processing_config,
@@ -358,6 +385,7 @@ def build_semantic_application(
         shared_unknown_pool,
         shared_evidence_store,
         shared_constraint_store,
+        shared_confirmed_membership_store,
         shared_known_class_registry,
         shared_class_catalog,
         processing_runtime.state_store,
@@ -402,6 +430,7 @@ def build_semantic_application(
         unknown_pool=shared_unknown_pool,
         evidence_store=shared_evidence_store,
         constraint_store=shared_constraint_store,
+        confirmed_membership_store=shared_confirmed_membership_store,
         feedback_workflow=shared_feedback_workflow,
         known_class_registry=shared_known_class_registry,
         class_catalog=shared_class_catalog,

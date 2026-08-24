@@ -10,6 +10,7 @@ from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
     from .candidate_confirmation import CandidateIdentity
+    from .confirmed_membership import ConfirmedSemanticMembership
     from .known_class_registry import SemanticClassDefinition
     from .representation_class_scoring import RepresentationClassCentroids
     from .semantic_feedback_workflow import NegativeMembershipConstraint
@@ -18,7 +19,7 @@ if TYPE_CHECKING:
     from .trusted_class_evidence import TrustedClassEvidence
     from .unknown_stream_pool import UnknownStreamPoolSnapshot
 
-SEMANTIC_STATE_SCHEMA_VERSION = 1
+SEMANTIC_STATE_SCHEMA_VERSION = 2
 SEMANTIC_REPRESENTATION_CONTRACT_VERSION = "smartmqtt-six-view-v1"
 
 
@@ -42,6 +43,7 @@ class SemanticApplicationSnapshot:
     unknown_pool: UnknownStreamPoolSnapshot
     trusted_evidence: tuple[TrustedClassEvidence, ...]
     constraints: tuple[NegativeMembershipConstraint, ...]
+    confirmed_memberships: tuple[ConfirmedSemanticMembership, ...]
     known_classes: tuple[RepresentationClassCentroids, ...]
     class_catalog: tuple[SemanticClassDefinition, ...]
     pending_candidates: tuple[PendingSemanticCandidate, ...]

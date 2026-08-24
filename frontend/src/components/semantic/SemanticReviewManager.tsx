@@ -134,12 +134,13 @@ export default function SemanticReviewManager() {
         added_topics: addedTopics,
       });
       setResult(reviewResult);
-      setCandidates((current) => current.slice(1));
       try {
         const refreshed = await getSemanticReviewState();
+        setCandidates(refreshed.candidates);
         setUnknownTopics(refreshed.available_unknown_topics);
       } catch {
         // The submitted result remains valid if the diagnostic refresh fails.
+        setCandidates((current) => current.slice(1));
       }
     } catch (requestError: unknown) {
       setError(errorMessage(requestError));

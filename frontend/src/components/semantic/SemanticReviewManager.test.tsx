@@ -55,6 +55,12 @@ beforeEach(() => {
 
 describe("SemanticReviewManager", () => {
   it("edits the exact partition, reports diagnostics, and removes a successful candidate", async () => {
+    api.getSemanticReviewState
+      .mockResolvedValueOnce(state)
+      .mockResolvedValueOnce({
+        candidates: [],
+        available_unknown_topics: ["topic/B"],
+      });
     api.submitSemanticReview.mockResolvedValue(result);
     render(<SemanticReviewManager />);
 
@@ -124,5 +130,37 @@ describe("SemanticReviewManager", () => {
     expect(await screen.findByRole("alert")).toHaveTextContent("Review unavailable");
     expect(screen.getByText("topic/A")).toBeInTheDocument();
     expect(screen.getByText("topic/B")).toBeInTheDocument();
+  });
+
+  it("replaces candidates and UNKNOWN topics with refreshed server state", async () => {
+    const refreshed = {
+      candidates: [
+        {
+          representation_name: "schema",
+          member_topics: ["topic/D", "topic/E"],
+          candidate_index: 9,
+        },
+      ],
+      available_unknown_topics: ["topic/D", "topic/E", "topic/F"],
+    };
+    api.getSemanticReviewState
+      .mockResolvedValueOnce(state)
+      .mockResolvedValueOnce(refreshed);
+    api.submitSemanticReview.mockResolvedValue(result);
+    render(<SemanticReviewManager />);
+
+    await screen.findByText("topic/A");
+    fireEvent.change(screen.getByLabelText("Semantic class ID"), {
+      target: { value: "temperature" },
+    });
+    fireEvent.change(screen.getByLabelText("Semantic class name"), {
+      target: { value: "Temperature" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Apply review" }));
+
+    expect(await screen.findByText("topic/D")).toBeInTheDocument();
+    expect(screen.getByText("topic/E")).toBeInTheDocument();
+    expect(screen.queryByText("topic/A")).not.toBeInTheDocument();
+    expect(screen.getByRole("option", { name: "topic/F" })).toBeInTheDocument();
   });
 });

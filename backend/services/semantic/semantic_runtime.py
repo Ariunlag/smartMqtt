@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 from dataclasses import dataclass
 from threading import Lock, RLock
 
 from services.embedding.base_model import BaseEmbeddingModel
 
+from .confirmed_membership import ConfirmedSemanticMembershipStore
 from .known_class_registry import KnownClassRegistry
 from .multi_view_consensus import MultiViewConsensusEngine, MultiViewConsensusResult
 from .representation_class_scoring import (
@@ -136,6 +138,7 @@ class SemanticRuntimeOrchestrator:
         state_store: SemanticRuntimeStateStore | None = None,
         unknown_pool: UnknownStreamPool | None = None,
         constraint_store: NegativeMembershipConstraintStore | None = None,
+        confirmed_membership_store: ConfirmedSemanticMembershipStore | None = None,
         feedback_lock=None,
         temporal_profiler: TemporalStreamProfiler | None = None,
         refresh_policy: SemanticRefreshPolicy | None = None,
@@ -156,6 +159,11 @@ class SemanticRuntimeOrchestrator:
             constraint_store
             if constraint_store is not None
             else NegativeMembershipConstraintStore()
+        )
+        self.confirmed_membership_store = (
+            confirmed_membership_store
+            if confirmed_membership_store is not None
+            else ConfirmedSemanticMembershipStore()
         )
         self.feedback_lock = feedback_lock or RLock()
         self.state_coordinator = state_coordinator
@@ -200,32 +208,6 @@ class SemanticRuntimeOrchestrator:
                 )
                 stage = "representation embedding"
                 embeddings = self.embedder.embed(representations)
-                with self.feedback_lock:
-                    stage = "known-class registry snapshot"
-                    known_classes = self.known_class_registry.snapshot()
-                    stage = "known-class scoring"
-                    evidence = self.class_scorer.score(embeddings, known_classes)
-                    stage = "multi-view consensus"
-                    unfiltered_consensus = self.consensus_engine.build(evidence)
-                    stage = "negative constraint filtering"
-                    eligible = self.constraint_store.filter_allowed(
-                        topic, unfiltered_consensus.classes
-                    )
-                    consensus = MultiViewConsensusResult(
-                        view_winners=unfiltered_consensus.view_winners,
-                        classes=eligible,
-                    )
-                    stage = "semantic class decision"
-                    if unfiltered_consensus.classes and not eligible:
-                        decision = SemanticClassDecision(
-                            state=SemanticClassDecisionState.UNKNOWN,
-                            candidate=None,
-                            runner_up=None,
-                            similarity_margin=None,
-                            reasons=(SemanticClassDecisionReason.ALL_CLASSES_BLOCKED,),
-                        )
-                    else:
-                        decision = self.decision_policy.decide(consensus)
             else:
                 if previous is None:
                     raise RuntimeError(
@@ -233,23 +215,39 @@ class SemanticRuntimeOrchestrator:
                     )
                 representations = previous.representations
                 embeddings = previous.embeddings
-                evidence = previous.evidence
-                consensus = previous.consensus
-                decision = previous.decision
         except Exception as exc:
             if isinstance(exc, SemanticRuntimeProcessingError):
                 raise
             raise SemanticRuntimeProcessingError(topic, stage, exc) from exc
 
-        next_state = SemanticRuntimeTopicState(
-            temporal_profile=temporal_update.profile,
-            representations=representations,
-            embeddings=embeddings,
-            evidence=evidence,
-            consensus=consensus,
-            decision=decision,
+        transaction = (
+            self.state_coordinator.transaction()
+            if self.state_coordinator is not None
+            else nullcontext()
         )
-        self._commit(topic, previous, next_state)
+        try:
+            with self.feedback_lock, transaction:
+                stage = (
+                    "semantic context evaluation"
+                    if refresh.should_refresh
+                    else "cached semantic context evaluation"
+                )
+                evidence, consensus, decision = self._evaluate_context(
+                    topic, embeddings
+                )
+                next_state = SemanticRuntimeTopicState(
+                    temporal_profile=temporal_update.profile,
+                    representations=representations,
+                    embeddings=embeddings,
+                    evidence=evidence,
+                    consensus=consensus,
+                    decision=decision,
+                )
+                self._commit(topic, previous, next_state)
+        except Exception as exc:
+            if isinstance(exc, SemanticRuntimeProcessingError):
+                raise
+            raise SemanticRuntimeProcessingError(topic, stage, exc) from exc
         return SemanticRuntimeProcessResult(
             topic=topic,
             temporal_update=temporal_update,
@@ -261,6 +259,98 @@ class SemanticRuntimeOrchestrator:
             consensus=consensus,
             decision=decision,
         )
+
+    def reconcile_context(
+        self,
+        topics: tuple[str, ...] | None = None,
+        *,
+        coordinated: bool = False,
+    ) -> None:
+        """Re-score cached embeddings after authoritative feedback changes."""
+        selected = (
+            tuple(sorted(set(topics)))
+            if topics is not None
+            else tuple(state.temporal_profile.topic for state in self.state_store.all())
+        )
+        for topic in selected:
+            topic_lock = nullcontext() if coordinated else self._lock_for(topic)
+            transaction = (
+                nullcontext()
+                if coordinated or self.state_coordinator is None
+                else self.state_coordinator.transaction()
+            )
+            with topic_lock, self.feedback_lock, transaction:
+                previous = self.state_store.get(topic)
+                if previous is None:
+                    continue
+                try:
+                    evidence, consensus, decision = self._evaluate_context(
+                        topic, previous.embeddings
+                    )
+                    next_state = SemanticRuntimeTopicState(
+                        temporal_profile=previous.temporal_profile,
+                        representations=previous.representations,
+                        embeddings=previous.embeddings,
+                        evidence=evidence,
+                        consensus=consensus,
+                        decision=decision,
+                    )
+                    self._commit(topic, previous, next_state)
+                except Exception as exc:
+                    if isinstance(exc, SemanticRuntimeProcessingError):
+                        raise
+                    raise SemanticRuntimeProcessingError(
+                        topic, "cached semantic context reconciliation", exc
+                    ) from exc
+
+    def _evaluate_context(
+        self,
+        topic: str,
+        embeddings: RepresentationEmbeddings,
+    ) -> tuple[
+        RepresentationClassEvidenceMatrix,
+        MultiViewConsensusResult,
+        SemanticClassDecision,
+    ]:
+        with self.feedback_lock:
+            known_classes = self.known_class_registry.snapshot()
+            evidence = self.class_scorer.score(embeddings, known_classes)
+            unfiltered_consensus = self.consensus_engine.build(evidence)
+            eligible = self.constraint_store.filter_allowed(
+                topic, unfiltered_consensus.classes
+            )
+            consensus = MultiViewConsensusResult(
+                view_winners=unfiltered_consensus.view_winners,
+                classes=eligible,
+            )
+            membership = self.confirmed_membership_store.get(topic)
+            if membership is not None:
+                registered = self.known_class_registry.get(membership.class_id)
+                if (
+                    registered is None
+                    or registered.class_name != membership.semantic_class_name
+                ):
+                    raise ValueError(
+                        "Human-confirmed membership references an unavailable class"
+                    )
+                decision = SemanticClassDecision(
+                    state=SemanticClassDecisionState.KNOWN,
+                    candidate=None,
+                    runner_up=None,
+                    similarity_margin=None,
+                    reasons=(SemanticClassDecisionReason.HUMAN_CONFIRMED_MEMBERSHIP,),
+                )
+            elif unfiltered_consensus.classes and not eligible:
+                decision = SemanticClassDecision(
+                    state=SemanticClassDecisionState.UNKNOWN,
+                    candidate=None,
+                    runner_up=None,
+                    similarity_margin=None,
+                    reasons=(SemanticClassDecisionReason.ALL_CLASSES_BLOCKED,),
+                )
+            else:
+                decision = self.decision_policy.decide(consensus)
+            return evidence, consensus, decision
 
     def _commit(
         self,
