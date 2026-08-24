@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from .trusted_class_evidence import TrustedClassEvidence
     from .unknown_stream_pool import UnknownStreamPoolSnapshot
 
-SEMANTIC_STATE_SCHEMA_VERSION = 2
+SEMANTIC_STATE_SCHEMA_VERSION = 3
 SEMANTIC_REPRESENTATION_CONTRACT_VERSION = "smartmqtt-six-view-v1"
 
 
@@ -39,6 +39,7 @@ class SemanticApplicationSnapshot:
 
     metadata: SemanticPersistenceMetadata
     generation: int
+    semantic_context_generation: int
     runtime_states: tuple[SemanticRuntimeTopicState, ...]
     unknown_pool: UnknownStreamPoolSnapshot
     trusted_evidence: tuple[TrustedClassEvidence, ...]

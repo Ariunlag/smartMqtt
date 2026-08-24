@@ -355,6 +355,15 @@ topic decision metadata and one requests a coalesced persistence retry after a
 repository outage. Neither endpoint changes semantic scoring or threshold
 behavior. See `docs/REAL_STACK_ACCEPTANCE.md` for the command and runbook.
 
+Human-confirmed decisions now expose explicit vector-free class identity while
+remaining distinct from automated classifier evidence. Classification-relevant
+registry, prototype, membership, and constraint changes advance a persisted
+semantic-context generation. Direct review members are reconciled atomically;
+other cached topics are explicitly stale until their existing six embeddings
+are lazily re-scored. The processing/review lock order is covered by a
+deterministic concurrent MQTT-versus-review regression test, and embedding work
+remains outside the shared semantic coordinator lock.
+
 Real-broker acceptance completed on 2026-07-31 with run ID
 `codex-20260731`. All phases passed against the real Compose stack. The reviewed
 follow-up stream remained `UNCERTAIN` under the frozen strict policy because

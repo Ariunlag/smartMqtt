@@ -104,7 +104,7 @@ def test_schema_version_and_complete_empty_application_round_trip():
     record = serializer.serialize(snapshot)
     restored = serializer.deserialize(record, expected_model_fingerprint="model-fp")
 
-    assert record.schema_version == 2
+    assert record.schema_version == 3
     assert restored == snapshot
     assert restored.runtime_states == ()
 
@@ -114,6 +114,7 @@ def test_version_one_snapshot_migrates_with_empty_confirmed_memberships():
     current = serializer.serialize(_application().snapshot())
     legacy_payload = dict(current.payload)
     legacy_payload.pop("confirmed_memberships")
+    legacy_payload.pop("semantic_context_generation")
     legacy = replace(current, schema_version=1, payload=legacy_payload)
 
     restored = serializer.deserialize(
@@ -121,8 +122,38 @@ def test_version_one_snapshot_migrates_with_empty_confirmed_memberships():
         expected_model_fingerprint="model-fp",
     )
 
-    assert restored.metadata.schema_version == 2
+    assert restored.metadata.schema_version == 3
     assert restored.confirmed_memberships == ()
+    assert restored.semantic_context_generation == 1
+
+
+def test_version_two_snapshot_marks_cached_decisions_stale_and_drops_unknown_evidence():
+    serializer = SemanticSnapshotSerializer()
+    current = serializer.serialize(_populated().snapshot())
+    legacy_payload = dict(current.payload)
+    legacy_payload.pop("semantic_context_generation")
+    legacy_states = []
+    for state in legacy_payload["runtime_states"]:
+        state = dict(state)
+        state.pop("semantic_context_generation")
+        decision = dict(state["decision"])
+        decision.pop("confirmed_class_id")
+        decision.pop("confirmed_class_name")
+        state["decision"] = decision
+        legacy_states.append(state)
+    legacy_payload["runtime_states"] = legacy_states
+    legacy = replace(current, schema_version=2, payload=legacy_payload)
+
+    restored = serializer.deserialize(
+        legacy,
+        expected_model_fingerprint="model-fp",
+    )
+
+    assert restored.metadata.schema_version == 3
+    assert restored.semantic_context_generation == 1
+    assert restored.runtime_states[0].semantic_context_generation == 0
+    assert restored.unknown_pool.entries == ()
+    assert restored.pending_candidates == ()
 
 
 def test_runtime_temporal_six_view_evidence_consensus_and_unknown_round_trip():
@@ -178,7 +209,7 @@ def test_incompatible_schema_model_and_contract_are_rejected(field):
     serializer = SemanticSnapshotSerializer()
     record = serializer.serialize(_application().snapshot())
     if field == "schema_version":
-        record = replace(record, schema_version=3)
+        record = replace(record, schema_version=4)
         error = SemanticSnapshotValidationError
         kwargs = {"expected_model_fingerprint": "model-fp"}
     elif field == "model":
@@ -403,7 +434,7 @@ def test_persistence_status_endpoint_is_vector_free_and_uses_application_state()
 
     assert response.status_code == 200
     body = response.json()
-    assert body["schema_version"] == 2
+    assert body["schema_version"] == 3
     assert body["current_generation"] == 1
     assert "payload" not in body
     assert "vectors" not in body

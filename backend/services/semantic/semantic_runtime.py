@@ -23,6 +23,7 @@ from .semantic_class_decision import (
     SemanticClassDecisionReason,
     SemanticClassDecisionState,
 )
+from .semantic_context import SemanticContextGeneration
 from .semantic_feedback_workflow import NegativeMembershipConstraintStore
 from .semantic_refresh import SemanticRefreshDecision, SemanticRefreshPolicy
 from .stability_aware_representations import StabilityAwareRepresentationBuilder
@@ -45,6 +46,15 @@ class SemanticRuntimeTopicState:
     evidence: RepresentationClassEvidenceMatrix
     consensus: MultiViewConsensusResult
     decision: SemanticClassDecision
+    semantic_context_generation: int = 0
+
+    def __post_init__(self) -> None:
+        if (
+            isinstance(self.semantic_context_generation, bool)
+            or not isinstance(self.semantic_context_generation, int)
+            or self.semantic_context_generation < 0
+        ):
+            raise ValueError("semantic_context_generation must be non-negative")
 
 
 class SemanticRuntimeStateStore:
@@ -139,6 +149,7 @@ class SemanticRuntimeOrchestrator:
         unknown_pool: UnknownStreamPool | None = None,
         constraint_store: NegativeMembershipConstraintStore | None = None,
         confirmed_membership_store: ConfirmedSemanticMembershipStore | None = None,
+        semantic_context_generation: SemanticContextGeneration | None = None,
         feedback_lock=None,
         temporal_profiler: TemporalStreamProfiler | None = None,
         refresh_policy: SemanticRefreshPolicy | None = None,
@@ -165,6 +176,7 @@ class SemanticRuntimeOrchestrator:
             if confirmed_membership_store is not None
             else ConfirmedSemanticMembershipStore()
         )
+        self.semantic_context_generation = semantic_context_generation
         self.feedback_lock = feedback_lock or RLock()
         self.state_coordinator = state_coordinator
         self.temporal_profiler = temporal_profiler or TemporalStreamProfiler()
@@ -242,6 +254,7 @@ class SemanticRuntimeOrchestrator:
                     evidence=evidence,
                     consensus=consensus,
                     decision=decision,
+                    semantic_context_generation=self.current_context_generation,
                 )
                 self._commit(topic, previous, next_state)
         except Exception as exc:
@@ -294,6 +307,7 @@ class SemanticRuntimeOrchestrator:
                         evidence=evidence,
                         consensus=consensus,
                         decision=decision,
+                        semantic_context_generation=self.current_context_generation,
                     )
                     self._commit(topic, previous, next_state)
                 except Exception as exc:
@@ -302,6 +316,50 @@ class SemanticRuntimeOrchestrator:
                     raise SemanticRuntimeProcessingError(
                         topic, "cached semantic context reconciliation", exc
                     ) from exc
+
+    @property
+    def current_context_generation(self) -> int:
+        if self.semantic_context_generation is None:
+            return 0
+        return self.semantic_context_generation.generation
+
+    def is_state_current(self, state: SemanticRuntimeTopicState) -> bool:
+        """Return whether cached scoring used the current class context."""
+        return state.semantic_context_generation == self.current_context_generation
+
+    def get_current_state(self, topic: str) -> SemanticRuntimeTopicState | None:
+        """Lazily re-score one stale topic without rebuilding embeddings."""
+        state = self.state_store.get(topic)
+        if state is not None and not self.is_state_current(state):
+            self.reconcile_context((topic,))
+            state = self.state_store.get(topic)
+        return state
+
+    def current_states(self) -> tuple[SemanticRuntimeTopicState, ...]:
+        """Return current vector-free decisions, lazily refreshing stale topics."""
+        topics = tuple(state.temporal_profile.topic for state in self.state_store.all())
+        return tuple(
+            state
+            for topic in topics
+            if (state := self.get_current_state(topic)) is not None
+        )
+
+    def remove_stale_unknown_entries(self) -> tuple[str, ...]:
+        """Exclude stale UNKNOWN evidence from discovery without re-scoring it."""
+        removed: list[str] = []
+        transaction = (
+            self.state_coordinator.transaction()
+            if self.state_coordinator is not None
+            else nullcontext()
+        )
+        with self.feedback_lock, transaction:
+            for entry in self.unknown_pool.all():
+                state = self.state_store.get(entry.topic)
+                if (
+                    state is None or not self.is_state_current(state)
+                ) and self.unknown_pool.remove(entry.topic) is not None:
+                    removed.append(entry.topic)
+        return tuple(removed)
 
     def _evaluate_context(
         self,
@@ -339,6 +397,8 @@ class SemanticRuntimeOrchestrator:
                     runner_up=None,
                     similarity_margin=None,
                     reasons=(SemanticClassDecisionReason.HUMAN_CONFIRMED_MEMBERSHIP,),
+                    confirmed_class_id=membership.class_id,
+                    confirmed_class_name=membership.semantic_class_name,
                 )
             elif unfiltered_consensus.classes and not eligible:
                 decision = SemanticClassDecision(

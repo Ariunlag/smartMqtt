@@ -6,7 +6,7 @@ import copy
 import json
 import math
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, fields, is_dataclass
+from dataclasses import dataclass, fields, is_dataclass, replace
 from datetime import datetime, timezone
 from enum import Enum
 from numbers import Real
@@ -129,6 +129,7 @@ class SemanticSnapshotSerializer:
             policy_config=_plain_json(dict(metadata.policy_config), "policy_config"),
             payload={
                 "runtime_states": self._encode(snapshot.runtime_states),
+                "semantic_context_generation": snapshot.semantic_context_generation,
                 "unknown_pool": self._encode(snapshot.unknown_pool),
                 "trusted_evidence": self._encode(snapshot.trusted_evidence),
                 "constraints": self._encode(snapshot.constraints),
@@ -148,7 +149,7 @@ class SemanticSnapshotSerializer:
         expected_model_fingerprint: str,
         expected_representation_contract_version: str = SEMANTIC_REPRESENTATION_CONTRACT_VERSION,
     ) -> SemanticApplicationSnapshot:
-        if record.schema_version not in {1, SEMANTIC_STATE_SCHEMA_VERSION}:
+        if record.schema_version not in {1, 2, SEMANTIC_STATE_SCHEMA_VERSION}:
             raise SemanticSnapshotValidationError(
                 f"Unsupported semantic state schema version: {record.schema_version}"
             )
@@ -175,8 +176,52 @@ class SemanticSnapshotSerializer:
         }
         if record.schema_version >= 2:
             expected.add("confirmed_memberships")
+        if record.schema_version >= 3:
+            expected.add("semantic_context_generation")
         _exact_keys(record.payload, expected, "payload")
         try:
+            memberships = (
+                tuple(self._decode(record.payload["confirmed_memberships"]))
+                if record.schema_version >= 2
+                else ()
+            )
+            runtime_payload = record.payload["runtime_states"]
+            if record.schema_version < 3:
+                runtime_payload = self._prepare_legacy_runtime_states(
+                    runtime_payload,
+                    memberships,
+                )
+            runtime_states = tuple(self._decode(runtime_payload))
+            unknown_pool = self._decode(record.payload["unknown_pool"])
+            pending_candidates = tuple(
+                self._decode(record.payload["pending_candidates"])
+            )
+            if record.schema_version < 3:
+                membership_by_topic = {
+                    membership.topic: membership for membership in memberships
+                }
+                migrated_states = []
+                for state in runtime_states:
+                    membership = membership_by_topic.get(state.temporal_profile.topic)
+                    decision = state.decision
+                    if membership is not None and decision.reasons == (
+                        SemanticClassDecisionReason.HUMAN_CONFIRMED_MEMBERSHIP,
+                    ):
+                        decision = replace(
+                            decision,
+                            confirmed_class_id=membership.class_id,
+                            confirmed_class_name=membership.semantic_class_name,
+                        )
+                    migrated_states.append(
+                        replace(
+                            state,
+                            decision=decision,
+                            semantic_context_generation=0,
+                        )
+                    )
+                runtime_states = tuple(migrated_states)
+                unknown_pool = replace(unknown_pool, entries=())
+                pending_candidates = ()
             snapshot = SemanticApplicationSnapshot(
                 metadata=SemanticPersistenceMetadata(
                     schema_version=SEMANTIC_STATE_SCHEMA_VERSION,
@@ -190,22 +235,24 @@ class SemanticSnapshotSerializer:
                     policy_config=_plain_json(record.policy_config, "policy_config"),
                 ),
                 generation=_non_negative_int(record.generation, "generation"),
-                runtime_states=tuple(self._decode(record.payload["runtime_states"])),
-                unknown_pool=self._decode(record.payload["unknown_pool"]),
+                semantic_context_generation=(
+                    _non_negative_int(
+                        record.payload["semantic_context_generation"],
+                        "semantic_context_generation",
+                    )
+                    if record.schema_version >= 3
+                    else 1
+                ),
+                runtime_states=runtime_states,
+                unknown_pool=unknown_pool,
                 trusted_evidence=tuple(
                     self._decode(record.payload["trusted_evidence"])
                 ),
                 constraints=tuple(self._decode(record.payload["constraints"])),
-                confirmed_memberships=(
-                    tuple(self._decode(record.payload["confirmed_memberships"]))
-                    if record.schema_version >= 2
-                    else ()
-                ),
+                confirmed_memberships=memberships,
                 known_classes=tuple(self._decode(record.payload["known_classes"])),
                 class_catalog=tuple(self._decode(record.payload["class_catalog"])),
-                pending_candidates=tuple(
-                    self._decode(record.payload["pending_candidates"])
-                ),
+                pending_candidates=pending_candidates,
                 suppressed_candidates=tuple(
                     self._decode(record.payload["suppressed_candidates"])
                 ),
@@ -234,6 +281,10 @@ class SemanticSnapshotSerializer:
             "representation_contract_version",
         )
         _non_negative_int(snapshot.generation, "generation")
+        _non_negative_int(
+            snapshot.semantic_context_generation,
+            "semantic_context_generation",
+        )
         _plain_json(dict(snapshot.metadata.policy_config), "policy_config")
 
         runtime_topics = [
@@ -272,6 +323,13 @@ class SemanticSnapshotSerializer:
                 "A candidate cannot be both pending and suppressed"
             )
 
+        membership_by_topic = {
+            membership.topic: membership
+            for membership in snapshot.confirmed_memberships
+        }
+        state_by_topic = {
+            state.temporal_profile.topic: state for state in snapshot.runtime_states
+        }
         dimensions: set[int] = set()
         for state in snapshot.runtime_states:
             _required_text(state.temporal_profile.topic, "runtime topic")
@@ -280,6 +338,21 @@ class SemanticSnapshotSerializer:
             self._validate_evidence(state.evidence)
             self._validate_consensus(state.consensus)
             self._validate_decision(state.decision)
+            if state.semantic_context_generation > snapshot.semantic_context_generation:
+                raise SemanticSnapshotValidationError(
+                    "Runtime state semantic context exceeds application context"
+                )
+            if state.decision.confirmed_class_id is not None:
+                membership = membership_by_topic.get(state.temporal_profile.topic)
+                if (
+                    membership is None
+                    or membership.class_id != state.decision.confirmed_class_id
+                    or membership.semantic_class_name
+                    != state.decision.confirmed_class_name
+                ):
+                    raise SemanticSnapshotValidationError(
+                        "Human-confirmed decision must match authoritative membership"
+                    )
         for entry in snapshot.unknown_pool.entries:
             _required_text(entry.topic, "UNKNOWN topic")
             self._validate_embeddings(entry.embeddings, dimensions)
@@ -287,6 +360,15 @@ class SemanticSnapshotSerializer:
             if entry.decision.state is not SemanticClassDecisionState.UNKNOWN:
                 raise SemanticSnapshotValidationError(
                     "UNKNOWN pool entry must contain an UNKNOWN decision"
+                )
+            state = state_by_topic.get(entry.topic)
+            if (
+                state is None
+                or state.semantic_context_generation
+                != snapshot.semantic_context_generation
+            ):
+                raise SemanticSnapshotValidationError(
+                    "UNKNOWN pool cannot contain stale runtime evidence"
                 )
         for known_class in snapshot.known_classes:
             _required_text(known_class.class_id, "class_id")
@@ -412,6 +494,23 @@ class SemanticSnapshotSerializer:
             raise SemanticSnapshotValidationError("Invalid decision reasons")
         if decision.similarity_margin is not None:
             _finite(decision.similarity_margin, "similarity_margin")
+        human_confirmed = decision.reasons == (
+            SemanticClassDecisionReason.HUMAN_CONFIRMED_MEMBERSHIP,
+        )
+        if human_confirmed:
+            _required_text(decision.confirmed_class_id, "confirmed_class_id")
+            _required_text(decision.confirmed_class_name, "confirmed_class_name")
+            if decision.state is not SemanticClassDecisionState.KNOWN:
+                raise SemanticSnapshotValidationError(
+                    "Human-confirmed decision must be KNOWN"
+                )
+        elif (
+            decision.confirmed_class_id is not None
+            or decision.confirmed_class_name is not None
+        ):
+            raise SemanticSnapshotValidationError(
+                "Automated decision cannot contain confirmed class identity"
+            )
 
     @staticmethod
     def _validate_identity(identity: CandidateIdentity) -> None:
@@ -420,6 +519,30 @@ class SemanticSnapshotSerializer:
         _unique(identity.member_topics, "candidate member topic")
         for topic in identity.member_topics:
             _required_text(topic, "candidate member topic")
+
+    @staticmethod
+    def _prepare_legacy_runtime_states(runtime_payload, memberships):
+        """Add only fields absent from schema 1/2 before strict decoding."""
+        migrated = copy.deepcopy(runtime_payload)
+        membership_by_topic = {
+            membership.topic: membership for membership in memberships
+        }
+        for state in migrated:
+            state.setdefault("semantic_context_generation", 0)
+            decision = state["decision"]
+            decision.setdefault("confirmed_class_id", None)
+            decision.setdefault("confirmed_class_name", None)
+            reasons = decision["reasons"]
+            human_confirmed = len(reasons) == 1 and reasons[0].get("value") == (
+                SemanticClassDecisionReason.HUMAN_CONFIRMED_MEMBERSHIP.value
+            )
+            if human_confirmed:
+                topic = state["temporal_profile"]["topic"]
+                membership = membership_by_topic.get(topic)
+                if membership is not None:
+                    decision["confirmed_class_id"] = membership.class_id
+                    decision["confirmed_class_name"] = membership.semantic_class_name
+        return migrated
 
     def _encode(self, value: Any) -> Any:
         if isinstance(value, Enum):
@@ -472,10 +595,26 @@ class SemanticSnapshotSerializer:
             expected = {"_type", *(field.name for field in fields(cls))}
             if cls is TrustedClassEvidence:
                 expected.add("member_count")
+            optional_defaults = {}
+            if cls is SemanticRuntimeTopicState:
+                optional_defaults["semantic_context_generation"] = 0
+            if cls is SemanticClassDecision:
+                optional_defaults.update(
+                    confirmed_class_id=None,
+                    confirmed_class_name=None,
+                )
+            if cls is PendingSemanticCandidate:
+                optional_defaults["retained_after_review"] = False
+            for optional_name in optional_defaults:
+                if optional_name not in value:
+                    expected.remove(optional_name)
             _exact_keys(value, expected, name)
             kwargs = {
-                field.name: self._decode(value[field.name]) for field in fields(cls)
+                field.name: self._decode(value[field.name])
+                for field in fields(cls)
+                if field.name in value
             }
+            kwargs = {**optional_defaults, **kwargs}
             if cls is TrustedClassEvidence:
                 member_count = _non_negative_int(
                     value["member_count"], "trusted evidence member_count"

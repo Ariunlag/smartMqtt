@@ -5,6 +5,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from threading import RLock
 
+from .semantic_context import SemanticContextGeneration
+
 
 @dataclass(frozen=True, slots=True)
 class ConfirmedSemanticMembership:
@@ -24,10 +26,20 @@ class ConfirmedSemanticMembership:
 class ConfirmedSemanticMembershipStore:
     """Latest authoritative human assignment keyed by topic."""
 
-    def __init__(self, coordinator=None) -> None:
+    def __init__(
+        self,
+        coordinator=None,
+        context_generation: SemanticContextGeneration | None = None,
+    ) -> None:
         self._memberships: dict[str, ConfirmedSemanticMembership] = {}
         self._lock = RLock()
         self._coordinator = coordinator
+        self._context_generation = context_generation
+
+    def set_context_generation(
+        self, context_generation: SemanticContextGeneration
+    ) -> None:
+        self._context_generation = context_generation
 
     def get(self, topic: str) -> ConfirmedSemanticMembership | None:
         with self._lock:
@@ -38,12 +50,16 @@ class ConfirmedSemanticMembershipStore:
             if self._memberships.get(membership.topic) == membership:
                 return
             self._memberships[membership.topic] = membership
+            if self._context_generation is not None:
+                self._context_generation.advance()
         if self._coordinator is not None:
             self._coordinator.mark_changed()
 
     def remove(self, topic: str) -> ConfirmedSemanticMembership | None:
         with self._lock:
             removed = self._memberships.pop(topic, None)
+            if removed is not None and self._context_generation is not None:
+                self._context_generation.advance()
         if removed is not None and self._coordinator is not None:
             self._coordinator.mark_changed()
         return removed
@@ -65,6 +81,8 @@ class ConfirmedSemanticMembershipStore:
             if self._memberships == replacement:
                 return
             self._memberships = replacement
+            if self._context_generation is not None:
+                self._context_generation.advance()
         if self._coordinator is not None:
             self._coordinator.mark_changed()
 
