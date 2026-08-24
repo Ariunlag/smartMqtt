@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
 from .candidate_membership_review import CandidateMembershipReview
 from .representation_embedder import RepresentationEmbeddings
@@ -13,6 +14,9 @@ from .trusted_class_evidence import (
     TrustedClassEvidenceUpdater,
 )
 from .unknown_stream_pool import UnknownStreamPool
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 _REPRESENTATION_NAMES = tuple(RepresentationEmbeddings.__dataclass_fields__)
 
@@ -50,6 +54,8 @@ class ReviewedPrototypeReconciler:
         review: CandidateMembershipReview,
         unknown_pool: UnknownStreamPool,
         evidence_store: TrustedClassEvidenceStore,
+        embedding_resolver: Callable[[str], RepresentationEmbeddings | None]
+        | None = None,
     ) -> ReviewedPrototypeReconciliationResult:
         """Compute all replacements without mutating the evidence store."""
         prepared = []
@@ -76,13 +82,22 @@ class ReviewedPrototypeReconciler:
             vectors = []
             for topic in final_topics:
                 entry = unknown_pool.get(topic)
-                if entry is None:
+                embeddings = (
+                    entry.embeddings
+                    if entry is not None
+                    else (
+                        embedding_resolver(topic)
+                        if embedding_resolver is not None
+                        else None
+                    )
+                )
+                if embeddings is None:
                     raise ValueError(
                         f"Missing final-member topic '{topic}' for class "
                         f"'{review.semantic_class_name}', representation "
                         f"'{representation_name}'"
                     )
-                vector = getattr(entry.embeddings, representation_name)
+                vector = getattr(embeddings, representation_name)
                 vectors.append(
                     self._validate_vector(
                         vector,

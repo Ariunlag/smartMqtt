@@ -15,6 +15,10 @@ from .candidate_membership_review import (
     MembershipFeedbackPolarity,
     MembershipFeedbackStore,
 )
+from .confirmed_membership import (
+    ConfirmedSemanticMembership,
+    ConfirmedSemanticMembershipStore,
+)
 from .known_class_assembly import (
     KnownClassAssembler,
     KnownClassAssemblyRequest,
@@ -162,6 +166,8 @@ __all__ = [
     "CandidateMembershipReview",
     "CandidateMembershipReviewProcessor",
     "ClassMatch",
+    "ConfirmedSemanticMembership",
+    "ConfirmedSemanticMembershipStore",
     "FieldProfile",
     "HDBSCANDiscoveryConfig",
     "InMemorySemanticStateRepository",

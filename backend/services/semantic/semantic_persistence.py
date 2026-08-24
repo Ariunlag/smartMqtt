@@ -16,6 +16,7 @@ from typing import Any
 from psycopg.types.json import Jsonb
 
 from .candidate_confirmation import CandidateIdentity
+from .confirmed_membership import ConfirmedSemanticMembership
 from .known_class_registry import SemanticClassDefinition
 from .multi_view_consensus import (
     MultiViewConsensusResult,
@@ -80,6 +81,7 @@ _DATACLASS_TYPES = {
         SemanticClassDefinition,
         CandidateIdentity,
         PendingSemanticCandidate,
+        ConfirmedSemanticMembership,
     )
 }
 _ENUM_TYPES = {
@@ -130,6 +132,7 @@ class SemanticSnapshotSerializer:
                 "unknown_pool": self._encode(snapshot.unknown_pool),
                 "trusted_evidence": self._encode(snapshot.trusted_evidence),
                 "constraints": self._encode(snapshot.constraints),
+                "confirmed_memberships": self._encode(snapshot.confirmed_memberships),
                 "known_classes": self._encode(snapshot.known_classes),
                 "class_catalog": self._encode(snapshot.class_catalog),
                 "pending_candidates": self._encode(snapshot.pending_candidates),
@@ -145,7 +148,7 @@ class SemanticSnapshotSerializer:
         expected_model_fingerprint: str,
         expected_representation_contract_version: str = SEMANTIC_REPRESENTATION_CONTRACT_VERSION,
     ) -> SemanticApplicationSnapshot:
-        if record.schema_version != SEMANTIC_STATE_SCHEMA_VERSION:
+        if record.schema_version not in {1, SEMANTIC_STATE_SCHEMA_VERSION}:
             raise SemanticSnapshotValidationError(
                 f"Unsupported semantic state schema version: {record.schema_version}"
             )
@@ -170,11 +173,13 @@ class SemanticSnapshotSerializer:
             "pending_candidates",
             "suppressed_candidates",
         }
+        if record.schema_version >= 2:
+            expected.add("confirmed_memberships")
         _exact_keys(record.payload, expected, "payload")
         try:
             snapshot = SemanticApplicationSnapshot(
                 metadata=SemanticPersistenceMetadata(
-                    schema_version=record.schema_version,
+                    schema_version=SEMANTIC_STATE_SCHEMA_VERSION,
                     model_fingerprint=_required_text(
                         record.model_fingerprint, "model_fingerprint"
                     ),
@@ -191,6 +196,11 @@ class SemanticSnapshotSerializer:
                     self._decode(record.payload["trusted_evidence"])
                 ),
                 constraints=tuple(self._decode(record.payload["constraints"])),
+                confirmed_memberships=(
+                    tuple(self._decode(record.payload["confirmed_memberships"]))
+                    if record.schema_version >= 2
+                    else ()
+                ),
                 known_classes=tuple(self._decode(record.payload["known_classes"])),
                 class_catalog=tuple(self._decode(record.payload["class_catalog"])),
                 pending_candidates=tuple(
@@ -244,6 +254,10 @@ class SemanticSnapshotSerializer:
             [(c.topic, c.semantic_class_name) for c in snapshot.constraints],
             "constraint identity",
         )
+        _unique(
+            [membership.topic for membership in snapshot.confirmed_memberships],
+            "confirmed membership topic",
+        )
         _unique([c.class_id for c in snapshot.known_classes], "known class ID")
         _unique([c.class_id for c in snapshot.class_catalog], "catalog class ID")
         _unique(
@@ -289,6 +303,26 @@ class SemanticSnapshotSerializer:
         for constraint in snapshot.constraints:
             _required_text(constraint.topic, "constraint topic")
             _required_text(constraint.semantic_class_name, "constraint class")
+        catalog_by_id = {
+            definition.class_id: definition.semantic_class_name
+            for definition in snapshot.class_catalog
+        }
+        known_ids = {known_class.class_id for known_class in snapshot.known_classes}
+        for membership in snapshot.confirmed_memberships:
+            _required_text(membership.topic, "confirmed membership topic")
+            _required_text(membership.class_id, "confirmed membership class_id")
+            _required_text(
+                membership.semantic_class_name,
+                "confirmed membership class name",
+            )
+            if catalog_by_id.get(membership.class_id) != membership.semantic_class_name:
+                raise SemanticSnapshotValidationError(
+                    "Confirmed membership must reference the matching catalog class"
+                )
+            if membership.class_id not in known_ids:
+                raise SemanticSnapshotValidationError(
+                    "Confirmed membership must reference a known class"
+                )
         for definition in snapshot.class_catalog:
             _required_text(definition.class_id, "catalog class_id")
             _required_text(definition.semantic_class_name, "catalog class name")

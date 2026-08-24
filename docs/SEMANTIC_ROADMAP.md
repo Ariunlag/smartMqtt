@@ -123,6 +123,11 @@ reliability learning remain planned stages.
 - [x] Integrated semantic feedback application workflow
 - [x] Reviewed prototype synchronization into the live known-class registry
 - [x] Negative-constraint filtering during runtime candidate eligibility
+- [x] Authoritative reviewed topic-to-class membership
+- [x] Confirmed human-membership precedence in live decisions
+- [x] Cached-embedding re-scoring after registry or feedback changes
+- [x] Reviewed-positive UNKNOWN cleanup and stale-candidate invalidation
+- [x] Atomic feedback reconciliation across shared semantic state
 - [x] Production MQTT semantic sidecar
 - [x] Bounded isolated semantic processing queue
 - [x] Shared live runtime processing from MQTT observations

@@ -169,10 +169,19 @@ def topic_states(
                 topic=state.temporal_profile.topic,
                 state=state.decision.state.value,
                 class_id=(
-                    state.decision.candidate.class_id
-                    if state.decision.candidate is not None
-                    else None
+                    membership.class_id
+                    if (
+                        membership := application.confirmed_membership_store.get(
+                            state.temporal_profile.topic
+                        )
+                    )
+                    else (
+                        state.decision.candidate.class_id
+                        if state.decision.candidate is not None
+                        else None
+                    )
                 ),
+                source=("HUMAN" if membership is not None else "AUTOMATED"),
                 reasons=tuple(reason.value for reason in state.decision.reasons),
             )
             for state in states
