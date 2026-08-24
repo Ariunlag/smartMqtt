@@ -372,6 +372,29 @@ was weakened. The bounded burst published 80 messages, accepted and processed
 3, dropped 77 explicitly, and recorded no semantic failures. Final persisted
 generation 15 was restored after a 3.5-second bounded shutdown.
 
+## Durable duplicate identity consistency
+
+Duplicate review history and current logical stream identity are now separate.
+Fresh confirmed decisions persist a direct alias-to-canonical root, collapse
+transitive sets without chains, and atomically reconcile active semantic,
+tag-group, and user-class membership. Terminal `KEEP_BOTH` decisions leave both
+streams independently eligible for every semantic and recommendation workflow.
+
+Inactive aliases are excluded from duplicate nearest-neighbor candidates and
+UNKNOWN discovery, cannot be manually resubscribed, and are stopped by an MQTT
+gate before the primary write pipeline. Historical Influx measurements and
+Qdrant embeddings are retained for audit. Pre-migration confirmations remain
+terminal and are exposed as unresolved because their unsubscribe target cannot
+be reconstructed safely.
+
+The real-stack acceptance runner includes an isolated duplicate phase that
+confirms an alias, checks canonical group/semantic behavior, verifies the MQTT
+gate, exercises `KEEP_BOTH`, and confirms identity recovery after restart. The
+runner continues to use unique namespaces and never deletes existing volumes.
+
+Phase 3 quality work may address time alignment/lag-aware duplicate scoring and
+historical tag-centroid bias. Those concerns are intentionally unchanged here.
+
 ## Documentation maintenance
 
 For every future semantic pull request:

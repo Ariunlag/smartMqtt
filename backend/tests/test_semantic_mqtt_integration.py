@@ -11,6 +11,7 @@ from models.mqtt_message import MQTTMessage
 from services.embedding.base_model import BaseEmbeddingModel
 from services.mqtt.client import MQTTClient
 from services.mqtt.handler_setup import register_mqtt_handlers
+from services.mqtt.handlers.canonical_identity_handler import CanonicalIdentityHandler
 from services.mqtt.handlers.influx_handler import InfluxHandler
 from services.mqtt.handlers.semantic_handler import SemanticHandler
 from services.mqtt.handlers.topic_handler import TopicHandler
@@ -84,12 +85,14 @@ def test_handler_setup_preserves_primary_order_adds_semantic_last_and_is_idempot
     register_mqtt_handlers(application.processing_service, client=client)
 
     assert tuple(type(handler) for handler in client.handlers) == (
+        CanonicalIdentityHandler,
         TopicHandler,
         InfluxHandler,
         Broadcaster,
         SemanticHandler,
     )
     assert tuple(handler.handler_identity for handler in client.handlers) == (
+        "canonical-identity",
         "topic",
         "influx",
         "broadcaster",

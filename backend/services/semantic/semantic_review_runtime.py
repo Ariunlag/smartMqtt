@@ -413,6 +413,28 @@ class SemanticReviewRuntime:
             self.state_coordinator.mark_changed()
         return removed
 
+    def invalidate_topics(
+        self, topics: tuple[str, ...]
+    ) -> tuple[PendingSemanticCandidate, ...]:
+        """Remove every pending candidate containing an inactive topic."""
+        invalid = set(topics)
+        with self._pending_lock:
+            removed = tuple(
+                candidate
+                for identity, candidate in self._pending.items()
+                if invalid.intersection(identity.member_topics)
+            )
+            if not removed:
+                return ()
+            self._pending = {
+                identity: candidate
+                for identity, candidate in self._pending.items()
+                if not invalid.intersection(identity.member_topics)
+            }
+        if self.state_coordinator is not None:
+            self.state_coordinator.mark_changed()
+        return removed
+
     def _suppress_and_remove(self, identity: CandidateIdentity) -> None:
         changed = identity not in self._suppressed or identity in self._pending
         self._suppressed.add(identity)

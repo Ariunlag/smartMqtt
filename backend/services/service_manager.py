@@ -62,7 +62,14 @@ class ServiceManager:
         ):
             semantic_application.discovery_service.request()
         await semantic_application.processing_service.start()
-        register_mqtt_handlers(semantic_application.processing_service)
+        identity_store = getattr(semantic_application, "canonical_identity_store", None)
+        if identity_store is None:
+            register_mqtt_handlers(semantic_application.processing_service)
+        else:
+            register_mqtt_handlers(
+                semantic_application.processing_service,
+                identity_store=identity_store,
+            )
         for service in self.services:
             if hasattr(service, "set_loop"):
                 service.set_loop(loop)

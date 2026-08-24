@@ -48,20 +48,20 @@ export const useDuplicateStore = create<DuplicateState>()(
       // === Confirm duplicate pair ===
       confirmDuplicate: async (req) => {
         try {
-          const { data } = await duplicateApi.confirmDuplicate(req);
-
-          set((s) => {
-            const updatedDuplicates = s.duplicates.map((d) =>
-              samePair(d.topics, req.topics) ? data : d
-            );
-
-            // Always clear selection after an action
-            return {
-              duplicates: updatedDuplicates,
-              selectedPair: null,
-              series: [],
-            };
-          });
+          await duplicateApi.confirmDuplicate(req);
+          set((state) => ({
+            duplicates: state.duplicates.filter(
+              (duplicate) => !samePair(duplicate.topics, req.topics)
+            ),
+            selectedPair: null,
+            series: [],
+          }));
+          try {
+            const { data } = await duplicateApi.getDuplicates();
+            set({ duplicates: data.duplicates });
+          } catch (err) {
+            console.error("[Duplicates] Refresh after resolution failed:", err);
+          }
         } catch (err) {
           console.error("[Duplicates] Confirm failed:", err);
         }

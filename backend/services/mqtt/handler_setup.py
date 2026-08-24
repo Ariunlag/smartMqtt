@@ -1,4 +1,5 @@
 from services.mqtt.client import mqtt_client
+from services.mqtt.handlers.canonical_identity_handler import CanonicalIdentityHandler
 from services.mqtt.handlers.influx_handler import InfluxHandler
 from services.mqtt.handlers.semantic_handler import SemanticHandler
 from services.mqtt.handlers.topic_handler import TopicHandler
@@ -10,9 +11,13 @@ def register_mqtt_handlers(
     semantic_service: SemanticProcessingService,
     *,
     client=mqtt_client,
+    identity_store=None,
 ) -> None:
     """Register the stable primary pipeline and its final semantic sidecar."""
     handlers = [
+        CanonicalIdentityHandler(identity_store)
+        if identity_store is not None
+        else CanonicalIdentityHandler(),
         TopicHandler(),
         InfluxHandler(),
         Broadcaster(),
