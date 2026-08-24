@@ -31,9 +31,52 @@ from .final_benchmark import (
     SemanticBenchmarkExecutor,
     SemanticBenchmarkRun,
 )
+from .rq1_benchmark import (
+    RQ1BenchmarkRunner,
+    RQ1Condition,
+    RQ1DecisionConfig,
+    RQ1RunResult,
+    write_rq1_artifacts,
+)
+from .rq1_dataset import (
+    DuplicateDisposition,
+    DuplicateFilterStats,
+    RQ1Dataset,
+    RQ1Example,
+    RQ1SourceKind,
+    RQ1Split,
+    load_rq1_dataset,
+)
+from .rq1_metrics import RQ1Prediction, RQ1QualityMetrics, compute_quality_metrics
+from .rq1_representations import (
+    PRODUCTION_VARIANTS,
+    IndependentFusion,
+    RQ1Representation,
+    RQ1RepresentationBuilder,
+    RQ1RepresentationConfig,
+    RQ1Variant,
+)
 
 __all__ = [
+    "PRODUCTION_VARIANTS",
+    "DuplicateDisposition",
+    "DuplicateFilterStats",
     "FrozenSemanticBenchmarkConfig",
+    "IndependentFusion",
+    "RQ1BenchmarkRunner",
+    "RQ1Condition",
+    "RQ1Dataset",
+    "RQ1DecisionConfig",
+    "RQ1Example",
+    "RQ1Prediction",
+    "RQ1QualityMetrics",
+    "RQ1Representation",
+    "RQ1RepresentationBuilder",
+    "RQ1RepresentationConfig",
+    "RQ1RunResult",
+    "RQ1SourceKind",
+    "RQ1Split",
+    "RQ1Variant",
     "SemanticBenchmarkBuilder",
     "SemanticBenchmarkChangeType",
     "SemanticBenchmarkComparison",
@@ -56,4 +99,7 @@ __all__ = [
     "SemanticExperimentVariant",
     "SemanticPrediction",
     "SemanticThresholdCalibrator",
+    "compute_quality_metrics",
+    "load_rq1_dataset",
+    "write_rq1_artifacts",
 ]
