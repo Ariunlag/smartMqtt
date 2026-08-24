@@ -196,7 +196,7 @@ class SemanticExperimentRunner:
         decision = SemanticClassDecisionPolicy(config).decide(consensus)
         return (
             decision.state,
-            decision.candidate.class_name
+            decision.class_name
             if decision.state is SemanticClassDecisionState.KNOWN
             else None,
         )

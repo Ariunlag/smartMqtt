@@ -191,8 +191,22 @@ class RealStackAcceptance:
             len(result.get("prototypes", ())) == 6,
             "review did not create all six prototypes",
         )
+        topic_states = self._json_request(
+            "GET", f"{self.api}/semantic-review/topic-states"
+        )["topics"]
+        states_by_topic = {item["topic"]: item for item in topic_states}
+        expected_class_id = f"acceptance-{self.run_id}-temperature"
+        for topic in group_a[:2]:
+            reviewed_state = states_by_topic.get(topic)
+            self._require(
+                reviewed_state is not None
+                and reviewed_state["state"] == "KNOWN"
+                and reviewed_state["source"] == "HUMAN"
+                and reviewed_state["class_id"] == expected_class_id,
+                f"human-confirmed membership did not take precedence: {reviewed_state}",
+            )
         self._wait_persistence_clean()
-        self.report.passed("UNKNOWN discovery, pending publication, and review")
+        self.report.passed("UNKNOWN discovery, review, and HUMAN_CONFIRMED precedence")
         return group_a, group_b
 
     def _wait_for_candidates(
@@ -330,8 +344,19 @@ class RealStackAcceptance:
 
         self._compose("start", "mqtt")
         self._wait("broker container recovery", lambda: self._container_healthy("mqtt"))
+        consecutive_healthy = 0
+
+        def subscriptions_restored() -> bool:
+            nonlocal consecutive_healthy
+            if self._dependency_healthy("MQTTClient"):
+                consecutive_healthy += 1
+            else:
+                consecutive_healthy = 0
+            return consecutive_healthy >= 3
+
         self._wait(
-            "backend broker recovery", lambda: self._dependency_healthy("MQTTClient")
+            "stable backend broker recovery and subscription restoration",
+            subscriptions_restored,
         )
         topic = f"{self.prefix}/broker-recovered"
         baseline = self._processing_status()["processed_count"]

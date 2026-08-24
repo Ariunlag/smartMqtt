@@ -61,6 +61,7 @@ from .semantic_class_decision import (
     SemanticClassDecisionReason,
     SemanticClassDecisionState,
 )
+from .semantic_context import SemanticContextGeneration
 from .semantic_discovery_service import (
     SemanticDiscoveryConfig,
     SemanticDiscoveryService,
@@ -212,6 +213,7 @@ __all__ = [
     "SemanticClassDecisionReason",
     "SemanticClassDecisionState",
     "SemanticClassDefinition",
+    "SemanticContextGeneration",
     "SemanticDiscoveryConfig",
     "SemanticDiscoveryService",
     "SemanticDiscoveryStatus",

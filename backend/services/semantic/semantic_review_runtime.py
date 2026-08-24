@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from threading import RLock
 from typing import TYPE_CHECKING
 
@@ -47,6 +47,11 @@ class PendingSemanticCandidate:
 
     identity: CandidateIdentity
     candidate_index: int | None = None
+    retained_after_review: bool = False
+
+    def __post_init__(self) -> None:
+        if not isinstance(self.retained_after_review, bool):
+            raise TypeError("retained_after_review must be a boolean")
 
 
 @dataclass(frozen=True, slots=True)
@@ -120,7 +125,6 @@ class SemanticReviewRuntime:
         self.state_coordinator = state_coordinator
         self._pending: dict[CandidateIdentity, PendingSemanticCandidate] = {}
         self._suppressed: set[CandidateIdentity] = set()
-        self._carry_forward_once: set[CandidateIdentity] = set()
         self._pending_lock = RLock()
         self._discovery_requester: Callable[[], bool] | None = None
 
@@ -163,17 +167,21 @@ class SemanticReviewRuntime:
                 for identity, candidate in pending.items()
                 if identity not in self._suppressed
             }
-            carry_forward = {
-                identity: self._pending[identity]
-                for identity in self._carry_forward_once
-                if identity in self._pending
-                and all(
-                    self.unknown_pool.get(topic) is not None
-                    for topic in identity.member_topics
-                )
+            retained = {
+                identity: candidate
+                for identity, candidate in self._pending.items()
+                if candidate.retained_after_review
             }
-            self._carry_forward_once = set()
-            replacement = {**carry_forward, **replacement}
+            replacement = {
+                **replacement,
+                **{
+                    identity: replace(
+                        replacement.get(identity, candidate),
+                        retained_after_review=True,
+                    )
+                    for identity, candidate in retained.items()
+                },
+            }
             if self._pending == replacement:
                 return
             self._pending = replacement
@@ -181,13 +189,16 @@ class SemanticReviewRuntime:
             self.state_coordinator.mark_changed()
 
     def clear_candidates(self) -> None:
-        """Atomically remove every pending discovery candidate."""
+        """Remove discovery candidates while preserving disjoint reviewed state."""
         with self._pending_lock:
-            if not self._pending:
-                self._carry_forward_once = set()
+            replacement = {
+                identity: candidate
+                for identity, candidate in self._pending.items()
+                if candidate.retained_after_review
+            }
+            if self._pending == replacement:
                 return
-            self._pending = {}
-            self._carry_forward_once = set()
+            self._pending = replacement
         if self.state_coordinator is not None:
             self.state_coordinator.mark_changed()
 
@@ -217,11 +228,9 @@ class SemanticReviewRuntime:
             raise ValueError("A candidate cannot be both pending and suppressed")
         with self._pending_lock:
             if self._pending == pending and self._suppressed == suppressed:
-                self._carry_forward_once = set()
                 return
             self._pending = pending
             self._suppressed = suppressed
-            self._carry_forward_once = set()
         if self.state_coordinator is not None:
             self.state_coordinator.mark_changed()
 
@@ -278,6 +287,14 @@ class SemanticReviewRuntime:
                 if self.processing_runtime is not None
                 else ()
             )
+            context_generation = (
+                self.processing_runtime.semantic_context_generation
+                if self.processing_runtime is not None
+                else None
+            )
+            context_before = (
+                context_generation.generation if context_generation is not None else 0
+            )
             try:
                 self.class_catalog.register(
                     SemanticClassDefinition(class_id, review.semantic_class_name)
@@ -317,22 +334,28 @@ class SemanticReviewRuntime:
                         review.positive_topics + review.removed_topics,
                         coordinated=True,
                     )
+                    self.processing_runtime.remove_stale_unknown_entries()
                 self._invalidate_after_review(review)
                 result = self._result(class_id, workflow_result, True)
             except Exception:
-                self.evidence_store.replace(evidence_before)
-                self.constraint_store.replace(constraints_before)
-                self.confirmed_membership_store.replace(memberships_before)
-                self.class_catalog.replace(catalog_before)
-                self.known_class_registry.replace(registry_before)
-                self.unknown_pool.replace(
-                    unknown_before.entries,
-                    unknown_before.version,
+                restore_context = (
+                    context_generation.restore(context_before)
+                    if context_generation is not None
+                    else nullcontext()
                 )
-                self.replace_review_state(review_before)
-                self._carry_forward_once = set()
-                if self.processing_runtime is not None:
-                    self.processing_runtime.state_store.replace(runtime_before)
+                with restore_context:
+                    self.evidence_store.replace(evidence_before)
+                    self.constraint_store.replace(constraints_before)
+                    self.confirmed_membership_store.replace(memberships_before)
+                    self.class_catalog.replace(catalog_before)
+                    self.known_class_registry.replace(registry_before)
+                    self.unknown_pool.replace(
+                        unknown_before.entries,
+                        unknown_before.version,
+                    )
+                    self.replace_review_state(review_before)
+                    if self.processing_runtime is not None:
+                        self.processing_runtime.state_store.replace(runtime_before)
                 raise
         if self._discovery_requester is not None:
             self._discovery_requester()
@@ -394,7 +417,6 @@ class SemanticReviewRuntime:
         changed = identity not in self._suppressed or identity in self._pending
         self._suppressed.add(identity)
         self._pending.pop(identity, None)
-        self._carry_forward_once.discard(identity)
         if changed and self.state_coordinator is not None:
             self.state_coordinator.mark_changed()
 
@@ -402,20 +424,15 @@ class SemanticReviewRuntime:
         """Suppress the reviewed identity and drop overlapping stale candidates."""
         positive = set(review.positive_topics)
         replacement = {
-            identity: candidate
+            identity: replace(candidate, retained_after_review=True)
             for identity, candidate in self._pending.items()
             if identity != review.identity
             and not (positive & set(identity.member_topics))
-            and all(
-                self.unknown_pool.get(topic) is not None
-                for topic in identity.member_topics
-            )
         }
         changed = (
             self._pending != replacement or review.identity not in self._suppressed
         )
         self._pending = replacement
-        self._carry_forward_once = set(replacement)
         self._suppressed.add(review.identity)
         if changed and self.state_coordinator is not None:
             self.state_coordinator.mark_changed()
