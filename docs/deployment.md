@@ -1,73 +1,97 @@
-# Deployment Guide
+# Deployment guide
 
-This document describes the intended deployment path for Smart-MQTT++.
+SmartMQTT's supported local deployment is the repository Docker Compose stack.
+It runs PostgreSQL, Qdrant, InfluxDB, Mosquitto, a one-off Alembic migration,
+the FastAPI backend, and the React/Nginx frontend.
 
-## Current Status
-
-The current system is a research prototype that runs locally with:
-- FastAPI backend
-- React frontend
-- MQTT broker
-- InfluxDB
-- Local JSON metadata stores
-
-Docker-based deployment is planned as the next step.
-
-## Target Local Deployment
-
-The target local deployment should run with:
+## Local startup
 
 ```bash
-docker compose up --build
+docker compose up -d --build
+docker compose ps
+```
 
-Expected services:
+The backend container starts only after PostgreSQL is healthy and the migration
+job completes. InfluxDB, Mosquitto, Qdrant, and the backend also expose Compose
+health checks. Runtime probes are:
 
-backend
-frontend
-mqtt broker
-influxdb
-Required Environment Variables
+```text
+GET /api/health/live     process liveness; independent of dependencies
+GET /api/health/ready    200 only when every required dependency is healthy
+GET /api/health/details  per-dependency health and bounded check latency
+```
 
-Suggested .env.example:
+The frontend is available at `http://localhost:3000` and proxies `/api` to the
+backend. The backend is also published at `http://localhost:8000` for local
+diagnostics.
 
-MQTT_BROKER=mosquitto
-MQTT_PORT=1883
+## Configuration and secrets
 
-INFLUX_URL=http://influxdb:8086
-INFLUX_BUCKET=smartHub
-INFLUX_ORG=smartmqtt
-INFLUX_TOKEN=change_me
+Compose includes developer-only defaults so an isolated workstation can start
+without a secret manager. They must not be used for a shared environment.
 
-EMBEDDING_MODEL=BAAI/bge-small-en-v1.5
-EMBEDDING_DEVICE=cpu
+Use `.env.acceptance.example` as a key inventory, copy it to an untracked env
+file, and replace every `CHANGE_ME`. Never commit passwords, tokens, populated
+DSNs, `.env` files, or model-provider credentials. In a managed deployment,
+inject secrets with the platform's secret store and restrict published ports.
 
-ID_THRESH=0.90
-MIN_POINTS=10
-DUPE_CHECK_DELAY=60
-GROUP_TAG_THRESH=0.85
+Important runtime settings include:
 
-DATA_DIR=./backend/data
-Deployment Goals
+- PostgreSQL database/user/password and `POSTGRES_DSN`
+- InfluxDB initialization password/token, organization, and bucket
+- optional `QDRANT_API_KEY`
+- `EMBEDDING_MODEL` and `EMBEDDING_DEVICE`
+- ingestion and semantic queue bounds
+- discovery and persistence lifecycle timeouts
 
-A deployable Smart-MQTT++ setup should provide:
+## Safe shutdown and recovery
 
-One-command local startup.
-Persistent InfluxDB volume.
-Configurable MQTT broker.
-Configurable backend environment.
-Frontend connected through environment-based API URLs.
-Health check endpoint.
-Demo publisher script.
-Benchmark script.
-Future Production Considerations
+```bash
+docker compose stop
+```
 
-Before external production use, the system should add:
+The backend stops primary ingestion, drains bounded processing, performs the
+final semantic persistence flush, stops dependency monitoring, and disconnects
+clients. Compose volumes retain PostgreSQL, Qdrant, and InfluxDB data.
 
-API authentication.
-MQTT authentication.
-Restricted CORS.
-HTTPS reverse proxy.
-Structured logging.
-Metadata database.
-Backup and restore process.
-Monitoring and metrics.
+`docker compose down -v` permanently deletes those volumes. It is not part of
+normal shutdown, acceptance, or recovery.
+
+The dependency monitor keeps liveness available during broker or database
+outages. Readiness becomes unavailable until recovery. MQTT recovery reconnects
+the existing client network loop and restores stored subscriptions. Failed
+semantic persistence remains dirty; after PostgreSQL recovery an operator may
+request the existing coalesced save path through:
+
+```text
+POST /api/semantic-review/persistence-retry
+```
+
+## Real-stack acceptance
+
+Run the repository-maintained acceptance workflow after deployment or lifecycle
+changes:
+
+```bash
+python -m scripts.run_real_stack_acceptance --run-id local-001
+```
+
+The workflow uses real MQTT publication and all configured data services. It
+also verifies restart recovery, broker recovery, PostgreSQL persistence retry,
+bounded queue behavior, and final flush. It does not delete volumes. Full
+details and failure guidance are in
+[`docs/REAL_STACK_ACCEPTANCE.md`](REAL_STACK_ACCEPTANCE.md).
+
+## External deployment hardening
+
+Before exposing the stack beyond a trusted network:
+
+- require API authentication and authorization;
+- require authenticated, encrypted MQTT connections;
+- terminate HTTPS at a managed ingress or reverse proxy;
+- restrict CORS and published database ports;
+- store all credentials in a secret manager and rotate local defaults;
+- configure backups and tested restore procedures for every persistent store;
+- centralize structured logs, metrics, alerts, and capacity monitoring;
+- pin and scan container images and dependencies;
+- run migration jobs separately from horizontally scaled backend replicas.

@@ -17,6 +17,7 @@ class MQTTClient:
         self.port = port
         self.client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2)
         self._connected = False
+        self._network_loop_started = False
         self.handlers = []
         self.loop: asyncio.AbstractEventLoop | None = None  # store FastAPI loop
         # Bounded ingestion queue feeding the existing handler pipeline.
@@ -56,11 +57,15 @@ class MQTTClient:
     def connect(self):
         try:
             self.client.on_connect = self._on_connect
+            self.client.on_disconnect = self._on_disconnect
             self.client.on_message = self._on_message
-            self.client.connect(self.broker, self.port, 60)
-            self.client.loop_start()
-            self._connected = True
-        except Exception as e:
+            if self._network_loop_started:
+                self.client.reconnect()
+            else:
+                self.client.connect(self.broker, self.port, 60)
+                self.client.loop_start()
+                self._network_loop_started = True
+        except Exception as e:  # noqa: BLE001 - dependency recovery boundary
             logger.warning("[MQTTClient] Failed to connect: %s", e)
             self._connected = False
 
@@ -68,6 +73,17 @@ class MQTTClient:
         self._connected = reason_code == 0
         logger.info(
             "[MQTTClient] Connected to %s:%s rc=%s", self.broker, self.port, reason_code
+        )
+
+    def _on_disconnect(
+        self, client, userdata, disconnect_flags, reason_code, properties=None
+    ):
+        self._connected = False
+        logger.warning(
+            "[MQTTClient] Disconnected from %s:%s rc=%s",
+            self.broker,
+            self.port,
+            reason_code,
         )
 
     def _on_message(self, client, userdata, msg):
@@ -81,7 +97,7 @@ class MQTTClient:
                 tags=payload["tags"],
                 timestamp=payload["timestamp"],
             )
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001 - network payload boundary
             logger.warning(
                 "[MQTTClient] Failed to parse payload on %s: %s", msg.topic, e
             )
@@ -111,16 +127,15 @@ class MQTTClient:
         logger.info("[MQTTClient] Unsubscribed from %s", topic)
 
     def disconnect(self):
-        self.client.loop_stop()
-        self.client.disconnect()
+        if self._network_loop_started:
+            self.client.disconnect()
+            self.client.loop_stop()
+            self._network_loop_started = False
         self._connected = False
         logger.info("[MQTTClient] Disconnected")
 
     def check_health(self) -> bool:
-        try:
-            return self.client.is_connected()
-        except Exception:
-            return False
+        return self._connected
 
 
 # Singleton instance

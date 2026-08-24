@@ -3,6 +3,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 from fastapi.testclient import TestClient
 from main import create_app
@@ -286,6 +287,56 @@ def test_processing_status_endpoint_uses_application_state_without_sensitive_dat
     }
     assert "embedding" not in response.text.lower()
     assert "payload" not in response.text.lower()
+
+
+def test_topic_state_endpoint_reports_decision_metadata_without_vectors():
+    application = _application()
+    application.processing_runtime.process(
+        application.processing_service.profile_builder.profile(
+            "sensor/acceptance", {"site": "lab"}, {"reading": 1.0}
+        )
+    )
+    app = create_app(semantic_application=application, manage_services=False)
+
+    with TestClient(app) as client:
+        response = client.get("/api/semantic-review/topic-states")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "topics": [
+            {
+                "topic": "sensor/acceptance",
+                "state": "UNKNOWN",
+                "class_id": None,
+                "reasons": ["NO_KNOWN_CLASSES"],
+            }
+        ]
+    }
+    assert "embedding" not in response.text.lower()
+    assert "representation" not in response.text.lower()
+
+
+def test_mqtt_reconnect_reuses_network_loop_and_disconnect_callback_tracks_health():
+    client = MQTTClient("broker", 1883)
+    client.client.connect = Mock()
+    client.client.reconnect = Mock()
+    client.client.loop_start = Mock()
+    client.client.loop_stop = Mock()
+    client.client.disconnect = Mock()
+
+    client.connect()
+    client.connect()
+    client._on_connect(None, None, None, 0)
+    assert client.check_health()
+    client._on_disconnect(None, None, None, 1)
+    assert not client.check_health()
+    client.disconnect()
+
+    client.client.connect.assert_called_once_with("broker", 1883, 60)
+    client.client.reconnect.assert_called_once_with()
+    client.client.loop_start.assert_called_once_with()
+    client.client.disconnect.assert_called_once_with()
+    client.client.loop_stop.assert_called_once_with()
 
 
 def test_importing_main_does_not_import_or_construct_embedding_manager():

@@ -98,6 +98,15 @@ docker compose ps
 docker compose logs -f backend
 ```
 
+Run the non-destructive real-stack acceptance workflow after startup changes:
+
+```bash
+python -m scripts.run_real_stack_acceptance --run-id local-001
+```
+
+See the [Real-stack acceptance runbook](docs/REAL_STACK_ACCEPTANCE.md) for
+prerequisites, diagnostics, credential handling, and outage/recovery checks.
+
 The backend health endpoint should report all dependencies as `true`:
 
 ```bash
@@ -192,7 +201,8 @@ its existing vector.
 
 ### PostgreSQL
 
-The backend creates its schema idempotently during startup:
+The one-off `migrate` service applies the Alembic schema before the backend
+becomes ready. The schema includes:
 
 - `streams`
 - `ignored_topics`

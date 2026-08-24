@@ -3,9 +3,9 @@ services:
     image: postgres:16-alpine
     container_name: influxai_postgres
     environment:
-      POSTGRES_DB: influxai
-      POSTGRES_USER: influxai
-      POSTGRES_PASSWORD: influxai-password
+      POSTGRES_DB: ${POSTGRES_DB:-influxai}
+      POSTGRES_USER: ${POSTGRES_USER:-influxai}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-influxai-password}
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -21,6 +21,11 @@ services:
       - "6333:6333"
     volumes:
       - qdrant-data:/qdrant/storage
+    healthcheck:
+      test: ["CMD", "bash", "-c", ": >/dev/tcp/127.0.0.1/6333"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   influxdb:
     image: influxdb:2.7
@@ -29,13 +34,18 @@ services:
       - "8086:8086"
     environment:
       DOCKER_INFLUXDB_INIT_MODE: setup
-      DOCKER_INFLUXDB_INIT_USERNAME: admin
-      DOCKER_INFLUXDB_INIT_PASSWORD: adminpassword
-      DOCKER_INFLUXDB_INIT_ORG: influxai
-      DOCKER_INFLUXDB_INIT_BUCKET: smartHub
-      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: supersecret-token
+      DOCKER_INFLUXDB_INIT_USERNAME: ${INFLUX_INIT_USERNAME:-admin}
+      DOCKER_INFLUXDB_INIT_PASSWORD: ${INFLUX_INIT_PASSWORD:-adminpassword}
+      DOCKER_INFLUXDB_INIT_ORG: ${INFLUX_ORG:-influxai}
+      DOCKER_INFLUXDB_INIT_BUCKET: ${INFLUX_BUCKET:-smartHub}
+      DOCKER_INFLUXDB_INIT_ADMIN_TOKEN: ${INFLUX_TOKEN:-supersecret-token}
     volumes:
       - influxdb-data:/var/lib/influxdb2
+    healthcheck:
+      test: ["CMD", "influx", "ping", "--host", "http://localhost:8086"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
   mqtt:
     image: eclipse-mosquitto:2
@@ -45,6 +55,12 @@ services:
       - "9001:9001"
     volumes:
       - ./mosquitto.conf:/mosquitto/config/mosquitto.conf:ro
+    healthcheck:
+      test:
+        ["CMD", "mosquitto_sub", "-h", "localhost", "-t", "$$SYS/broker/version", "-C", "1", "-W", "3"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
 
   # One-off schema migration job. Runs `alembic upgrade head` and exits; the
   # backend waits for it to complete successfully. In production this maps to a
@@ -60,7 +76,7 @@ services:
       postgres:
         condition: service_healthy
     environment:
-      POSTGRES_DSN: postgresql://influxai:influxai-password@postgres:5432/influxai
+      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://influxai:influxai-password@postgres:5432/influxai}
 
   backend:
     build:
@@ -73,24 +89,27 @@ services:
       migrate:
         condition: service_completed_successfully
       influxdb:
-        condition: service_started
+        condition: service_healthy
       mqtt:
-        condition: service_started
+        condition: service_healthy
       qdrant:
-        condition: service_started
+        condition: service_healthy
     environment:
       BACKEND_HOST: 0.0.0.0
       BACKEND_PORT: 8000
       MQTT_BROKER: mqtt
       MQTT_PORT: 1883
       INFLUX_URL: http://influxdb:8086
-      INFLUX_BUCKET: smartHub
-      INFLUX_ORG: influxai
-      INFLUX_TOKEN: supersecret-token
-      POSTGRES_DSN: postgresql://influxai:influxai-password@postgres:5432/influxai
+      INFLUX_BUCKET: ${INFLUX_BUCKET:-smartHub}
+      INFLUX_ORG: ${INFLUX_ORG:-influxai}
+      INFLUX_TOKEN: ${INFLUX_TOKEN:-supersecret-token}
+      POSTGRES_DSN: ${POSTGRES_DSN:-postgresql://influxai:influxai-password@postgres:5432/influxai}
       QDRANT_URL: http://qdrant:6333
-      EMBEDDING_MODEL: BAAI/bge-small-en-v1.5
-      EMBEDDING_DEVICE: cpu
+      QDRANT_API_KEY: ${QDRANT_API_KEY:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-BAAI/bge-small-en-v1.5}
+      EMBEDDING_DEVICE: ${EMBEDDING_DEVICE:-cpu}
+    volumes:
+      - embedding-model-cache:/root/.cache/huggingface
     ports:
       - "8000:8000"
     healthcheck:
@@ -123,3 +142,4 @@ volumes:
   influxdb-data:
   postgres-data:
   qdrant-data:
+  embedding-model-cache:

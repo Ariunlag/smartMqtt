@@ -10,10 +10,13 @@ from models.semantic_review_models import (
     SemanticClassList,
     SemanticDiscoveryStatusModel,
     SemanticMembershipReviewRequest,
+    SemanticPersistenceRetryResult,
     SemanticPersistenceStatusModel,
     SemanticProcessingStatusModel,
     SemanticReviewResult,
     SemanticReviewState,
+    SemanticTopicStateList,
+    SemanticTopicStateModel,
 )
 from services.semantic import (
     CandidateConfirmationSource,
@@ -139,6 +142,41 @@ def persistence_status(
 ) -> SemanticPersistenceStatusModel:
     return SemanticPersistenceStatusModel.model_validate(
         application.persistence_service.status()
+    )
+
+
+@router.post("/persistence-retry", response_model=SemanticPersistenceRetryResult)
+def retry_persistence(
+    application: Annotated[SemanticApplication, Depends(get_semantic_application)],
+) -> SemanticPersistenceRetryResult:
+    """Request a coalesced retry after an operational repository outage."""
+    accepted = application.persistence_service.request_save()
+    return SemanticPersistenceRetryResult(
+        accepted=accepted,
+        current_generation=application.state_coordinator.generation,
+    )
+
+
+@router.get("/topic-states", response_model=SemanticTopicStateList)
+def topic_states(
+    application: Annotated[SemanticApplication, Depends(get_semantic_application)],
+) -> SemanticTopicStateList:
+    """Expose deterministic decision metadata without vectors or representations."""
+    states = application.processing_runtime.state_store.all()
+    return SemanticTopicStateList(
+        topics=tuple(
+            SemanticTopicStateModel(
+                topic=state.temporal_profile.topic,
+                state=state.decision.state.value,
+                class_id=(
+                    state.decision.candidate.class_id
+                    if state.decision.candidate is not None
+                    else None
+                ),
+                reasons=tuple(reason.value for reason in state.decision.reasons),
+            )
+            for state in states
+        )
     )
 
 
