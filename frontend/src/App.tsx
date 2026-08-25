@@ -9,8 +9,7 @@ import DuplicateManager from "./components/duplicates/DuplicateManager";
 import ClassBuilder from "./components/classes/ClassBuilder";
 import SavedClasses from "./components/savedClasses/SavedClasses";
 import GroupManager from "./components/groups/GroupManager";
-import SemanticOperationsPanel from "./components/semantic/SemanticOperationsPanel";
-import SemanticReviewManager from "./components/semantic/SemanticReviewManager";
+import RecommendationsManager from "./components/recommendations/RecommendationsManager";
 
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
@@ -20,7 +19,7 @@ const STATUS_LABEL: Record<ConnectionStatus, string> = {
   offline: "Offline",
 };
 
-type TabId = "mqtt" | "duplicates" | "builder" | "classes" | "groups" | "semantic";
+type TabId = "mqtt" | "duplicates" | "builder" | "classes" | "groups" | "recommendations";
 
 const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: "mqtt", label: "MQTT", icon: "◉" },
@@ -28,7 +27,7 @@ const TABS: Array<{ id: TabId; label: string; icon: string }> = [
   { id: "builder", label: "Class Builder", icon: "◈" },
   { id: "classes", label: "Saved Classes", icon: "▤" },
   { id: "groups", label: "Tag Groups", icon: "⌗" },
-  { id: "semantic", label: "Semantic", icon: "◍" },
+  { id: "recommendations", label: "Recommendations", icon: "◍" },
 ];
 
 export default function App() {
@@ -96,11 +95,8 @@ export default function App() {
         {panel("classes", <SavedClasses />)}
         {panel("groups", <GroupManager />)}
         {panel(
-          "semantic",
-          <>
-            <SemanticOperationsPanel />
-            <SemanticReviewManager />
-          </>,
+          "recommendations",
+          <RecommendationsManager />,
           true,
         )}
       </main>

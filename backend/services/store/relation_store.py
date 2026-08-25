@@ -1,3 +1,5 @@
+import uuid
+
 from services.database.postgres import postgres_client
 from services.store.canonical_identity_store import canonical_identity_store
 
@@ -13,7 +15,7 @@ class ClassStore:
     def get_all(self) -> list[dict]:
         rows = postgres_client.fetch_all(
             """
-            SELECT c.name, COALESCE(
+            SELECT c.class_id, c.name, c.profile_version, COALESCE(
                 array_agg(membership.topic ORDER BY membership.position)
                     FILTER (WHERE membership.topic IS NOT NULL),
                 ARRAY[]::text[]
@@ -32,12 +34,36 @@ class ClassStore:
             ORDER BY c.name
             """
         )
-        return [{"name": row["name"], "topics": row["topics"]} for row in rows]
+        return [
+            {
+                "class_id": row["class_id"],
+                "name": row["name"],
+                "topics": row["topics"],
+                "profile_version": row["profile_version"],
+            }
+            for row in rows
+        ]
+
+    def get(self, name: str) -> dict | None:
+        return next((item for item in self.get_all() if item["name"] == name), None)
+
+    def get_by_id(self, class_id: str) -> dict | None:
+        return next(
+            (item for item in self.get_all() if item["class_id"] == class_id), None
+        )
+
+    def classes_for_topic(self, topic: str) -> list[dict]:
+        canonical = self.identity_store.resolve_canonical(topic)
+        return [item for item in self.get_all() if canonical in item["topics"]]
 
     def add(self, item: dict) -> dict:
         topics = self._canonicalize(item["topics"])
+        class_id = item.get("class_id") or str(uuid.uuid4())
         with postgres_client.transaction() as conn:
-            conn.execute("INSERT INTO classes(name) VALUES (%s)", (item["name"],))
+            conn.execute(
+                "INSERT INTO classes(name, class_id) VALUES (%s, %s)",
+                (item["name"], class_id),
+            )
             for position, topic in enumerate(topics):
                 conn.execute(
                     """
@@ -46,7 +72,12 @@ class ClassStore:
                     """,
                     (item["name"], topic, position),
                 )
-        return {"name": item["name"], "topics": topics}
+        return {
+            "class_id": class_id,
+            "name": item["name"],
+            "topics": topics,
+            "profile_version": 1,
+        }
 
     def update(self, name: str, topics: list[str]) -> dict | None:
         topics = self._canonicalize(topics)
@@ -66,7 +97,32 @@ class ClassStore:
                     """,
                     (name, topic, position),
                 )
-        return {"name": name, "topics": topics}
+            row = conn.execute(
+                """
+                UPDATE classes SET profile_version = profile_version + 1
+                WHERE name = %s
+                RETURNING class_id, profile_version
+                """,
+                (name,),
+            ).fetchone()
+        return {
+            "class_id": row["class_id"],
+            "name": name,
+            "topics": topics,
+            "profile_version": row["profile_version"],
+        }
+
+    def bump_profile_version(self, name: str) -> int:
+        row = postgres_client.fetch_one(
+            """
+            UPDATE classes SET profile_version = profile_version + 1
+            WHERE name = %s RETURNING profile_version
+            """,
+            (name,),
+        )
+        if row is None:
+            raise ValueError(f"Class '{name}' not found")
+        return int(row["profile_version"])
 
     def remove(self, name: str) -> bool:
         return (
@@ -163,6 +219,21 @@ class DupeStore:
             "score": row["score"],
             "status": row["status"],
         }
+
+    def has_pending(self, topic: str) -> bool:
+        return self.database_has_pending(topic)
+
+    @staticmethod
+    def database_has_pending(topic: str) -> bool:
+        row = postgres_client.fetch_one(
+            """
+            SELECT 1 FROM duplicates
+            WHERE status = 'PENDING' AND (topic_a = %s OR topic_b = %s)
+            LIMIT 1
+            """,
+            (topic, topic),
+        )
+        return row is not None
 
     @staticmethod
     def _record(row) -> dict:

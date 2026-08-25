@@ -1,90 +1,39 @@
 # Benchmark Plan
 
-This document defines the benchmark plan for Smart-MQTT++.
+SmartMQTT benchmarks keep operational throughput, duplicate detection, and
+class recommendation evaluation separate so one metric cannot hide a failure
+in another subsystem.
 
-## Benchmark Goals
+## Operational metrics
 
-The benchmark should measure whether Smart-MQTT++ can ingest, store, analyze, and visualize schema-flexible IoT telemetry streams efficiently.
+- MQTT messages submitted, processed, failed, coalesced, and dropped.
+- Per-topic ordering and same-topic concurrency safety.
+- InfluxDB write latency and retained point count.
+- WebSocket delivery and dashboard load time.
+- Restart recovery from durable PostgreSQL and Qdrant state.
 
-## Metrics
+## Duplicate metrics
 
-### Ingestion Metrics
+- Candidate detection latency.
+- Precision and recall where labeled pairs exist.
+- Pending, keep-both, and confirmed action counts.
+- Canonical remapping and Saved Class membership reconciliation.
 
-- Messages per second.
-- Number of active topics.
-- Average payload size.
-- InfluxDB write latency.
-- Dropped or failed messages.
+Duplicate metrics use the established flattened topic vector and signal
+correlation path. They are not class-recommendation scores.
 
-### Semantic Processing Metrics
+## Pair-level class recommendation metrics
 
-- Embedding generation latency.
-- Duplicate detection latency.
-- Number of duplicate candidates.
-- Precision and recall for duplicate detection where labels are available.
-- Class recommendation quality.
+- Per-view top-1 accuracy and macro-F1.
+- Class-ranking accuracy.
+- Pair coverage and unmatched candidate/prototype identities.
+- Ranking change from adding the existing `stream_context` channel.
+- Embedding calls and generated pair-vector counts.
+- Profile rebuild and cache-invalidation counts.
 
-### Dashboard Metrics
+The controlled RQ1 runner uses leakage-safe class/topic grouping and reports
+the five independent pair views plus optional stream context. It does not
+automatically select a production threshold or create a class.
 
-- WebSocket event latency.
-- Number of connected clients.
-- Chart update responsiveness.
-
-## Test Scenarios
-
-### Scenario 1: Small Local Demo
-
-- 10 topics.
-- 1 message per second per topic.
-- Duration: 5 minutes.
-
-### Scenario 2: Medium Load
-
-- 100 topics.
-- 5 messages per second per topic.
-- Duration: 10 minutes.
-
-### Scenario 3: High Topic Count
-
-- 1,000 topics.
-- 1 message per second per topic.
-- Duration: 10 minutes.
-
-### Scenario 4: Duplicate Detection Evaluation
-
-- Generate topic pairs with similar names and similar numeric signals.
-- Generate topic pairs with similar names but different numeric signals.
-- Generate topic pairs with different names but correlated numeric signals.
-- Evaluate hybrid scoring behavior.
-
-### Scenario 5: Class Recommendation Evaluation
-
-- Generate tags representing locations, device types, and domains.
-- Measure whether semantically related tags are grouped correctly.
-
-## Benchmark Output
-
-Each benchmark run should generate:
-
-```text
-benchmark_results/
-  run_metadata.json
-  ingestion_metrics.csv
-  semantic_metrics.csv
-  websocket_metrics.csv
-  summary.md
-Reporting Rules
-
-Do not claim a throughput number in README or papers unless it is produced by a reproducible benchmark run.
-
-Every benchmark result should include:
-
-Hardware details.
-OS.
-Python version.
-Node version.
-MQTT broker.
-InfluxDB version.
-Number of topics.
-Message rate.
-Duration.
+See [research/RQ1_PAIR_RECOMMENDATION.md](research/RQ1_PAIR_RECOMMENDATION.md)
+for the reproducible protocol.

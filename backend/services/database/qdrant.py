@@ -1,11 +1,9 @@
 import uuid
 from typing import Any
 
+from config import config
 from qdrant_client import QdrantClient as QdrantSDKClient
 from qdrant_client.models import Distance, PointStruct, VectorParams
-
-from config import config
-
 
 TOPIC_COLLECTION = "topic_embeddings"
 TAG_COLLECTION = "tag_key_value_embeddings"
@@ -22,7 +20,7 @@ class QdrantClient:
         try:
             self.client.get_collections()
             print(f"[QdrantClient] Connected to {self.url}")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - SDK transport errors vary by backend
             print(f"[QdrantClient] Connection failed: {exc}")
 
     def disconnect(self):
@@ -32,7 +30,7 @@ class QdrantClient:
         try:
             self.client.get_collections()
             return True
-        except Exception:
+        except Exception:  # noqa: BLE001 - readiness must collapse SDK transport errors
             return False
 
     def ensure_collection(self, name: str, vector_size: int):
@@ -97,6 +95,32 @@ class QdrantClient:
             with_vectors=True,
         )
         return points[0] if points else None
+
+    def delete(self, collection: str, identity: str) -> None:
+        """Delete one deterministic point when its collection exists."""
+        if not self.client.collection_exists(collection):
+            return
+        self.client.delete(
+            collection_name=collection,
+            points_selector=[self.point_id(collection, identity)],
+            wait=True,
+        )
+
+    def delete_where(self, collection: str, payload: dict[str, Any]) -> None:
+        """Delete the bounded set of points matching exact payload fields."""
+        if not self.client.collection_exists(collection):
+            return
+        point_ids = [
+            point.id
+            for point in self.all_points(collection)
+            if all(point.payload.get(key) == value for key, value in payload.items())
+        ]
+        if point_ids:
+            self.client.delete(
+                collection_name=collection,
+                points_selector=point_ids,
+                wait=True,
+            )
 
     def all_points(self, collection: str):
         if not self.client.collection_exists(collection):

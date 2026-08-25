@@ -1,8 +1,8 @@
 # InfluxAI Realtime IoT Hub
 
 InfluxAI is a real-time IoT platform for MQTT telemetry ingestion, time-series
-visualization, semantic topic analysis, duplicate detection, tag grouping, and
-user-defined topic classes.
+visualization, duplicate detection, tag grouping, user-defined Saved Classes,
+and pair-level class recommendation.
 
 The application uses FastAPI and React, with a strict separation between
 telemetry, embeddings, and relational metadata:
@@ -10,7 +10,7 @@ telemetry, embeddings, and relational metadata:
 | Data | Database |
 |---|---|
 | Sensor telemetry and historical time series | InfluxDB |
-| Topic, tag key/value, and group-centroid embeddings | Qdrant |
+| Topic, pair-view, prototype, tag, and group-centroid embeddings | Qdrant |
 | Streams, classes, duplicate decisions, groups, and relationships | PostgreSQL |
 
 The application does not use local JSON files for runtime persistence.
@@ -27,7 +27,7 @@ Mosquitto MQTT
 FastAPI ingestion pipeline
       |
       +--> InfluxDB   telemetry and time-series queries
-      +--> Qdrant     semantic vectors and nearest-neighbor search
+      +--> Qdrant     embedding evidence and compact prototypes
       +--> PostgreSQL metadata and relationships
       |
       +--> WebSocket live events
@@ -47,8 +47,9 @@ FastAPI ingestion pipeline
    PostgreSQL.
 6. Telemetry is written to InfluxDB using the MQTT topic as the measurement
    name.
-7. The message and semantic updates are broadcast to connected dashboards over
-   WebSocket.
+7. The message is broadcast to connected dashboards over WebSocket.
+8. A bounded topic-aware sidecar updates pair embeddings and affected class
+   profiles without blocking InfluxDB persistence.
 
 ## Services
 
@@ -64,18 +65,20 @@ FastAPI ingestion pipeline
 | MQTT WebSocket | Eclipse Mosquitto | `localhost:9001` |
 | PostgreSQL | PostgreSQL 16 | Internal Docker network |
 
-## Semantic research foundation
+## Class recommendation
 
-The repository contains isolated research components for deterministic stream
-profiling, six textual stream representations, multi-representation embedding,
-Qdrant representation persistence, semantic pipeline orchestration, and stream
-semantic class centroid, similarity, and ranking operations.
+Saved Classes are the only class ontology. Every MQTT tag and field becomes an
+independent key:value pair with five dense views: key, value, key+value, schema,
+and numeric key where applicable. Compact per-role class prototypes are matched
+one-to-one with candidate pairs. The sixth channel reuses the existing flat
+topic vector shared with duplicate detection.
 
-These components are foundation modules and are not yet fully integrated into
-the default production MQTT ingestion path. For the intended architecture and
-implementation status, see the [Semantic Roadmap](docs/SEMANTIC_ROADMAP.md).
-For the rationale behind major architecture choices, see
-[Semantic Decisions](docs/SEMANTIC_DECISIONS.md).
+Recommendations expose actual cosine evidence, coverage, unmatched pairs,
+versions, and pending duplicate state. Accept, reject, dismiss, manual add, and
+manual remove have distinct durable semantics. See the
+[architecture](docs/CLASS_RECOMMENDATION_ARCHITECTURE.md),
+[decisions](docs/CLASS_RECOMMENDATION_DECISIONS.md), and
+[RQ1 protocol](docs/research/RQ1_PAIR_RECOMMENDATION.md).
 
 ## Quick start with Docker
 
@@ -189,14 +192,17 @@ mosquitto_pub \
 
 ### Qdrant
 
-Qdrant collections are created lazily when the first semantic record is
+Qdrant collections are created lazily when the first embedding record is
 processed:
 
 - `topic_embeddings`
 - `tag_key_value_embeddings`
 - `tag_group_centroids`
+- `class_pair_embeddings`
+- `class_pair_prototypes`
+- `class_stream_context_prototypes`
 
-Point IDs are deterministic, so reprocessing the same semantic entity updates
+Point IDs are deterministic, so reprocessing the same recommendation entity updates
 its existing vector.
 
 ### PostgreSQL
@@ -213,6 +219,10 @@ becomes ready. The schema includes:
 - `tag_groups`
 - `tag_group_values`
 - `tag_group_topics`
+- `topic_representations`
+- `class_recommendation_constraints`
+- `class_recommendation_dismissals`
+- `class_recommendation_actions`
 
 See [Persistence Architecture](docs/PERSISTENCE.md) for more detail.
 
@@ -233,9 +243,13 @@ All REST routes use the `/api` prefix.
 | POST | `/api/duplicate-confirm` | Resolve a duplicate candidate |
 | GET/POST | `/api/classes/` | List or create classes |
 | PUT/DELETE | `/api/classes/{name}` | Update or delete a class |
-| GET | `/api/groups` | Semantic tag groups |
+| GET | `/api/topics/{topic}/class-recommendations` | Recommended Saved Classes for a topic |
+| GET | `/api/classes/{name}/recommendations` | Recommended topics for a Saved Class |
+| POST | `/api/classes/{name}/recommendation-actions` | Accept, reject, dismiss, add, or remove |
+| GET | `/api/class-recommendations/status` | Bounded sidecar diagnostics |
+| GET | `/api/groups` | Exploratory tag groups |
 | GET | `/api/groups/{id}/topics` | Topics related to a group |
-| WebSocket | `/ws` | Live MQTT and semantic events |
+| WebSocket | `/ws` | Live MQTT and dashboard events |
 
 ## Configuration
 
@@ -263,6 +277,7 @@ ID_THRESH=0.90
 MIN_POINTS=10
 DUPE_CHECK_DELAY=60
 GROUP_TAG_THRESH=0.85
+CLASS_RECOMMENDATION_QUEUE_MAXSIZE=1000
 ```
 
 ## Local development
@@ -327,10 +342,8 @@ uv run --no-project --with ruff ruff check backend --exclude backend/.venv
 
 - The first backend start downloads and loads the embedding model, so startup
   can take longer than subsequent health checks.
-- FastAPI startup/shutdown currently uses deprecated `on_event` handlers and
-  should be migrated to a lifespan handler.
-- Semantic processing and database access run inside the main backend process;
-  heavier workloads should move embedding and duplicate detection to workers.
+- Embedding and database access run inside the main backend process; heavier
+  workloads may require dedicated workers.
 - Authentication and authorization are not implemented.
 - The included credentials and anonymous MQTT configuration are for local
   development only.
@@ -350,6 +363,7 @@ backend/
     embedding/          Sentence-transformer integration
     influx/             InfluxDB client
     mqtt/               MQTT client and handler pipeline
+    class_recommendation/ Pair views, prototypes, matching, actions, RQ1
     store/              Database-backed repositories
 
 frontend/

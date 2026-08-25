@@ -2,8 +2,10 @@ import asyncio
 import logging
 
 from config import config
+from services.duplicate.canonicalization_service import DuplicateCanonicalizationService
 from services.duplicate.duplicate_service import duplicate_service
 from services.socket_manager import ws_manager
+from services.store.canonical_identity_store import canonical_identity_store
 from services.store.embedding_store import topic_embedding_store
 from services.store.relation_store import dupe_store
 from services.topic_manager import topic_manager
@@ -17,8 +19,12 @@ class DupeManager:
     def __init__(
         self,
         store=dupe_store,
+        canonicalization_service=None,
     ):
         self.store = store
+        self.canonicalization_service = canonicalization_service or (
+            DuplicateCanonicalizationService(canonical_identity_store, store)
+        )
         self.id_thresh = config.ID_THRESH
         self.delay = config.DUPE_CHECK_DELAY
 
@@ -73,16 +79,15 @@ class DupeManager:
         topic_a: str,
         topic_b: str,
         target: str | None = None,
-        semantic_application=None,
+        recommendation_application=None,
     ) -> dict | None:
         """Commit canonical identity, reconcile state, then unsubscribe the alias."""
         target = target or topic_b
-        if semantic_application is None:
-            raise RuntimeError(
-                "SemanticApplication is required for duplicate resolution"
-            )
-        result = semantic_application.duplicate_canonicalization_service.confirm(
-            semantic_application, topic_a, topic_b, target
+        result = self.canonicalization_service.confirm(
+            topic_a,
+            topic_b,
+            target,
+            recommendation_application=recommendation_application,
         )
         if result is None:
             return None

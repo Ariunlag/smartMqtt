@@ -1,5 +1,9 @@
 # Comprehensive Codebase Assessment: SmartCity Realtime IoT Hub
 
+> Historical snapshot (2026-04-30). Product and architecture statements below
+> describe the repository at that date. See `docs/ARCHITECTURE_OVERVIEW.md` and
+> `docs/CLASS_RECOMMENDATION_ARCHITECTURE.md` for the current system.
+
 **Assessment Date:** April 30, 2026  
 **Project:** SmartCity Realtime IoT Hub (Python FastAPI + React/TypeScript)  
 **Scope:** Backend (Python), Frontend (TypeScript/React), Tests, Documentation

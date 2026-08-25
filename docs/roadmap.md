@@ -85,11 +85,12 @@ Deliverables:
 
 ## Long-Term Research Direction
 
-The long-term research direction is self-organizing semantic telemetry management for schema-flexible IoT streams.
+The long-term research direction is explainable, pair-level telemetry class
+recommendation for schema-flexible IoT streams.
 
 Potential research contributions:
-- Hybrid semantic and temporal duplicate detection.
-- Human-in-the-loop class recommendation.
+- Evaluation of hybrid embedding and temporal duplicate detection.
+- Human-in-the-loop Saved Class recommendation.
 - Multi-source telemetry normalization.
 - Drift-aware stream grouping.
-- Benchmarking semantic IoT telemetry organization.
+- Benchmarking pair-view contribution, coverage, and recommendation quality.

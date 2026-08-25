@@ -1,6 +1,5 @@
 import asyncio
 import logging
-from typing import TYPE_CHECKING
 
 from config import config
 from services.database.postgres import postgres_client
@@ -9,9 +8,6 @@ from services.dependency_monitor import DependencyMonitor
 from services.influx.client import influx_client
 from services.mqtt.client import mqtt_client
 from services.topic_manager import topic_manager
-
-if TYPE_CHECKING:
-    from services.semantic import SemanticApplication
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +27,7 @@ class ServiceManager:
             max_delay=config.RECOVERY_MAX_DELAY,
             on_recover=self._on_recover,
         )
-        self._semantic_application: SemanticApplication | None = None
+        self._class_recommendation_application = None
 
     async def _on_recover(self, name: str) -> None:
         # When MQTT (re)connects, restore subscriptions. Runs off the event loop
@@ -40,7 +36,7 @@ class ServiceManager:
             logger.info("MQTT connected — restoring subscriptions")
             await asyncio.to_thread(topic_manager.resubscribe_all)
 
-    async def startup(self, semantic_application: "SemanticApplication"):
+    async def startup(self, class_recommendation_application):
         """Non-blocking startup: liveness is up immediately; dependencies are
         connected in the background so the app does not crash-loop when a
         dependency is temporarily unavailable."""
@@ -51,25 +47,12 @@ class ServiceManager:
         # configured sentence-transformer embedding model.
         from services.mqtt.handler_setup import register_mqtt_handlers
 
-        self._semantic_application = semantic_application
-        await semantic_application.persistence_service.restore()
-        await semantic_application.persistence_service.start()
-        await semantic_application.discovery_service.start()
-        if (
-            len(semantic_application.unknown_pool)
-            >= semantic_application.discovery_engine.config.min_cluster_size
-            and not semantic_application.review_runtime.list_candidates()
-        ):
-            semantic_application.discovery_service.request()
-        await semantic_application.processing_service.start()
-        identity_store = getattr(semantic_application, "canonical_identity_store", None)
-        if identity_store is None:
-            register_mqtt_handlers(semantic_application.processing_service)
-        else:
-            register_mqtt_handlers(
-                semantic_application.processing_service,
-                identity_store=identity_store,
-            )
+        self._class_recommendation_application = class_recommendation_application
+        await class_recommendation_application.processing_service.start()
+        register_mqtt_handlers(
+            class_recommendation_application.processing_service,
+            identity_store=class_recommendation_application.identity_store,
+        )
         for service in self.services:
             if hasattr(service, "set_loop"):
                 service.set_loop(loop)
@@ -83,12 +66,8 @@ class ServiceManager:
 
     async def shutdown(self):
         await mqtt_client.stop_ingestion()
-        if self._semantic_application is not None:
-            await self._semantic_application.processing_service.stop()
-            await self._semantic_application.discovery_service.stop()
-            self._semantic_application.persistence_service.request_save()
-            await self._semantic_application.persistence_service.flush()
-            await self._semantic_application.persistence_service.stop()
+        if self._class_recommendation_application is not None:
+            await self._class_recommendation_application.processing_service.stop()
         await self.monitor.stop()
         for service in self.services:
             if hasattr(service, "disconnect"):
@@ -99,7 +78,7 @@ class ServiceManager:
                         "disconnect failed: %s", service.__class__.__name__
                     )
         logger.info("[Shutdown] All services disconnected")
-        self._semantic_application = None
+        self._class_recommendation_application = None
 
     async def check_all(self) -> dict[str, dict]:
         return await self.monitor.snapshot()

@@ -1,5 +1,6 @@
 import argparse
 import json
+from pathlib import Path
 
 import pytest
 
@@ -28,9 +29,7 @@ def test_acceptance_composition_is_isolated_without_volume_deletion_commands():
     runner = RealStackAcceptance("safe-run")
 
     assert runner.prefix == "acceptance/safe-run"
-    assert runner.environment["SEMANTIC_PERSISTENCE_STATE_KEY"] == (
-        "acceptance-safe-run"
-    )
+    assert runner.environment["CLASS_RECOMMENDATION_QUEUE_MAXSIZE"] == "128"
     assert (
         tuple(
             runner._compose_prefix[index + 1]
@@ -57,18 +56,12 @@ def test_acceptance_payload_is_valid_mqtt_contract_and_contains_no_credentials()
     assert "token" not in payload.lower()
 
 
-def test_candidate_selection_requires_an_exact_isolated_topic_set():
-    candidates = [
-        {
-            "representation_name": "schema",
-            "member_topics": ["prefix/a", "prefix/b", "old/topic"],
-        },
-        {
-            "representation_name": "key_value",
-            "member_topics": ["prefix/b", "prefix/a"],
-        },
-    ]
+def test_acceptance_runner_has_no_destructive_compose_or_volume_commands():
+    source = (
+        Path(__file__).parents[2] / "scripts/run_real_stack_acceptance.py"
+    ).read_text(encoding="utf-8")
 
-    selected = RealStackAcceptance._candidate_for(candidates, ("prefix/a", "prefix/b"))
-
-    assert selected == candidates[1]
+    assert '"down"' not in source
+    assert '"-v"' not in source
+    assert "volume rm" not in source
+    assert "docker volume" not in source

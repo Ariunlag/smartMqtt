@@ -3,8 +3,8 @@
 from dataclasses import FrozenInstanceError
 
 import pytest
-from services.semantic import (
-    StreamProfiler,
+from services.class_recommendation.profiling import StreamProfiler
+from services.class_recommendation.temporal import (
     TemporalChangeType,
     TemporalStreamProfiler,
 )

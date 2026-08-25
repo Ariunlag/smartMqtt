@@ -1,21 +1,16 @@
-"""Atomic duplicate confirmation and downstream canonical reconciliation."""
+"""Atomic duplicate identity confirmation and class-membership reconciliation."""
 
 from __future__ import annotations
 
-from contextlib import nullcontext
 from dataclasses import dataclass
 from threading import RLock
-from typing import TYPE_CHECKING
 
 from services.store.canonical_identity_store import CanonicalIdentityStore
 from services.store.relation_store import DupeStore
 
-if TYPE_CHECKING:
-    from services.semantic.semantic_application import SemanticApplication
-
 
 class DuplicateCanonicalizationConflict(ValueError):
-    """A human semantic decision makes the identity merge unsafe."""
+    """A durable identity or class decision makes the merge unsafe."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -23,16 +18,14 @@ class DuplicateCanonicalizationResult:
     record: dict
     canonical_topic: str
     alias_topic: str
-    invalidated_candidate_count: int
+    invalidated_recommendation_count: int = 0
 
 
 class DuplicateCanonicalizationService:
-    """Resolve identity and reconcile active recommendation state together."""
+    """Resolve canonical identity without depending on recommendation runtime."""
 
     def __init__(
-        self,
-        identity_store: CanonicalIdentityStore,
-        dupe_store: DupeStore,
+        self, identity_store: CanonicalIdentityStore, dupe_store: DupeStore
     ) -> None:
         self.identity_store = identity_store
         self.dupe_store = dupe_store
@@ -40,10 +33,11 @@ class DuplicateCanonicalizationService:
 
     def confirm(
         self,
-        application: SemanticApplication,
         topic_a: str,
         topic_b: str,
         alias_target: str,
+        *,
+        recommendation_application=None,
     ) -> DuplicateCanonicalizationResult | None:
         if alias_target not in {topic_a, topic_b}:
             raise ValueError("Unsubscribe target must be one of the duplicate topics")
@@ -62,95 +56,119 @@ class DuplicateCanonicalizationService:
                 alias_identity.is_alias
                 and alias_identity.canonical_topic == requested_root
             ):
+                if recommendation_application is not None:
+                    recommendation_application.canonicalized(
+                        requested_root, self._aliases_for_root(requested_root)
+                    )
                 return DuplicateCanonicalizationResult(
-                    pair, requested_root, alias_target, 0
+                    pair, requested_root, alias_target
                 )
             raise DuplicateCanonicalizationConflict(
-                "Legacy confirmed duplicate has unresolved canonical identity; "
-                "its unsubscribe target was not recorded"
+                "Confirmed duplicate has unresolved canonical identity"
             )
 
-        with self._lock, application.review_runtime.feedback_lock:
-            semantic_before = application.snapshot()
-            context = (
-                application.state_coordinator.transaction()
-                if application.state_coordinator is not None
-                else nullcontext()
-            )
-            try:
-                with self.identity_store.database.transaction() as conn, context:
-                    merge = self.identity_store.merge(
-                        conn, requested_canonical, alias_target
-                    )
-                    canonical = merge.canonical_topic
-                    aliases = merge.aliases
-                    self._preflight_semantics(application, canonical, aliases)
-                    self._reconcile_relations(conn, canonical, aliases)
-                    invalidated = self._reconcile_semantics(
-                        application, canonical, aliases
-                    )
-                    pair_a, pair_b = sorted((topic_a, topic_b))
-                    row = conn.execute(
-                        """
-                        UPDATE duplicates
-                        SET status = 'CONFIRMED_DUPLICATE', updated_at = now()
-                        WHERE topic_a = %s AND topic_b = %s
-                        RETURNING topic_a, topic_b, score, status
-                        """,
-                        (pair_a, pair_b),
-                    ).fetchone()
-                    if row is None:
-                        raise RuntimeError(
-                            "Duplicate pair disappeared during resolution"
-                        )
-                    record = {
-                        "topics": [row["topic_a"], row["topic_b"]],
-                        "score": row["score"],
-                        "status": row["status"],
-                    }
-            except Exception:
-                application.restore(semantic_before)
-                raise
+        with self._lock, self.identity_store.database.transaction() as conn:
+            self._preflight_class_membership(conn, requested_canonical, alias_target)
+            merge = self.identity_store.merge(conn, requested_canonical, alias_target)
+            affected_class_names = self._classes_for_aliases(conn, merge.aliases)
+            self._reconcile_relations(conn, merge.canonical_topic, merge.aliases)
+            self._bump_class_profile_versions(conn, affected_class_names)
+            pair_a, pair_b = sorted((topic_a, topic_b))
+            row = conn.execute(
+                """
+                UPDATE duplicates
+                SET status = 'CONFIRMED_DUPLICATE', updated_at = now()
+                WHERE topic_a = %s AND topic_b = %s
+                RETURNING topic_a, topic_b, score, status
+                """,
+                (pair_a, pair_b),
+            ).fetchone()
+            if row is None:
+                raise RuntimeError("Duplicate pair disappeared during resolution")
+            record = {
+                "topics": [row["topic_a"], row["topic_b"]],
+                "score": row["score"],
+                "status": row["status"],
+            }
 
-        application.discovery_service.request()
+        if recommendation_application is not None:
+            # Durable audit first: a later Qdrant/profile rebuild failure must not
+            # erase the fact that the human duplicate decision committed.
+            recommendation_application.metadata_store.audit(
+                action_type="DUPLICATE_CONFIRM",
+                details={
+                    "canonical_topic": merge.canonical_topic,
+                    "original_topic": alias_target,
+                    "duplicate_state": "CONFIRMED_DUPLICATE",
+                    "aliases": list(merge.aliases),
+                },
+            )
+            # Derived pair/prototype cleanup is intentionally idempotent. If it
+            # fails after the DB transaction, retrying the confirmed action runs
+            # this reconciliation again without changing canonical identity.
+            recommendation_application.canonicalized(
+                merge.canonical_topic, merge.aliases
+            )
         return DuplicateCanonicalizationResult(
             record=record,
-            canonical_topic=canonical,
+            canonical_topic=merge.canonical_topic,
             alias_topic=alias_target,
-            invalidated_candidate_count=len(invalidated),
         )
 
+    def _aliases_for_root(self, canonical: str) -> tuple[str, ...]:
+        rows = self.identity_store.database.fetch_all(
+            """
+            SELECT topic FROM duplicate_canonical_topics
+            WHERE canonical_topic = %s AND topic <> %s
+            ORDER BY topic
+            """,
+            (canonical, canonical),
+        )
+        return tuple(row["topic"] for row in rows)
+
     @staticmethod
-    def _preflight_semantics(
-        application, canonical: str, aliases: tuple[str, ...]
-    ) -> None:
-        memberships = [
-            membership
-            for topic in (canonical, *aliases)
-            if (membership := application.confirmed_membership_store.get(topic))
-            is not None
-        ]
-        identities = {(m.class_id, m.semantic_class_name) for m in memberships}
-        if len(identities) > 1:
-            detail = ", ".join(
-                f"{m.topic}={m.semantic_class_name}" for m in memberships
-            )
+    def _preflight_class_membership(conn, canonical: str, alias: str) -> None:
+        rows = conn.execute(
+            """
+            SELECT topic, array_agg(class_name ORDER BY class_name) AS classes
+            FROM class_topics WHERE topic = ANY(%s::text[])
+            GROUP BY topic
+            """,
+            ([canonical, alias],),
+        ).fetchall()
+        memberships = {row["topic"]: tuple(row["classes"]) for row in rows}
+        left = memberships.get(canonical, ())
+        right = memberships.get(alias, ())
+        if left and right and left != right:
             raise DuplicateCanonicalizationConflict(
-                f"Conflicting human-confirmed semantic memberships: {detail}"
+                "Topics have conflicting explicit class memberships"
             )
-        if memberships:
-            positive = memberships[0].semantic_class_name
-            conflicting = [
-                constraint.topic
-                for constraint in application.constraint_store.all()
-                if constraint.topic in {canonical, *aliases}
-                and constraint.semantic_class_name == positive
-            ]
-            if conflicting:
-                raise DuplicateCanonicalizationConflict(
-                    "Negative semantic feedback conflicts with authoritative "
-                    f"membership '{positive}' for: {', '.join(sorted(conflicting))}"
-                )
+
+    @staticmethod
+    def _classes_for_aliases(conn, aliases: tuple[str, ...]) -> tuple[str, ...]:
+        if not aliases:
+            return ()
+        rows = conn.execute(
+            """
+            SELECT DISTINCT class_name FROM class_topics
+            WHERE topic = ANY(%s::text[])
+            ORDER BY class_name
+            """,
+            (list(aliases),),
+        ).fetchall()
+        return tuple(row["class_name"] for row in rows)
+
+    @staticmethod
+    def _bump_class_profile_versions(conn, class_names: tuple[str, ...]) -> None:
+        if not class_names:
+            return
+        conn.execute(
+            """
+            UPDATE classes SET profile_version = profile_version + 1
+            WHERE name = ANY(%s::text[])
+            """,
+            (list(class_names),),
+        )
 
     @staticmethod
     def _reconcile_relations(conn, canonical: str, aliases: tuple[str, ...]) -> None:
@@ -175,123 +193,3 @@ class DuplicateCanonicalizationService:
             )
             conn.execute("DELETE FROM class_topics WHERE topic = %s", (alias,))
             conn.execute("DELETE FROM streams WHERE topic = %s", (alias,))
-
-    def _reconcile_semantics(
-        self, application, canonical: str, aliases: tuple[str, ...]
-    ):
-        from services.semantic.confirmed_membership import (
-            ConfirmedSemanticMembership,
-        )
-        from services.semantic.known_class_assembly import KnownClassAssemblyRequest
-        from services.semantic.semantic_feedback_workflow import (
-            NegativeMembershipConstraint,
-        )
-
-        topic_set = {canonical, *aliases}
-        memberships = [
-            membership
-            for topic in sorted(topic_set)
-            if (membership := application.confirmed_membership_store.get(topic))
-            is not None
-        ]
-        positive = memberships[0] if memberships else None
-        constraints = tuple(
-            item for item in application.constraint_store.all() if item.topic in aliases
-        )
-
-        replacements = self._prepare_evidence(application, canonical, aliases)
-        for alias in aliases:
-            application.processing_runtime.state_store.remove(alias)
-            application.unknown_pool.remove(alias)
-            application.confirmed_membership_store.remove(alias)
-            for constraint in tuple(application.constraint_store.all()):
-                if constraint.topic == alias:
-                    application.constraint_store.remove(
-                        alias, constraint.semantic_class_name
-                    )
-        for constraint in constraints:
-            application.constraint_store.upsert(
-                NegativeMembershipConstraint(canonical, constraint.semantic_class_name)
-            )
-        if positive is not None:
-            application.confirmed_membership_store.upsert(
-                ConfirmedSemanticMembership(
-                    canonical, positive.class_id, positive.semantic_class_name
-                )
-            )
-            application.unknown_pool.remove(canonical)
-        for evidence in replacements:
-            application.evidence_store.upsert(evidence)
-        affected_names = tuple(
-            sorted({item.semantic_class_name for item in replacements})
-        )
-        for class_name in affected_names:
-            definition = application.class_catalog.get_by_name(class_name)
-            if definition is None:
-                continue
-            assembly = application.review_runtime.assembler.assemble(
-                KnownClassAssemblyRequest(definition.class_id, class_name),
-                application.evidence_store,
-            )
-            if assembly.is_complete:
-                application.known_class_registry.upsert(assembly.centroids)
-        invalidated = application.review_runtime.invalidate_topics(aliases)
-        application.processing_runtime.reconcile_context((canonical,), coordinated=True)
-        application.processing_runtime.remove_stale_unknown_entries()
-        return invalidated
-
-    @staticmethod
-    def _prepare_evidence(application, canonical: str, aliases: tuple[str, ...]):
-        from services.semantic.stream_class import StreamClassEngine
-        from services.semantic.trusted_class_evidence import TrustedClassEvidence
-
-        replacements = []
-        alias_set = set(aliases)
-        for existing in application.evidence_store.all():
-            members = set(existing.member_topics)
-            if not members.intersection(alias_set):
-                continue
-            final = tuple(sorted((members - alias_set) | {canonical}))
-            if len(final) == len(existing.member_topics):
-                replacements.append(
-                    TrustedClassEvidence(
-                        existing.semantic_class_name,
-                        existing.representation_name,
-                        existing.centroid,
-                        final,
-                    )
-                )
-                continue
-            vectors = []
-            for topic in final:
-                state = application.processing_runtime.state_store.get(topic)
-                if state is None and topic == canonical:
-                    state = next(
-                        (
-                            application.processing_runtime.state_store.get(alias)
-                            for alias in aliases
-                            if application.processing_runtime.state_store.get(alias)
-                            is not None
-                        ),
-                        None,
-                    )
-                if state is not None:
-                    embeddings = state.embeddings
-                else:
-                    unknown = application.unknown_pool.get(topic)
-                    embeddings = unknown.embeddings if unknown is not None else None
-                if embeddings is None:
-                    raise DuplicateCanonicalizationConflict(
-                        f"Missing cached embeddings needed to deduplicate prototype "
-                        f"'{existing.semantic_class_name}'"
-                    )
-                vectors.append(getattr(embeddings, existing.representation_name))
-            replacements.append(
-                TrustedClassEvidence(
-                    existing.semantic_class_name,
-                    existing.representation_name,
-                    StreamClassEngine.compute_centroid(vectors),
-                    final,
-                )
-            )
-        return tuple(replacements)

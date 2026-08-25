@@ -9,7 +9,7 @@ class Config:
     def __init__(self):
         # MQTT
         self.MQTT_BROKER = os.getenv("MQTT_BROKER", "localhost")
-        self.MQTT_PORT = int(os.getenv("MQTT_PORT", 1883))
+        self.MQTT_PORT = int(os.getenv("MQTT_PORT", "1883"))
 
         # InfluxDB
         self.INFLUX_URL = os.getenv("INFLUX_URL", "http://localhost:8086")
@@ -23,13 +23,13 @@ class Config:
             "postgresql://influxai:influxai@localhost:5432/influxai",
         )
 
-        # Qdrant semantic vectors
+        # Qdrant embedding vectors
         self.QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
         self.QDRANT_API_KEY = os.getenv("QDRANT_API_KEY") or None
 
         # Runtime host/port
         self.BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
-        self.BACKEND_PORT = int(os.getenv("BACKEND_PORT", 8000))
+        self.BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8000"))
 
         # Embedding model config ( NEW)
         self.EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
@@ -37,78 +37,37 @@ class Config:
 
         # Thresholds for duplicate detection
         self.ID_THRESH = self._ratio("ID_THRESH", 0.90)
-        self.MIN_POINTS = int(os.getenv("MIN_POINTS", 10))
+        self.MIN_POINTS = int(os.getenv("MIN_POINTS", "10"))
 
         # Duplicate check delay (in seconds)
         self.DUPE_CHECK_DELAY = int(
-            os.getenv("DUPE_CHECK_DELAY", 60)
+            os.getenv("DUPE_CHECK_DELAY", "60")
         )  # default 1 minute
 
         # threshold for group tags similarity (between 0 and 1)
         self.GROUP_TAG_THRESH = self._ratio("GROUP_TAG_THRESH", 0.85)
 
         # Dependency health / recovery
-        self.HEALTH_CHECK_TIMEOUT = float(os.getenv("HEALTH_CHECK_TIMEOUT", 2.0))
-        self.RECOVERY_BASE_DELAY = float(os.getenv("RECOVERY_BASE_DELAY", 2.0))
-        self.RECOVERY_MAX_DELAY = float(os.getenv("RECOVERY_MAX_DELAY", 30.0))
+        self.HEALTH_CHECK_TIMEOUT = float(os.getenv("HEALTH_CHECK_TIMEOUT", "2.0"))
+        self.RECOVERY_BASE_DELAY = float(os.getenv("RECOVERY_BASE_DELAY", "2.0"))
+        self.RECOVERY_MAX_DELAY = float(os.getenv("RECOVERY_MAX_DELAY", "30.0"))
 
         # MQTT ingestion queue / backpressure
-        self.INGEST_QUEUE_MAXSIZE = int(os.getenv("INGEST_QUEUE_MAXSIZE", 1000))
-        self.INGEST_WORKERS = int(os.getenv("INGEST_WORKERS", 4))
+        self.INGEST_QUEUE_MAXSIZE = int(os.getenv("INGEST_QUEUE_MAXSIZE", "1000"))
+        self.INGEST_WORKERS = int(os.getenv("INGEST_WORKERS", "4"))
         # "drop_new" (reject newest) or "drop_oldest" (evict oldest to admit new)
         self.INGEST_QUEUE_FULL_POLICY = os.getenv(
             "INGEST_QUEUE_FULL_POLICY", "drop_new"
         )
-        self.INGEST_MAX_RETRIES = int(os.getenv("INGEST_MAX_RETRIES", 0))
-        self.INGEST_RETRY_DELAY = float(os.getenv("INGEST_RETRY_DELAY", 0.5))
-        self.INGEST_METRICS_INTERVAL = float(os.getenv("INGEST_METRICS_INTERVAL", 30.0))
-
-        # Ordered semantic MQTT sidecar. Enabled by default; its model is still
-        # constructed lazily during FastAPI startup rather than module import.
-        self.SEMANTIC_PROCESSING_ENABLED = self._boolean(
-            "SEMANTIC_PROCESSING_ENABLED", True
-        )
-        self.SEMANTIC_QUEUE_MAXSIZE = int(os.getenv("SEMANTIC_QUEUE_MAXSIZE", "256"))
-        self.SEMANTIC_SHUTDOWN_DRAIN_TIMEOUT = float(
-            os.getenv("SEMANTIC_SHUTDOWN_DRAIN_TIMEOUT", "5.0")
+        self.INGEST_MAX_RETRIES = int(os.getenv("INGEST_MAX_RETRIES", "0"))
+        self.INGEST_RETRY_DELAY = float(os.getenv("INGEST_RETRY_DELAY", "0.5"))
+        self.INGEST_METRICS_INTERVAL = float(
+            os.getenv("INGEST_METRICS_INTERVAL", "30.0")
         )
 
-        # Debounced UNKNOWN discovery operational defaults. These values are
-        # scheduling defaults, not calibrated research thresholds.
-        self.SEMANTIC_DISCOVERY_ENABLED = self._boolean(
-            "SEMANTIC_DISCOVERY_ENABLED", True
-        )
-        self.SEMANTIC_DISCOVERY_DEBOUNCE_SECONDS = float(
-            os.getenv("SEMANTIC_DISCOVERY_DEBOUNCE_SECONDS", "1.0")
-        )
-        self.SEMANTIC_DISCOVERY_SHUTDOWN_TIMEOUT = float(
-            os.getenv("SEMANTIC_DISCOVERY_SHUTDOWN_TIMEOUT", "5.0")
-        )
-        self.SEMANTIC_DISCOVERY_MIN_CLUSTER_SIZE = int(
-            os.getenv("SEMANTIC_DISCOVERY_MIN_CLUSTER_SIZE", "3")
-        )
-
-        # Authoritative semantic application snapshot persistence.
-        self.SEMANTIC_PERSISTENCE_ENABLED = self._boolean(
-            "SEMANTIC_PERSISTENCE_ENABLED", True
-        )
-        self.SEMANTIC_PERSISTENCE_STATE_KEY = os.getenv(
-            "SEMANTIC_PERSISTENCE_STATE_KEY", "default"
-        )
-        self.SEMANTIC_PERSISTENCE_SAVE_DEBOUNCE_SECONDS = float(
-            os.getenv("SEMANTIC_PERSISTENCE_SAVE_DEBOUNCE_SECONDS", "1.0")
-        )
-        self.SEMANTIC_PERSISTENCE_SAVE_TIMEOUT = float(
-            os.getenv("SEMANTIC_PERSISTENCE_SAVE_TIMEOUT", "5.0")
-        )
-        self.SEMANTIC_PERSISTENCE_RESTORE_TIMEOUT = float(
-            os.getenv("SEMANTIC_PERSISTENCE_RESTORE_TIMEOUT", "5.0")
-        )
-        self.SEMANTIC_PERSISTENCE_SHUTDOWN_FLUSH_TIMEOUT = float(
-            os.getenv("SEMANTIC_PERSISTENCE_SHUTDOWN_FLUSH_TIMEOUT", "5.0")
-        )
-        self.SEMANTIC_PERSISTENCE_REQUIRE_COMPATIBLE_RESTORE = self._boolean(
-            "SEMANTIC_PERSISTENCE_REQUIRE_COMPATIBLE_RESTORE", False
+        # Topic-aware class recommendation sidecar. The model remains lazy.
+        self.CLASS_RECOMMENDATION_QUEUE_MAXSIZE = int(
+            os.getenv("CLASS_RECOMMENDATION_QUEUE_MAXSIZE", "1000")
         )
 
     @staticmethod

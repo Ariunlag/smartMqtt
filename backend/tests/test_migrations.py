@@ -28,6 +28,10 @@ APP_TABLES = [
     "tag_group_topics",
     "semantic_application_state",
     "duplicate_canonical_topics",
+    "topic_representations",
+    "class_recommendation_constraints",
+    "class_recommendation_dismissals",
+    "class_recommendation_actions",
 ]
 
 
@@ -80,7 +84,7 @@ def pg_url():
 
 def test_clean_database_upgrades_to_head(pg_url):
     command.upgrade(_make_config(pg_url), "head")
-    assert _alembic_version(pg_url) == "0003_duplicate_canonical_id"
+    assert _alembic_version(pg_url) == "0004_pair_class_recommendation"
     for table in APP_TABLES:
         assert _table_exists(pg_url, table), table
 
@@ -98,7 +102,7 @@ def test_existing_schema_adopts_baseline_without_data_loss(pg_url):
 
     command.upgrade(_make_config(pg_url), "head")
 
-    assert _alembic_version(pg_url) == "0003_duplicate_canonical_id"
+    assert _alembic_version(pg_url) == "0004_pair_class_recommendation"
     with psycopg.connect(pg_url) as conn:
         row = conn.execute("SELECT topic FROM streams").fetchone()
     assert row[0] == "keep/me"  # data preserved
@@ -108,7 +112,7 @@ def test_repeated_upgrade_is_idempotent(pg_url):
     cfg = _make_config(pg_url)
     command.upgrade(cfg, "head")
     command.upgrade(cfg, "head")  # must not error
-    assert _alembic_version(pg_url) == "0003_duplicate_canonical_id"
+    assert _alembic_version(pg_url) == "0004_pair_class_recommendation"
 
 
 def test_downgrade_removes_baseline(pg_url):
