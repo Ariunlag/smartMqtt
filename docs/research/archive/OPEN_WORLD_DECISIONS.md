@@ -1,4 +1,6 @@
-# SmartMQTT Semantic Decisions
+# Archived open-world research decisions
+
+> Historical research only. These decisions are not production requirements.
 
 This record explains the current architecture and research choices behind the
 semantic roadmap. Status values distinguish accepted foundations, current

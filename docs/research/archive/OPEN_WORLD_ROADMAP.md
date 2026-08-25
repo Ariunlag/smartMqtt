@@ -1,4 +1,7 @@
-# SmartMQTT Semantic Roadmap
+# Archived open-world research roadmap
+
+> Historical research only. This document does not describe the production
+> class recommendation architecture introduced in August 2026.
 
 ## Purpose
 

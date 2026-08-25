@@ -41,8 +41,7 @@ Important runtime settings include:
 - InfluxDB initialization password/token, organization, and bucket
 - optional `QDRANT_API_KEY`
 - `EMBEDDING_MODEL` and `EMBEDDING_DEVICE`
-- ingestion and semantic queue bounds
-- discovery and persistence lifecycle timeouts
+- ingestion and class recommendation queue bounds
 
 ## Safe shutdown and recovery
 
@@ -50,22 +49,19 @@ Important runtime settings include:
 docker compose stop
 ```
 
-The backend stops primary ingestion, drains bounded processing, performs the
-final semantic persistence flush, stops dependency monitoring, and disconnects
-clients. Compose volumes retain PostgreSQL, Qdrant, and InfluxDB data.
+The backend stops primary ingestion and bounded recommendation processing,
+stops dependency monitoring, and disconnects clients. Compose volumes retain
+PostgreSQL, Qdrant, and InfluxDB data.
 
 `docker compose down -v` permanently deletes those volumes. It is not part of
 normal shutdown, acceptance, or recovery.
 
 The dependency monitor keeps liveness available during broker or database
 outages. Readiness becomes unavailable until recovery. MQTT recovery reconnects
-the existing client network loop and restores stored subscriptions. Failed
-semantic persistence remains dirty; after PostgreSQL recovery an operator may
-request the existing coalesced save path through:
-
-```text
-POST /api/semantic-review/persistence-retry
-```
+the existing client network loop and restores stored subscriptions. Class
+membership, versions, constraints, dismissals, and audits recover directly from
+PostgreSQL; derived Qdrant profiles rebuild from authoritative membership and
+pair evidence.
 
 ## Real-stack acceptance
 
@@ -77,8 +73,9 @@ python -m scripts.run_real_stack_acceptance --run-id local-001
 ```
 
 The workflow uses real MQTT publication and all configured data services. It
-also verifies restart recovery, broker recovery, PostgreSQL persistence retry,
-bounded queue behavior, and final flush. It does not delete volumes. Full
+also verifies restart recovery, broker recovery, pair recommendation actions,
+canonical duplicate reconciliation, and bounded queue behavior. It does not
+delete volumes. Full
 details and failure guidance are in
 [`docs/REAL_STACK_ACCEPTANCE.md`](REAL_STACK_ACCEPTANCE.md).
 

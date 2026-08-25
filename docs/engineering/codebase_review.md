@@ -1,5 +1,9 @@
 # Codebase Engineering Review: influxai_v2
 
+> Historical snapshot (2026-04-09). This review predates the pair-level class
+> recommendation refactor and must not be used as the current architecture.
+> See `docs/ARCHITECTURE_OVERVIEW.md`.
+
 Date: 2026-04-09  
 Reviewer mode: code-driven architecture review (facts from code + explicit inferences)
 

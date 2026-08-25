@@ -1,4 +1,6 @@
-# RQ1 semantic representation evaluation
+# Archived RQ1 flattened-stream representation evaluation
+
+> Historical experiment only. Current RQ1 evaluates independent pair views.
 
 ## Research question
 

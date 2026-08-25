@@ -1,4 +1,6 @@
-# SmartMQTT Semantic Evaluation
+# Archived open-world evaluation
+
+> Historical calibration record only. It is not the current recommender.
 
 ## Research question
 
