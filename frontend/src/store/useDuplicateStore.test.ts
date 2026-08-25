@@ -1,6 +1,12 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, vi } from "vitest";
 import { useDuplicateStore } from "./useDuplicateStore";
 import { DupeStatus } from "../types/api_models";
+import * as duplicateApi from "../services/duplicateApi";
+
+vi.mock("../services/duplicateApi", () => ({
+  getDuplicates: vi.fn(),
+  confirmDuplicate: vi.fn(),
+}));
 
 const dupe = (topics: string[]) => ({
   topics,
@@ -13,6 +19,51 @@ beforeEach(() => {
 });
 
 describe("useDuplicateStore duplicate handling", () => {
+  it("removes a resolved pair from authoritative pending state", async () => {
+    const first = dupe(["a", "b"]);
+    const second = dupe(["c", "d"]);
+    useDuplicateStore.setState({
+      duplicates: [first, second],
+      selectedPair: first,
+      series: [{ measurement: "a", points: [] }],
+    });
+    vi.mocked(duplicateApi.confirmDuplicate).mockResolvedValue({ data: first } as never);
+    vi.mocked(duplicateApi.getDuplicates).mockResolvedValue({
+      data: { duplicates: [second] },
+    } as never);
+
+    await useDuplicateStore.getState().confirmDuplicate({
+      topics: ["b", "a"],
+      action: "KEEP_BOTH" as never,
+      target: null,
+    });
+
+    expect(useDuplicateStore.getState().duplicates).toEqual([second]);
+    expect(useDuplicateStore.getState().selectedPair).toBeNull();
+    expect(useDuplicateStore.getState().series).toEqual([]);
+  });
+
+  it("keeps a successfully resolved pair removed when pending refresh fails", async () => {
+    const first = dupe(["a", "b"]);
+    useDuplicateStore.setState({
+      duplicates: [first],
+      selectedPair: first,
+      series: [{ measurement: "a", points: [] }],
+    });
+    vi.mocked(duplicateApi.confirmDuplicate).mockResolvedValue({ data: first } as never);
+    vi.mocked(duplicateApi.getDuplicates).mockRejectedValue(new Error("offline"));
+
+    await useDuplicateStore.getState().confirmDuplicate({
+      topics: ["a", "b"],
+      action: "KEEP_BOTH" as never,
+      target: null,
+    });
+
+    expect(useDuplicateStore.getState().duplicates).toEqual([]);
+    expect(useDuplicateStore.getState().selectedPair).toBeNull();
+    expect(useDuplicateStore.getState().series).toEqual([]);
+  });
+
   it("adds a duplicate and is idempotent regardless of topic order", () => {
     const { addDuplicate } = useDuplicateStore.getState();
     addDuplicate(dupe(["a", "b"]));

@@ -1,13 +1,12 @@
 import asyncio
 import logging
-from typing import List, Optional
+
 from config import config
+from services.duplicate.duplicate_service import duplicate_service
+from services.socket_manager import ws_manager
 from services.store.embedding_store import topic_embedding_store
 from services.store.relation_store import dupe_store
-from services.socket_manager import ws_manager
 from services.topic_manager import topic_manager
-from services.duplicate.duplicate_service import duplicate_service
-
 
 logger = logging.getLogger(__name__)
 
@@ -15,18 +14,21 @@ logger = logging.getLogger(__name__)
 class DupeManager:
     """Detects, stores, and resolves potential duplicate topics."""
 
-    def __init__(self, store=dupe_store):
+    def __init__(
+        self,
+        store=dupe_store,
+    ):
         self.store = store
         self.id_thresh = config.ID_THRESH
         self.delay = config.DUPE_CHECK_DELAY
 
-    async def check_new_topic(self, topic: str, embedding: List[float]):
+    async def check_new_topic(self, topic: str, embedding: list[float]):
         """Schedule a delayed check when a new topic is embedded."""
         if hasattr(embedding, "tolist"):
             embedding = embedding.tolist()
         asyncio.create_task(self._delayed_check(topic, embedding))
 
-    async def _delayed_check(self, topic: str, embedding: List[float]):
+    async def _delayed_check(self, topic: str, embedding: list[float]):
         for _ in range(3):  # check up to 3 times (every 2 min)
             await asyncio.sleep(self.delay)
 
@@ -40,69 +42,67 @@ class DupeManager:
                 if other == topic:
                     continue
 
-                score = await duplicate_service.hybrid_score(topic, embedding, other, rec["embedding"])
+                score = await duplicate_service.hybrid_score(
+                    topic, embedding, other, rec["embedding"]
+                )
                 if score >= self.id_thresh:
-                    record = self.add_candidate(topic, other, score)
-                    await ws_manager.broadcast({
-                        "event_type": "duplicate",
-                        "data": record
-                    })
-                    return  
+                    record, created = self.create_candidate(topic, other, score)
+                    if created and record["status"] == "PENDING":
+                        await ws_manager.broadcast(
+                            {"event_type": "duplicate", "data": record}
+                        )
+                        return
+                    if record["status"] == "PENDING":
+                        return
+                    continue
 
         logger.debug("No duplicates found for %s after retries.", topic)
 
-
     def add_candidate(self, topic_a: str, topic_b: str, score: float) -> dict:
         """Add a duplicate candidate if not already stored."""
-        existing = self.find_pair(topic_a, topic_b)
-        if existing:
-            return existing
+        return self.create_candidate(topic_a, topic_b, score)[0]
 
-        record = {
-            "topics": [topic_a, topic_b],
-            "score": score,
-            "status": "PENDING",
-        }
-        self.store.add(record)
-        return record
+    def create_candidate(
+        self, topic_a: str, topic_b: str, score: float
+    ) -> tuple[dict, bool]:
+        """Atomically create one pending event without reopening terminal pairs."""
+        return self.store.create_pending(topic_a, topic_b, score)
 
     def confirm_duplicate(
         self,
         topic_a: str,
         topic_b: str,
         target: str | None = None,
-    ) -> Optional[dict]:
-        """Confirm a duplicate pair and unsubscribe one of the topics."""
-        rec = self.find_pair(topic_a, topic_b)
-        if not rec:
-            return None
-
+        semantic_application=None,
+    ) -> dict | None:
+        """Commit canonical identity, reconcile state, then unsubscribe the alias."""
         target = target or topic_b
-        if target not in {topic_a, topic_b}:
-            raise ValueError("Unsubscribe target must be one of the duplicate topics")
-        topic_manager.unsubscribe(target)
-        return self.store.update_status(
-            topic_a,
-            topic_b,
-            "CONFIRMED_DUPLICATE",
+        if semantic_application is None:
+            raise RuntimeError(
+                "SemanticApplication is required for duplicate resolution"
+            )
+        result = semantic_application.duplicate_canonicalization_service.confirm(
+            semantic_application, topic_a, topic_b, target
         )
+        if result is None:
+            return None
+        topic_manager.unsubscribe(target)
+        return result.record
 
-    def keep_both(self, topic_a: str, topic_b: str) -> Optional[dict]:
+    def keep_both(self, topic_a: str, topic_b: str) -> dict | None:
         """Mark a pair as not duplicates and keep both topics."""
         rec = self.find_pair(topic_a, topic_b)
         if not rec:
             return None
-
+        if rec["status"] != "PENDING":
+            return rec
         return self.store.update_status(topic_a, topic_b, "NOT_DUPLICATE")
 
-    def find_pair(self, topic_a: str, topic_b: str) -> Optional[dict]:
+    def find_pair(self, topic_a: str, topic_b: str) -> dict | None:
         """Find a stored duplicate pair, if it exists."""
-        for rec in self.store.get_all():
-            if {rec["topics"][0], rec["topics"][1]} == {topic_a, topic_b}:
-                return rec
-        return None
+        return self.store.get_pair(topic_a, topic_b)
 
-    def list_pending(self) -> List[dict]:
+    def list_pending(self) -> list[dict]:
         """Return all pending duplicate pairs."""
         return [r for r in self.store.get_all() if r["status"] == "PENDING"]
 

@@ -6,7 +6,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 from threading import RLock
 
+from services.duplicate.canonicalization_service import (
+    DuplicateCanonicalizationService,
+)
 from services.embedding.base_model import BaseEmbeddingModel
+from services.store.canonical_identity_store import CanonicalIdentityStore
 
 from .confirmed_membership import ConfirmedSemanticMembershipStore
 from .known_class_assembly import KnownClassAssembler
@@ -84,6 +88,8 @@ class SemanticApplication:
     state_coordinator: SemanticStateCoordinator
     semantic_context_generation: SemanticContextGeneration
     persistence_service: SemanticPersistenceService
+    canonical_identity_store: CanonicalIdentityStore
+    duplicate_canonicalization_service: DuplicateCanonicalizationService
 
     def snapshot(self) -> SemanticApplicationSnapshot:
         """Capture every authoritative store at one coordinator generation."""
@@ -215,6 +221,8 @@ def build_semantic_application(
     persistence_serializer: SemanticSnapshotSerializer | None = None,
     model_fingerprint: str | None = None,
     embedding_model_identifier: str | None = None,
+    canonical_identity_store: CanonicalIdentityStore | None = None,
+    duplicate_canonicalization_service: DuplicateCanonicalizationService | None = None,
 ) -> SemanticApplication:
     """Build both runtimes around the exact same injected state objects."""
     inherited_coordinator = (
@@ -440,6 +448,18 @@ def build_semantic_application(
         embedding_model, "model_name", type(embedding_model).__name__
     )
     fingerprint = model_fingerprint or create_model_fingerprint(str(identifier))
+    if canonical_identity_store is None:
+        from services.store.canonical_identity_store import (
+            canonical_identity_store as default_canonical_identity_store,
+        )
+
+        canonical_identity_store = default_canonical_identity_store
+    if duplicate_canonicalization_service is None:
+        from services.store.relation_store import dupe_store
+
+        duplicate_canonicalization_service = DuplicateCanonicalizationService(
+            canonical_identity_store, dupe_store
+        )
     holder: dict[str, SemanticApplication] = {}
     persistence_service = SemanticPersistenceService(
         repository=persistence_repository,
@@ -467,6 +487,8 @@ def build_semantic_application(
         state_coordinator=coordinator,
         semantic_context_generation=context_generation,
         persistence_service=persistence_service,
+        canonical_identity_store=canonical_identity_store,
+        duplicate_canonicalization_service=duplicate_canonicalization_service,
     )
     holder["application"] = application
     return application

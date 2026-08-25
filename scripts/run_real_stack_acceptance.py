@@ -49,6 +49,7 @@ class AcceptanceReport:
     classification: dict[str, Any] | None = None
     backpressure: dict[str, int] | None = None
     final_generation: int | None = None
+    duplicate_identity: dict[str, str] | None = None
 
     def passed(self, phase: str) -> None:
         self.phases.append(phase)
@@ -75,6 +76,7 @@ class RealStackAcceptance:
             self._subscribe_and_verify_primary_path()
             group_a, group_b = self._discover_and_review()
             self._verify_strict_classification(group_a)
+            self._verify_duplicate_identity()
             self._verify_restart_recovery()
             self._verify_broker_recovery()
             self._verify_postgres_recovery(group_b)
@@ -296,6 +298,123 @@ class RealStackAcceptance:
         self.report.classification = state
         self.report.passed(f"strict frozen-threshold classification ({state['state']})")
 
+    # ---- duplicate identity --------------------------------------------
+
+    def _verify_duplicate_identity(self) -> None:
+        canonical = f"{self.prefix}/duplicate/canonical"
+        alias = f"{self.prefix}/duplicate/alias"
+        keep_a = f"{self.prefix}/keep/a"
+        keep_b = f"{self.prefix}/keep/b"
+        baseline = self._processing_status()["processed_count"]
+        for topic in (canonical, alias, keep_a, keep_b):
+            self._publish(
+                topic,
+                fields={"reading": 42.0},
+                tags={"identity": "duplicate-phase", "site": self.run_id},
+            )
+        self._wait_processing_total(baseline + 4, timeout=240)
+
+        self._insert_pending_pair(canonical, alias)
+        self._insert_pending_pair(keep_a, keep_b)
+        confirmed = self._json_request(
+            "POST",
+            f"{self.api}/duplicate-confirm",
+            {
+                "topics": [canonical, alias],
+                "action": "UNSUBSCRIBE",
+                "target": alias,
+            },
+        )
+        self._require(
+            confirmed["status"] == "CONFIRMED_DUPLICATE",
+            "duplicate confirmation did not become terminal",
+        )
+        kept = self._json_request(
+            "POST",
+            f"{self.api}/duplicate-confirm",
+            {"topics": [keep_a, keep_b], "action": "KEEP_BOTH", "target": None},
+        )
+        self._require(kept["status"] == "NOT_DUPLICATE", "KEEP_BOTH failed")
+
+        identity = self._json_request(
+            "GET", f"{self.api}/duplicate-identity/{urllib.parse.quote(alias, safe='')}"
+        )
+        self._require(
+            identity
+            == {
+                "topic": alias,
+                "canonical_topic": canonical,
+                "state": "DUPLICATE_ALIAS",
+            },
+            f"unexpected canonical identity: {identity}",
+        )
+        pending = self._json_request("GET", f"{self.api}/duplicates")["duplicates"]
+        pending_keys = {tuple(sorted(item["topics"])) for item in pending}
+        self._require(
+            tuple(sorted((canonical, alias))) not in pending_keys
+            and tuple(sorted((keep_a, keep_b))) not in pending_keys,
+            "resolved duplicate pair remained pending",
+        )
+        states = self._json_request("GET", f"{self.api}/semantic-review/topic-states")[
+            "topics"
+        ]
+        state_topics = {item["topic"] for item in states}
+        self._require(alias not in state_topics, "alias remained semantic evidence")
+        self._require(
+            {keep_a, keep_b}.issubset(state_topics),
+            "KEEP_BOTH topics stopped being semantic eligible",
+        )
+
+        groups = self._json_request("GET", f"{self.api}/groups")["sets"]
+        relevant_topics: set[str] = set()
+        for group in groups:
+            topics = self._json_request(
+                "GET", f"{self.api}/groups/{group['id']}/topics"
+            )["topics"]
+            if canonical in topics or alias in topics:
+                relevant_topics.update(topics)
+        self._require(
+            alias not in relevant_topics, "alias independently counted in group"
+        )
+
+        after_confirmation = self._processing_status()["processed_count"]
+        self._publish(
+            alias,
+            fields={"reading": 43.0},
+            tags={"identity": "duplicate-phase", "site": self.run_id},
+        )
+        time.sleep(3)
+        self._require(
+            self._processing_status()["processed_count"] == after_confirmation,
+            "post-confirmation alias message reactivated semantic processing",
+        )
+        self.report.duplicate_identity = {
+            "canonical_topic": canonical,
+            "alias_topic": alias,
+        }
+        self._wait_persistence_clean(timeout=120)
+        self.report.passed("duplicate canonical identity and KEEP_BOTH isolation")
+
+    def _insert_pending_pair(self, topic_a: str, topic_b: str) -> None:
+        first, second = sorted((topic_a, topic_b))
+        sql = (
+            "INSERT INTO duplicates(topic_a, topic_b, score, status) VALUES "
+            f"('{first}', '{second}', 1.0, 'PENDING') "
+            "ON CONFLICT (topic_a, topic_b) DO UPDATE SET status='PENDING'"
+        )
+        self._compose(
+            "exec",
+            "-T",
+            "postgres",
+            "psql",
+            "-U",
+            self.environment.get("POSTGRES_USER", "influxai"),
+            "-d",
+            self.environment.get("POSTGRES_DB", "influxai"),
+            "-c",
+            sql,
+        )
+
     # ---- recovery --------------------------------------------------------
 
     def _verify_restart_recovery(self) -> None:
@@ -315,6 +434,18 @@ class RealStackAcceptance:
         )
         after = self._semantic_snapshots()
         self._require(after == before, "reviewed semantic state changed across restart")
+        if self.report.duplicate_identity is not None:
+            alias = self.report.duplicate_identity["alias_topic"]
+            canonical = self.report.duplicate_identity["canonical_topic"]
+            identity = self._json_request(
+                "GET",
+                f"{self.api}/duplicate-identity/{urllib.parse.quote(alias, safe='')}",
+            )
+            self._require(
+                identity["canonical_topic"] == canonical
+                and identity["state"] == "DUPLICATE_ALIAS",
+                "canonical identity did not survive restart",
+            )
         self.report.passed("backend restart and exact semantic recovery")
 
     def _verify_broker_recovery(self) -> None:
@@ -352,7 +483,9 @@ class RealStackAcceptance:
                 consecutive_healthy += 1
             else:
                 consecutive_healthy = 0
-            return consecutive_healthy >= 3
+            # Dependency health is published before the asynchronous recovery
+            # callback finishes restoring every persisted subscription.
+            return consecutive_healthy >= 5
 
         self._wait(
             "stable backend broker recovery and subscription restoration",

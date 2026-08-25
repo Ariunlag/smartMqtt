@@ -1,14 +1,27 @@
 from services.mqtt.client import mqtt_client
+
+from .store.canonical_identity_store import canonical_identity_store
 from .store.topic_store import ignored_topic_store, topic_store
+
+
+class DuplicateAliasSubscriptionError(ValueError):
+    """Raised when a confirmed alias is manually reactivated."""
 
 
 class TopicManager:
     """Manages MQTT topic subscriptions, including ignored topics and prefix stripping."""
-    def __init__(self):
-        pass
-    
+
+    def __init__(self, identity_store=canonical_identity_store):
+        self.identity_store = identity_store
+
     def subscribe(self, topic: str):
         """Subscribe to a topic and store it (prefix-safe)."""
+        identity = self.identity_store.get(topic)
+        if identity.is_alias:
+            raise DuplicateAliasSubscriptionError(
+                f"Topic '{topic}' is a duplicate alias of canonical topic "
+                f"'{identity.canonical_topic}'"
+            )
         ignored = ignored_topic_store.get_all()
 
         if topic in ignored:
@@ -23,7 +36,8 @@ class TopicManager:
         """Unsubscribe and remove from store."""
         topics = topic_store.get_all()
 
-        if topic in topics:
+        identity = self.identity_store.get(topic)
+        if topic in topics or identity.is_alias:
             mqtt_client.unsubscribe(topic)
             topic_store.remove(topic)
             print(f"[TopicManager] Unsubscribed from {topic}")
@@ -40,9 +54,16 @@ class TopicManager:
         """Re-subscribe to all non-ignored topics with prefix applied."""
         topics = topic_store.get_all()
         ignored = ignored_topic_store.get_all()
+        identities = self.identity_store.resolve_many(topics)
 
         for topic in topics:
-            if topic not in ignored:
+            canonical = identities.get(topic, topic)
+            if canonical != topic:
+                print(
+                    f"[TopicManager] Skipping duplicate alias {topic} "
+                    f"(canonical {canonical})"
+                )
+            elif topic not in ignored:
                 mqtt_client.subscribe(topic)
                 print(f"[TopicManager] Resubscribed to {topic}")
             else:

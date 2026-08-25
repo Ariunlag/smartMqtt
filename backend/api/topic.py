@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
-from models.api_models import TopicListResponse, TopicSubscribeRequest, TopicResponse
-from services.topic_manager import topic_manager
+from models.api_models import TopicListResponse, TopicResponse, TopicSubscribeRequest
+from services.topic_manager import DuplicateAliasSubscriptionError, topic_manager
 
 router = APIRouter(tags=["Topics"])
 
@@ -14,7 +14,10 @@ async def get_topics():
 async def subscribe_to_topic(req: TopicSubscribeRequest):
     if not req.topic:
         raise HTTPException(status_code=400, detail="Topic required")
-    topic_manager.subscribe(req.topic)
+    try:
+        topic_manager.subscribe(req.topic)
+    except DuplicateAliasSubscriptionError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     return TopicResponse(status="subscribed", topic=req.topic)
 
 

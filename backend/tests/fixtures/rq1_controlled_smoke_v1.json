@@ -1,0 +1,35 @@
+{
+  "schema_version": "smartmqtt-rq1/v1",
+  "dataset_id": "smartmqtt-rq1-controlled-smoke",
+  "version": "1.0.0",
+  "seed": 42,
+  "examples": [
+    {"stream_id":"cal-temp-1","topic":"cal/lab/temp","tags":{"location":"lab"},"fields":{"temperature":22.5},"label":"temperature","split":"CALIBRATION","source_id":"controlled/cal-temp-1","source_kind":"CONTROLLED"},
+    {"stream_id":"cal-temp-2","topic":"cal/plant/heat","tags":{"manufacturer":"acme"},"fields":{"heat_level":24.0},"label":"temperature","split":"CALIBRATION","source_id":"controlled/cal-temp-2","source_kind":"CONTROLLED"},
+    {"stream_id":"cal-voltage-1","topic":"cal/electric/voltage","tags":{"location":"lab"},"fields":{"voltage":22.5},"label":"voltage","split":"CALIBRATION","source_id":"controlled/cal-voltage-1","source_kind":"CONTROLLED"},
+    {"stream_id":"cal-voltage-2","topic":"cal/panel/potential","tags":{"manufacturer":"omega"},"fields":{"line_voltage":24.0},"label":"voltage","split":"CALIBRATION","source_id":"controlled/cal-voltage-2","source_kind":"CONTROLLED"},
+    {"stream_id":"cal-pressure-1","topic":"cal/pipe/pressure","tags":{"location":"lab"},"fields":{"pressure":22.5},"label":"pressure","split":"CALIBRATION","source_id":"controlled/cal-pressure-1","source_kind":"CONTROLLED"},
+    {"stream_id":"cal-pressure-2","topic":"cal/tank/pressure","tags":{"manufacturer":"contoso"},"fields":{"pressure_kpa":24.0},"label":"pressure","split":"CALIBRATION","source_id":"controlled/cal-pressure-2","source_kind":"CONTROLLED"},
+    {"stream_id":"cal-temp-alias","topic":"cal/lab/temp-alias","tags":{"location":"lab"},"fields":{"temperature":22.5},"label":"temperature","split":"CALIBRATION","source_id":"controlled/cal-temp-alias","source_kind":"CONTROLLED","duplicate_disposition":"CONFIRMED_ALIAS","canonical_stream_id":"cal-temp-1"},
+    {"stream_id":"cal-real-temp","topic":"real/cal/weather/t1","tags":{"station":"north"},"fields":{"temp":18.2},"label":"temperature","split":"CALIBRATION","source_id":"real-demo/cal-temp","source_kind":"REAL"},
+    {"stream_id":"cal-real-pressure","topic":"real/cal/weather/p1","tags":{"station":"north"},"fields":{"barometric_pressure":101.2},"label":"pressure","split":"CALIBRATION","source_id":"real-demo/cal-pressure","source_kind":"REAL"},
+
+    {"stream_id":"val-temp-synonym","topic":"validation/device/a","tags":{"building_id":"b1"},"fields":{"temperature_celsius":23.1},"label":"temperature","split":"VALIDATION","source_id":"controlled/val-temp","source_kind":"CONTROLLED"},
+    {"stream_id":"val-voltage-same-value","topic":"validation/device/b","tags":{"sensor_id":"s9"},"fields":{"voltage":23.1},"label":"voltage","split":"VALIDATION","source_id":"controlled/val-voltage","source_kind":"CONTROLLED"},
+    {"stream_id":"val-pressure-same-value","topic":"validation/device/c","tags":{},"fields":{"pressure":23.1},"label":"pressure","split":"VALIDATION","source_id":"controlled/val-pressure","source_kind":"CONTROLLED"},
+    {"stream_id":"val-unknown-id","topic":"validation/device/d","tags":{"building_id":"23"},"fields":{"sensor_id":23.1},"label":"identifier","split":"VALIDATION","source_id":"controlled/val-id","source_kind":"CONTROLLED"},
+    {"stream_id":"val-unknown-status","topic":"validation/device/e","tags":{"location":"Warehouse_01"},"fields":{"status":"active"},"label":"status","split":"VALIDATION","source_id":"controlled/val-status","source_kind":"CONTROLLED","decision_source":"HUMAN_CONFIRMED","authoritative_label":"status"},
+    {"stream_id":"val-keep-a","topic":"validation/keep/a","tags":{"location":"room"},"fields":{"temp":20.0},"label":"temperature","split":"VALIDATION","source_id":"controlled/val-keep-a","source_kind":"CONTROLLED","duplicate_disposition":"KEEP_BOTH"},
+    {"stream_id":"val-keep-b","topic":"validation/keep/b","tags":{"location":"room"},"fields":{"temp":20.0},"label":"temperature","split":"VALIDATION","source_id":"controlled/val-keep-b","source_kind":"CONTROLLED","duplicate_disposition":"KEEP_BOTH"},
+    {"stream_id":"val-real-temp","topic":"real/validation/weather/t2","tags":{"station":"south"},"fields":{"temperature":19.4},"label":"temperature","split":"VALIDATION","source_id":"real-demo/val-temp","source_kind":"REAL"},
+    {"stream_id":"val-real-pressure","topic":"real/validation/weather/p2","tags":{"station":"south"},"fields":{"pressure":99.8},"label":"pressure","split":"VALIDATION","source_id":"real-demo/val-pressure","source_kind":"REAL"},
+
+    {"stream_id":"test-temp-synonym","topic":"test/oem/x","tags":{"manufacturer":"x"},"fields":{"temp":25.2},"label":"temperature","split":"TEST","source_id":"controlled/test-temp","source_kind":"CONTROLLED"},
+    {"stream_id":"test-voltage-same-value","topic":"test/oem/y","tags":{"manufacturer":"y"},"fields":{"voltage":25.2},"label":"voltage","split":"TEST","source_id":"controlled/test-voltage","source_kind":"CONTROLLED"},
+    {"stream_id":"test-pressure-same-value","topic":"test/oem/z","tags":{"manufacturer":"z"},"fields":{"pressure":25.2},"label":"pressure","split":"TEST","source_id":"controlled/test-pressure","source_kind":"CONTROLLED"},
+    {"stream_id":"test-unknown-id","topic":"test/identity/a","tags":{},"fields":{"building_id":25.2},"label":"identifier","split":"TEST","source_id":"controlled/test-id","source_kind":"CONTROLLED"},
+    {"stream_id":"test-unknown-status","topic":"test/state/a","tags":{},"fields":{"status":"inactive"},"label":"status","split":"TEST","source_id":"controlled/test-status","source_kind":"CONTROLLED"},
+    {"stream_id":"test-real-temp","topic":"real/test/weather/t3","tags":{"station":"east"},"fields":{"heat_level":17.7},"label":"temperature","split":"TEST","source_id":"real-demo/test-temp","source_kind":"REAL"},
+    {"stream_id":"test-real-pressure","topic":"real/test/weather/p3","tags":{"station":"east"},"fields":{"barometric_pressure":100.1},"label":"pressure","split":"TEST","source_id":"real-demo/test-pressure","source_kind":"REAL"}
+  ]
+}

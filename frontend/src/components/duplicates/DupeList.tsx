@@ -1,4 +1,5 @@
 import { useDuplicateStore } from "../../store/useDuplicateStore";
+import { pairKey, samePair } from "../../utils/pairKey";
 
 export default function DupeList() {
   const { duplicates, selectPair, selectedPair } = useDuplicateStore();
@@ -9,14 +10,12 @@ export default function DupeList() {
 
   return (
     <div className="panel-list">
-      {duplicates.map((d, i) => {
-        const isSelected =
-          selectedPair &&
-          JSON.stringify(selectedPair.topics.sort()) === JSON.stringify(d.topics.sort());
+      {duplicates.map((d) => {
+        const isSelected = selectedPair && samePair(selectedPair.topics, d.topics);
 
         return (
           <div
-            key={i}
+            key={pairKey(d.topics)}
             className={`list-item dupe-item ${isSelected ? "selected" : ""}`}
             onClick={() => selectPair(d)}
           >
