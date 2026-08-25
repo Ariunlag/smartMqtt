@@ -36,6 +36,16 @@ class TopicEmbeddingStore:
             for point in qdrant_client.all_points(TOPIC_COLLECTION)
         ]
 
+    def get(self, topic: str) -> dict | None:
+        point = qdrant_client.retrieve(TOPIC_COLLECTION, topic)
+        if point is None:
+            return None
+        return {
+            "topic": point.payload["topic"],
+            "embedding": point.vector,
+            "tags": point.payload.get("tags", {}),
+        }
+
     def candidates_for(
         self,
         topic: str,

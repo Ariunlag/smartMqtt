@@ -1,17 +1,16 @@
-from pydantic import BaseModel
-from typing import List, Optional
 from datetime import datetime
 from enum import Enum
-from pydantic import field_validator
+from typing import Literal
 
-
+from pydantic import BaseModel, field_validator
 
 # ---------------------------
 # Topics
 # ---------------------------
 
+
 class TopicListResponse(BaseModel):
-    topics: List[str]
+    topics: list[str]
 
 
 class TopicSubscribeRequest(BaseModel):
@@ -27,24 +26,27 @@ class TopicResponse(BaseModel):
 # Measurements (time-series)
 # ---------------------------
 
+
 class MeasurementPoint(BaseModel):
     timestamp: datetime
-    value: float   # single numeric field for UI plotting
+    value: float  # single numeric field for UI plotting
 
 
 class MeasurementSeriesResponse(BaseModel):
     measurement: str
-    points: List[MeasurementPoint]
+    points: list[MeasurementPoint]
 
 
 # ---------------------------
 # Duplicate Detection
 # ---------------------------
 
+
 class DupeStatus(str, Enum):
     PENDING = "PENDING"
     CONFIRMED_DUPLICATE = "CONFIRMED_DUPLICATE"
     NOT_DUPLICATE = "NOT_DUPLICATE"
+
 
 class DupeAction(str, Enum):
     KEEP_BOTH = "KEEP_BOTH"
@@ -52,17 +54,19 @@ class DupeAction(str, Enum):
 
 
 class DupeRecord(BaseModel):
-    topics: List[str]
+    topics: list[str]
     score: float
     status: DupeStatus
 
+
 class DupeListResponse(BaseModel):
-    duplicates: List[DupeRecord]
+    duplicates: list[DupeRecord]
+
 
 class ConfirmDupeRequest(BaseModel):
-    topics: List[str]
+    topics: list[str]
     action: DupeAction
-    target: Optional[str] = None
+    target: str | None = None
 
     @field_validator("topics")
     def must_have_two(cls, v):
@@ -75,36 +79,55 @@ class ConfirmDupeRequest(BaseModel):
 # Classes (user groups)
 # ---------------------------
 
+
 class ClassRecord(BaseModel):
+    class_id: str
     name: str
-    topics: List[str]
+    topics: list[str]
+    profile_version: int
 
 
 class ClassListResponse(BaseModel):
-    classes: List[ClassRecord]
+    classes: list[ClassRecord]
 
 
 class CreateClassRequest(BaseModel):
     name: str
-    topics: List[str]
+    topics: list[str]
 
 
 class UpdateClassRequest(BaseModel):
-    topics: List[str]
+    topics: list[str]
+
+
+class ClassRecommendationActionRequest(BaseModel):
+    action: Literal[
+        "RECOMMENDATION_ACCEPT",
+        "RECOMMENDATION_REJECT",
+        "RECOMMENDATION_DISMISS",
+        "MANUAL_ADD",
+        "MANUAL_REMOVE",
+    ]
+    topic: str
+    topic_representation_version: int | None = None
+    class_profile_version: int | None = None
+    recommendation_id: str | None = None
 
 
 # ---------------------------
 # Groups (tag-based)
 # ---------------------------
 
+
 class TagSetRecord(BaseModel):
     id: str
-    tags: List[str]
+    tags: list[str]
+
 
 class GroupListResponse(BaseModel):
-    sets: List[TagSetRecord]
+    sets: list[TagSetRecord]
 
 
 class GroupTopicResponse(BaseModel):
     id: str
-    topics: List[str]
+    topics: list[str]

@@ -28,14 +28,24 @@ async def confirm_dupe(req: ConfirmDupeRequest, request: Request):
                 topic_a,
                 topic_b,
                 req.target,
-                request.app.state.semantic_application,
+                request.app.state.class_recommendation,
             )
         except DuplicateCanonicalizationConflict as exc:
             raise HTTPException(status_code=409, detail=str(exc)) from exc
         except ValueError as exc:
             raise HTTPException(status_code=400, detail=str(exc)) from exc
     elif req.action == DupeAction.KEEP_BOTH:
+        previous = dupe_manager.find_pair(topic_a, topic_b)
         rec = dupe_manager.keep_both(topic_a, topic_b)
+        if rec is not None and previous is not None and previous["status"] == "PENDING":
+            request.app.state.class_recommendation.metadata_store.audit(
+                action_type="DUPLICATE_KEEP_BOTH",
+                details={
+                    "canonical_topic": topic_a,
+                    "original_topic": topic_b,
+                    "duplicate_state": "NOT_DUPLICATE",
+                },
+            )
     else:
         raise HTTPException(status_code=400, detail="Invalid action")
 
@@ -47,9 +57,7 @@ async def confirm_dupe(req: ConfirmDupeRequest, request: Request):
 
 @router.get("/duplicate-identity/{topic:path}")
 async def duplicate_identity(topic: str, request: Request):
-    identity = request.app.state.semantic_application.canonical_identity_store.get(
-        topic
-    )
+    identity = request.app.state.class_recommendation.identity_store.get(topic)
     return {
         "topic": identity.topic,
         "canonical_topic": identity.canonical_topic,
@@ -61,6 +69,6 @@ async def duplicate_identity(topic: str, request: Request):
 async def duplicate_identity_diagnostics(request: Request):
     return {
         "legacy_unresolved_confirmations": (
-            request.app.state.semantic_application.canonical_identity_store.legacy_unresolved_confirmations()
+            request.app.state.class_recommendation.identity_store.legacy_unresolved_confirmations()
         )
     }
