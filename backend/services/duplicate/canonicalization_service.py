@@ -56,6 +56,10 @@ class DuplicateCanonicalizationService:
                 alias_identity.is_alias
                 and alias_identity.canonical_topic == requested_root
             ):
+                if recommendation_application is not None:
+                    recommendation_application.canonicalized(
+                        requested_root, self._aliases_for_root(requested_root)
+                    )
                 return DuplicateCanonicalizationResult(
                     pair, requested_root, alias_target
                 )
@@ -66,7 +70,9 @@ class DuplicateCanonicalizationService:
         with self._lock, self.identity_store.database.transaction() as conn:
             self._preflight_class_membership(conn, requested_canonical, alias_target)
             merge = self.identity_store.merge(conn, requested_canonical, alias_target)
+            affected_class_names = self._classes_for_aliases(conn, merge.aliases)
             self._reconcile_relations(conn, merge.canonical_topic, merge.aliases)
+            self._bump_class_profile_versions(conn, affected_class_names)
             pair_a, pair_b = sorted((topic_a, topic_b))
             row = conn.execute(
                 """
@@ -86,9 +92,8 @@ class DuplicateCanonicalizationService:
             }
 
         if recommendation_application is not None:
-            recommendation_application.canonicalized(
-                merge.canonical_topic, merge.aliases
-            )
+            # Durable audit first: a later Qdrant/profile rebuild failure must not
+            # erase the fact that the human duplicate decision committed.
             recommendation_application.metadata_store.audit(
                 action_type="DUPLICATE_CONFIRM",
                 details={
@@ -98,11 +103,28 @@ class DuplicateCanonicalizationService:
                     "aliases": list(merge.aliases),
                 },
             )
+            # Derived pair/prototype cleanup is intentionally idempotent. If it
+            # fails after the DB transaction, retrying the confirmed action runs
+            # this reconciliation again without changing canonical identity.
+            recommendation_application.canonicalized(
+                merge.canonical_topic, merge.aliases
+            )
         return DuplicateCanonicalizationResult(
             record=record,
             canonical_topic=merge.canonical_topic,
             alias_topic=alias_target,
         )
+
+    def _aliases_for_root(self, canonical: str) -> tuple[str, ...]:
+        rows = self.identity_store.database.fetch_all(
+            """
+            SELECT topic FROM duplicate_canonical_topics
+            WHERE canonical_topic = %s AND topic <> %s
+            ORDER BY topic
+            """,
+            (canonical, canonical),
+        )
+        return tuple(row["topic"] for row in rows)
 
     @staticmethod
     def _preflight_class_membership(conn, canonical: str, alias: str) -> None:
@@ -121,6 +143,32 @@ class DuplicateCanonicalizationService:
             raise DuplicateCanonicalizationConflict(
                 "Topics have conflicting explicit class memberships"
             )
+
+    @staticmethod
+    def _classes_for_aliases(conn, aliases: tuple[str, ...]) -> tuple[str, ...]:
+        if not aliases:
+            return ()
+        rows = conn.execute(
+            """
+            SELECT DISTINCT class_name FROM class_topics
+            WHERE topic = ANY(%s::text[])
+            ORDER BY class_name
+            """,
+            (list(aliases),),
+        ).fetchall()
+        return tuple(row["class_name"] for row in rows)
+
+    @staticmethod
+    def _bump_class_profile_versions(conn, class_names: tuple[str, ...]) -> None:
+        if not class_names:
+            return
+        conn.execute(
+            """
+            UPDATE classes SET profile_version = profile_version + 1
+            WHERE name = ANY(%s::text[])
+            """,
+            (list(class_names),),
+        )
 
     @staticmethod
     def _reconcile_relations(conn, canonical: str, aliases: tuple[str, ...]) -> None:

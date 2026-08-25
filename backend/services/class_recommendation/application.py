@@ -14,7 +14,13 @@ from services.store.canonical_identity_store import CanonicalIdentityStore
 from services.store.embedding_store import TopicEmbeddingStore
 from services.store.relation_store import ClassStore, DupeStore
 
-from .domain import ClassPairPrototype, ClassProfile, TopicRecommendations
+from .domain import (
+    ALGORITHM_VERSION,
+    REPRESENTATION_CONTRACT_VERSION,
+    ClassPairPrototype,
+    ClassProfile,
+    TopicRecommendations,
+)
 from .embedding import PairEmbedder
 from .matching import PairClassMatcher, centroid
 from .profiling import StreamProfiler
@@ -90,12 +96,20 @@ class ClassRecommendationApplication:
             previous = await asyncio.to_thread(
                 self.metadata_store.topic_state, canonical
             )
-            pair_material_exists = canonical in self._materialized_topics
+            previous_version = int(previous["representation_version"]) if previous else 0
+            contract_current = self._contract_is_current(previous)
+            pair_material_exists = (
+                previous is not None
+                and contract_current
+                and canonical in self._materialized_topics
+            )
             if previous is not None and not pair_material_exists:
                 stored_pairs = await asyncio.to_thread(
                     self.pair_store.get_topic, canonical
                 )
-                pair_material_exists = bool(stored_pairs)
+                pair_material_exists = contract_current and self._pair_material_complete(
+                    profile, stored_pairs, previous_version
+                )
                 if pair_material_exists:
                     self._materialized_topics.add(canonical)
             temporal = self.temporal_profiler.update(
@@ -122,6 +136,7 @@ class ClassRecommendationApplication:
             )
             if (
                 previous
+                and contract_current
                 and pair_material_exists
                 and (
                     previous["representation_fingerprint"] == fingerprint
@@ -129,7 +144,7 @@ class ClassRecommendationApplication:
                 )
             ):
                 return False
-            version = int(previous["representation_version"]) + 1 if previous else 1
+            version = previous_version + 1 if previous else 1
             representations = self.builder.build(
                 profile,
                 canonical_topic=canonical,
@@ -172,6 +187,46 @@ class ClassRecommendationApplication:
             self._invalidate_topic(canonical)
             return True
 
+    @staticmethod
+    def _contract_is_current(state: dict | None) -> bool:
+        return state is None or (
+            state.get("representation_contract_version")
+            == REPRESENTATION_CONTRACT_VERSION
+        )
+
+    def _pair_material_complete(self, profile, records, expected_version: int) -> bool:
+        expected_representations = self.builder.build(
+            profile,
+            canonical_topic=profile.topic,
+            original_topic=profile.topic,
+            representation_version=expected_version,
+        )
+        expected = {
+            representation.identity: tuple(name for name, _ in representation.texts)
+            for representation in expected_representations
+        }
+        if len(records) != len(expected):
+            return False
+        seen = set()
+        for record in records:
+            representation = record.representation
+            expected_views = expected.get(representation.identity)
+            if expected_views is None or representation.identity in seen:
+                return False
+            if representation.representation_version != expected_version:
+                return False
+            vector_views = tuple(name for name, _ in record.vectors)
+            text_views = tuple(name for name, _ in representation.texts)
+            if (
+                len(vector_views) != len(set(vector_views))
+                or len(text_views) != len(set(text_views))
+                or set(vector_views) != set(expected_views)
+                or set(text_views) != set(expected_views)
+            ):
+                return False
+            seen.add(representation.identity)
+        return seen == set(expected)
+
     def warm_profiles(self) -> None:
         for class_record in self.class_store.get_all():
             self.rebuild_profile(class_record)
@@ -182,8 +237,10 @@ class ClassRecommendationApplication:
         stream_vectors = []
         for topic in class_record["topics"]:
             canonical = self.identity_store.resolve_canonical(topic)
-            for record in self.pair_store.get_topic(canonical):
-                grouped[record.representation.identity].append(record)
+            state = self.metadata_store.topic_state(canonical)
+            if state is not None and self._contract_is_current(state):
+                for record in self.pair_store.get_topic(canonical):
+                    grouped[record.representation.identity].append(record)
             stream = self.topic_embedding_store.get(canonical)
             if stream is not None:
                 stream_vectors.append(stream["embedding"])
@@ -233,13 +290,16 @@ class ClassRecommendationApplication:
         if canonical != topic and self.identity_store.is_duplicate_alias(topic):
             return TopicRecommendations(canonical, topic, 0, ())
         state = self.metadata_store.topic_state(canonical)
-        if state is None:
+        if state is None or not self._contract_is_current(state):
             return TopicRecommendations(canonical, topic, 0, ())
         topic_version = int(state["representation_version"])
         pairs = self.pair_store.get_topic(canonical)
         stream = self.topic_embedding_store.get(canonical)
         stream_vector = tuple(stream["embedding"]) if stream else None
         duplicate_pending = self.dupe_store.has_pending(canonical)
+        member_class_ids = {
+            record["class_id"] for record in self.class_store.classes_for_topic(canonical)
+        }
         with self._profile_lock:
             profiles = tuple(self._profiles.values())
         if not profiles:
@@ -248,6 +308,8 @@ class ClassRecommendationApplication:
                 profiles = tuple(self._profiles.values())
         results = []
         for profile in sorted(profiles, key=lambda item: item.class_id):
+            if profile.class_id in member_class_ids:
+                continue
             if not profile.pair_prototypes and profile.stream_context_centroid is None:
                 continue
             if self.metadata_store.is_suppressed(
@@ -259,7 +321,7 @@ class ClassRecommendationApplication:
                 topic_version,
                 profile.class_id,
                 profile.profile_version,
-                "pair-greedy-equal-mean-v1",
+                ALGORITHM_VERSION,
             )
             recommendation = self._cache.get(key)
             if recommendation is None:
@@ -488,13 +550,11 @@ class ClassRecommendationApplication:
         for alias in aliases:
             self.pair_store.remove_topic(alias)
             self.metadata_store.remove_topic_state(alias)
+            self._materialized_topics.discard(alias)
+            self._temporal_profiles.pop(alias, None)
             self._invalidate_topic(alias)
         for class_record in self.class_store.classes_for_topic(canonical):
-            class_record = dict(class_record)
-            class_record["profile_version"] = self.class_store.bump_profile_version(
-                class_record["name"]
-            )
-            self.rebuild_profile(class_record)
+            self.rebuild_profile(dict(class_record))
 
     def _invalidate_topic(self, topic: str) -> None:
         with self._profile_lock:

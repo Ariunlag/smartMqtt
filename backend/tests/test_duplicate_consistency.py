@@ -175,6 +175,72 @@ def test_conflicting_explicit_class_memberships_block_canonicalization():
         DuplicateCanonicalizationService._preflight_class_membership(conn, "A", "B")
 
 
+def test_duplicate_reconciliation_bumps_affected_class_versions_in_transaction():
+    class VersionConnection:
+        def __init__(self):
+            self.updated = None
+
+        def execute(self, sql, params):
+            normalized = " ".join(sql.split())
+            if "SELECT DISTINCT class_name" in normalized:
+                return MembershipCursor([{"class_name": "Temperature"}])
+            if "UPDATE classes SET profile_version" in normalized:
+                self.updated = tuple(params[0])
+                return MembershipCursor([])
+            raise AssertionError(normalized)
+
+    conn = VersionConnection()
+    classes = DuplicateCanonicalizationService._classes_for_aliases(conn, ("B",))
+    assert classes == ("Temperature",)
+    DuplicateCanonicalizationService._bump_class_profile_versions(conn, classes)
+    assert conn.updated == ("Temperature",)
+
+
+def test_confirmed_duplicate_retry_repairs_derived_recommendation_state():
+    store = FakeDupeStore()
+    store.rows[store.key("A", "B")] = {
+        "topics": ["A", "B"],
+        "score": 0.99,
+        "status": "CONFIRMED_DUPLICATE",
+    }
+
+    class Database:
+        @staticmethod
+        def fetch_all(sql, params):
+            assert "duplicate_canonical_topics" in sql
+            assert params == ("A", "A")
+            return [{"topic": "B"}]
+
+    class Identities:
+        database = Database()
+
+        @staticmethod
+        def get(topic):
+            assert topic == "B"
+            return SimpleNamespace(is_alias=True, canonical_topic="A")
+
+        @staticmethod
+        def resolve_canonical(topic):
+            assert topic == "A"
+            return "A"
+
+    class Application:
+        def __init__(self):
+            self.calls = []
+
+        def canonicalized(self, canonical, aliases):
+            self.calls.append((canonical, aliases))
+
+    application = Application()
+    service = DuplicateCanonicalizationService(Identities(), store)
+    result = service.confirm(
+        "A", "B", "B", recommendation_application=application
+    )
+
+    assert result.canonical_topic == "A"
+    assert application.calls == [("A", ("B",))]
+
+
 def test_canonical_identity_store_never_persists_alias_chains():
     class Database:
         pass

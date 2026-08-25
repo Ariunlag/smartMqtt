@@ -6,6 +6,7 @@ import pytest
 from models.mqtt_message import MQTTMessage
 from services.class_recommendation.application import ClassRecommendationApplication
 from services.class_recommendation.domain import (
+    REPRESENTATION_CONTRACT_VERSION,
     ClassPairPrototype,
     ClassProfile,
     PairEmbeddingRecord,
@@ -312,6 +313,7 @@ class FakeMetadataStore:
             "canonical_topic": topic,
             "representation_version": version,
             "representation_fingerprint": fingerprint,
+            "representation_contract_version": REPRESENTATION_CONTRACT_VERSION,
         }
 
 
@@ -345,11 +347,13 @@ class ActionClassStore:
 class ActionMetadataStore(FakeMetadataStore):
     def __init__(self):
         super().__init__()
-        self.rows["sensor"] = {
-            "canonical_topic": "sensor",
-            "representation_version": 1,
-            "representation_fingerprint": "fixture",
-        }
+        for topic in ("sensor", "reference"):
+            self.rows[topic] = {
+                "canonical_topic": topic,
+                "representation_version": 1,
+                "representation_fingerprint": "fixture",
+                "representation_contract_version": REPRESENTATION_CONTRACT_VERSION,
+            }
         self.rejections = set()
         self.dismissals = set()
         self.audits = []
@@ -447,6 +451,41 @@ async def test_numeric_variation_does_not_reembed_or_increment_representation_ve
 
 
 @pytest.mark.asyncio
+async def test_representation_contract_change_forces_rematerialization():
+    model = CountingModel()
+    application = _application(model)
+    assert await application.observe(_message(1.0)) is True
+    application.metadata_store.rows["sensor"][
+        "representation_contract_version"
+    ] = "obsolete-contract"
+
+    assert await application.observe(_message(2.0)) is True
+    assert len(model.calls) == 2
+    assert application.metadata_store.rows["sensor"]["representation_version"] == 2
+    assert (
+        application.metadata_store.rows["sensor"]["representation_contract_version"]
+        == REPRESENTATION_CONTRACT_VERSION
+    )
+
+
+@pytest.mark.asyncio
+async def test_incomplete_persisted_pair_material_is_rebuilt_after_restart():
+    model = CountingModel()
+    application = _application(model)
+    assert await application.observe(_message(1.0)) is True
+    stored = application.pair_store.rows["sensor"]
+    first = stored[0]
+    application.pair_store.rows["sensor"] = (
+        PairEmbeddingRecord(first.representation, first.vectors[:-1]),
+    ) + stored[1:]
+    application._materialized_topics.clear()
+
+    assert await application.observe(_message(1.0)) is True
+    assert len(model.calls) == 2
+    assert application.metadata_store.rows["sensor"]["representation_version"] == 2
+
+
+@pytest.mark.asyncio
 async def test_categorical_change_refreshes_once_and_concurrent_same_topic_is_coalesced_by_lock():
     model = CountingModel()
     application = _application(model)
@@ -485,6 +524,7 @@ def test_accept_uses_current_versions_updates_membership_profile_and_audit_prove
         == recommendation.recommendation_id
     )
     assert application._profiles["temperature-id"].pair_prototypes[0].member_count == 2
+    assert application.recommendations_for_topic("sensor").recommendations == ()
 
 
 @pytest.mark.parametrize(
