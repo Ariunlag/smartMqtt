@@ -26,7 +26,7 @@
   --accent-soft: #dff1f7;
   --accent-tint: #f2fafc;
 
-  /* Semantic */
+  /* Recommendations */
   --danger: #dc2626;
   --danger-soft: #fee2e2;
   --success: #15803d;
@@ -695,11 +695,10 @@ label {
 }
 
 /* ================================
-   Semantic operations
+   Class recommendations
    ================================ */
 
-.semantic-operations,
-.semantic-review {
+.recommendations {
   padding: 0.9rem;
   background: var(--box-bg);
   border: 1px solid var(--border-color);
@@ -707,245 +706,135 @@ label {
   box-shadow: var(--shadow-md);
 }
 
-.semantic-operations__header,
-.semantic-operations__card-heading {
+.recommendations__header,
+.recommendation-card__heading {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 0.75rem;
 }
 
-.semantic-operations__header h2,
-.semantic-operations__header p,
-.semantic-operations__card h3,
-.semantic-operations__errors p {
-  margin: 0;
-}
-
-.semantic-operations__header p {
+.recommendations__header p,
+.recommendation-card p {
   color: var(--muted-text);
   font-size: 0.8rem;
 }
 
-.semantic-operations__grid {
+.recommendations__class-controls {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
-  gap: 0.6rem;
-  margin-top: 0.8rem;
+  grid-template-columns: minmax(180px, 0.4fr) minmax(280px, 1fr);
+  gap: 0.7rem;
+  margin: 0.8rem 0;
 }
 
-.semantic-operations__card {
-  padding: 0.65rem;
-  background: var(--sidebar-bg);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-}
-
-.semantic-operations__card h3 {
-  font-size: 0.85rem;
-}
-
-.semantic-operations__state {
-  padding: 0.1rem 0.45rem;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--primary-bg);
-  color: var(--muted-text);
-  font-size: 0.65rem;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-
-.semantic-operations__state[data-state="HEALTHY"] {
-  color: var(--success);
-  border-color: transparent;
-  background: var(--success-soft);
-}
-
-.semantic-operations__state[data-state="BUSY"] {
-  color: var(--accent-dark);
-  border-color: transparent;
-  background: var(--accent-soft);
-}
-
-.semantic-operations__state[data-state="DEGRADED"] {
-  color: var(--danger);
-  border-color: transparent;
-  background: var(--danger-soft);
-}
-
-.semantic-operations__card dl {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 0.35rem 0.6rem;
-  margin: 0.55rem 0 0;
-}
-
-.semantic-operations__card dl div {
-  min-width: 0;
-}
-
-.semantic-operations__card dt {
-  color: var(--muted-text);
-  font-size: 0.7rem;
-}
-
-.semantic-operations__card dd {
-  margin: 0;
-  overflow-wrap: anywhere;
-  font-size: 0.88rem;
-  font-weight: 600;
-}
-
-.semantic-operations__card-error,
-.semantic-operations__errors {
-  color: var(--danger);
-}
-
-.semantic-operations__card-error {
-  display: block;
-  margin-top: 0.4rem;
-  font-size: 0.72rem;
-}
-
-.semantic-operations__errors {
-  display: grid;
-  gap: 0.25rem;
-  margin-top: 0.7rem;
-  font-size: 0.8rem;
-}
-
-/* ---- Semantic review ---- */
-
-.semantic-review--state,
-.semantic-review--error {
-  color: var(--muted-text);
-  font-size: 0.85rem;
-}
-
-.semantic-review__card {
-  display: grid;
-  gap: 0.65rem;
-}
-
-.semantic-review__card p {
-  margin: 0;
-  font-size: 0.85rem;
-}
-
-.semantic-review__topics {
-  display: grid;
-  gap: 0.35rem;
-  max-height: 260px;
-  overflow-y: auto;
-}
-
-.semantic-review__topic,
-.semantic-review__add {
+.recommendations__manual,
+.recommendations__member,
+.recommendation-card__actions {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.75rem;
-  padding: 0.4rem 0.55rem;
-  background: var(--sidebar-bg);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-xs);
-  font-size: 0.83rem;
-}
-
-.semantic-review__topic > span {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.semantic-review__topic [role="group"] {
-  display: flex;
-  flex: 0 0 auto;
-  gap: 0.3rem;
-}
-
-.semantic-review__topic [aria-pressed="true"] {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-}
-.semantic-review__topic [aria-pressed="true"]:hover:not(:disabled) {
-  background: var(--accent-dark);
-  border-color: var(--accent-dark);
-  color: #fff;
-}
-
-.semantic-review__add label {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin: 0;
-}
-
-.semantic-review__chips,
-.semantic-review__success {
-  display: flex;
-  flex-wrap: wrap;
   gap: 0.4rem;
 }
 
-.semantic-review__chips > span {
-  display: inline-flex;
+.recommendations__manual input {
+  flex: 1;
+}
+
+.recommendations__members {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  padding: 0.15rem 0.3rem 0.15rem 0.6rem;
-  background: var(--accent-soft);
+  gap: 0.4rem;
+  margin-bottom: 0.8rem;
+}
+
+.recommendations__member {
+  align-items: center;
+  padding: 0.25rem 0.35rem 0.25rem 0.55rem;
+  background: var(--surface-sunken);
   border-radius: 999px;
   font-size: 0.78rem;
 }
 
-.semantic-review__chips button {
-  padding: 0 0.3rem;
-  border: 0;
+.recommendations__member button {
+  padding: 0.1rem 0.35rem;
+  border: none;
   background: transparent;
-  color: var(--accent-dark);
+  color: var(--danger);
+  font-size: 0.7rem;
 }
 
-.semantic-review__diagnostics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.75rem;
-  margin: 0;
-  padding: 0.55rem 0.65rem;
-  background: var(--surface-sunken);
+.recommendations__list {
+  display: grid;
+  gap: 0.65rem;
+}
+
+.recommendations__error {
+  color: var(--danger);
+}
+
+.recommendation-card {
+  padding: 0.75rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  background: var(--sidebar-bg);
+}
+
+.recommendation-card__pending {
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  background: var(--warning-soft);
+  color: var(--warning);
+  font-size: 0.7rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.recommendation-card__channels {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.45rem;
+  margin: 0.65rem 0;
+}
+
+.recommendation-card__channels div {
+  padding: 0.35rem 0.45rem;
   border-radius: var(--radius-xs);
-  font-size: 0.8rem;
+  background: var(--primary-bg);
 }
 
-.semantic-review__diagnostics div {
-  display: flex;
-  gap: 0.35rem;
-}
-
-.semantic-review__diagnostics dt {
+.recommendation-card__channels dt {
   color: var(--muted-text);
+  font-size: 0.68rem;
 }
 
-.semantic-review__diagnostics dd {
+.recommendation-card__channels dd {
   margin: 0;
   font-weight: 600;
 }
 
-.semantic-review__success {
-  flex-direction: column;
-  gap: 0.15rem;
-  margin-bottom: 0.7rem;
-  padding: 0.65rem;
-  color: var(--success);
-  background: var(--success-soft);
-  border: 1px solid transparent;
-  border-radius: var(--radius-sm);
-  font-size: 0.8rem;
+.recommendation-card__evidence-toggle {
+  margin-bottom: 0.55rem;
 }
 
-.semantic-review__error {
-  color: var(--danger);
-  font-size: 0.83rem;
+.recommendation-card__evidence {
+  display: grid;
+  gap: 0.4rem;
+  margin-bottom: 0.65rem;
+}
+
+.recommendation-card__evidence > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  gap: 0.3rem;
+  padding: 0.45rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+  background: var(--primary-bg);
+  font-size: 0.76rem;
+}
+
+.recommendation-card__evidence small {
+  grid-column: 1 / -1;
+  color: var(--muted-text);
 }
 
 /* ================================
@@ -982,6 +871,9 @@ label {
   }
   .split-layout .right {
     max-height: 70vh;
+  }
+  .recommendations__class-controls {
+    grid-template-columns: 1fr;
   }
 }
 

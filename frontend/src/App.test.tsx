@@ -26,11 +26,8 @@ vi.mock("./components/savedClasses/SavedClasses", () => ({
 vi.mock("./components/groups/GroupManager", () => ({
   default: () => <section data-testid="group-manager" />,
 }));
-vi.mock("./components/semantic/SemanticOperationsPanel", () => ({
-  default: () => <section data-testid="semantic-operations" />,
-}));
-vi.mock("./components/semantic/SemanticReviewManager", () => ({
-  default: () => <section data-testid="semantic-review" />,
+vi.mock("./components/recommendations/RecommendationsManager", () => ({
+  default: () => <section data-testid="recommendations-manager" />,
 }));
 
 const managerTestIds = [
@@ -39,19 +36,14 @@ const managerTestIds = [
   "class-builder",
   "saved-classes",
   "group-manager",
-  "semantic-operations",
-  "semantic-review",
+  "recommendations-manager",
 ];
 
-it("preserves every dashboard manager and mounts operations before review", () => {
+it("preserves every dashboard manager and adds recommendations", () => {
   render(<App />);
 
   for (const testId of managerTestIds) {
     expect(screen.getByTestId(testId)).toBeInTheDocument();
   }
-  const operations = screen.getByTestId("semantic-operations");
-  const review = screen.getByTestId("semantic-review");
-  expect(
-    operations.compareDocumentPosition(review) & Node.DOCUMENT_POSITION_FOLLOWING,
-  ).toBeTruthy();
+  expect(screen.getByRole("tab", { name: /Recommendations/i })).toBeInTheDocument();
 });

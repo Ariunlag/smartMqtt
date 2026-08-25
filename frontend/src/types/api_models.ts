@@ -67,8 +67,10 @@ export interface ConfirmDupeRequest {
 // ---------------------------
 
 export interface ClassRecord {
+  class_id: string;
   name: string;
   topics: string[];
+  profile_version: number;
 }
 
 export interface ClassListResponse {
@@ -84,6 +86,85 @@ export interface UpdateClassRequest {
   topics: string[];
 }
 
+export type ClassActionType =
+  | "RECOMMENDATION_ACCEPT"
+  | "RECOMMENDATION_REJECT"
+  | "RECOMMENDATION_DISMISS"
+  | "MANUAL_ADD"
+  | "MANUAL_REMOVE";
+
+export interface PairIdentity {
+  source: "tag" | "field";
+  normalized_key: string;
+  datatype: string;
+}
+
+export interface PairViewScores {
+  key: number;
+  value: number;
+  key_value: number;
+  schema: number;
+  numeric_key: number | null;
+}
+
+export interface MatchedPairEvidence {
+  candidate: PairIdentity;
+  prototype: PairIdentity;
+  prototype_id: string;
+  scores: PairViewScores;
+  compatibility_score: number;
+}
+
+export interface ClassRecommendation {
+  recommendation_id: string;
+  canonical_topic: string;
+  original_topic: string;
+  class_id: string;
+  class_name: string;
+  rank: number;
+  overall_score: number;
+  channel_scores: {
+    key: number | null;
+    value: number | null;
+    key_value: number | null;
+    schema: number | null;
+    numeric_key: number | null;
+    stream_context: number | null;
+  };
+  valid_channels: string[];
+  coverage: {
+    candidate_pair_count: number;
+    class_prototype_count: number;
+    matched_pair_count: number;
+    candidate_coverage: number;
+    prototype_coverage: number;
+  };
+  matched_pairs: MatchedPairEvidence[];
+  unmatched_candidate_pairs: PairIdentity[];
+  unmatched_prototypes: PairIdentity[];
+  class_profile_version: number;
+  topic_representation_version: number;
+  duplicate_pending: boolean;
+  algorithm_version: string;
+}
+
+export interface ClassActionRequest {
+  action: ClassActionType;
+  topic: string;
+  topic_representation_version?: number;
+  class_profile_version?: number;
+  recommendation_id?: string;
+}
+
+export interface ClassActionResult {
+  event_id: string;
+  action_type: ClassActionType;
+  canonical_topic: string;
+  class_id: string;
+  class_name: string;
+  class_profile_version: number;
+}
+
 // ---------------------------
 // Groups (tag-based)
 // ---------------------------
@@ -97,119 +178,7 @@ export type GroupListResponse = {
   sets: TagSetRecord[];
 };
 
-
 export type GroupTopicsResponse = {
   id: string;
   topics: string[];
 };
-
-// ---------------------------
-// Diagnostic semantic review
-// ---------------------------
-
-export interface CandidateIdentity {
-  representation_name: string;
-  member_topics: string[];
-}
-
-export interface PendingSemanticCandidate extends CandidateIdentity {
-  candidate_index?: number | null;
-}
-
-export interface SemanticReviewState {
-  candidates: PendingSemanticCandidate[];
-  available_unknown_topics: string[];
-}
-
-export interface SemanticMembershipReviewRequest {
-  identity: CandidateIdentity;
-  class_id: string;
-  semantic_class_name: string;
-  kept_topics: string[];
-  removed_topics: string[];
-  added_topics: string[];
-}
-
-export interface NegativeMembershipConstraint {
-  topic: string;
-  semantic_class_name: string;
-}
-
-export interface PrototypeSummary {
-  representation_name: string;
-  member_topics: string[];
-  member_count: number;
-}
-
-export interface SemanticReviewResult {
-  class_id: string;
-  semantic_class_name: string;
-  registry_updated: boolean;
-  positive_topics: string[];
-  removed_topics: string[];
-  changed_representations: string[];
-  constraints_added: NegativeMembershipConstraint[];
-  constraints_removed: NegativeMembershipConstraint[];
-  prototypes: PrototypeSummary[];
-}
-
-export interface NegativeMembershipConstraintList {
-  constraints: NegativeMembershipConstraint[];
-}
-
-export interface SemanticClassDefinition {
-  class_id: string;
-  semantic_class_name: string;
-}
-
-export interface SemanticClassList {
-  classes: SemanticClassDefinition[];
-}
-
-export interface SemanticProcessingStatus {
-  running: boolean;
-  enabled: boolean;
-  queue_size: number;
-  queue_capacity: number;
-  submitted_count: number;
-  processed_count: number;
-  failed_count: number;
-  dropped_count: number;
-  last_processed_topic: string | null;
-  last_error_topic: string | null;
-  last_error_message: string | null;
-}
-
-export interface SemanticDiscoveryStatus {
-  running: boolean;
-  enabled: boolean;
-  request_pending: boolean;
-  pool_version: number;
-  last_processed_version: number | null;
-  run_count: number;
-  published_count: number;
-  failed_count: number;
-  stale_discard_count: number;
-  candidate_count: number;
-  noise_topic_count: number;
-  last_error_message: string | null;
-}
-
-export interface SemanticPersistenceStatus {
-  enabled: boolean;
-  running: boolean;
-  restored: boolean;
-  degraded: boolean;
-  schema_version: number;
-  current_generation: number;
-  persisted_generation: number | null;
-  save_pending: boolean;
-  save_count: number;
-  restore_count: number;
-  failed_save_count: number;
-  failed_restore_count: number;
-  last_saved_at: string | null;
-  last_restored_at: string | null;
-  last_error_message: string | null;
-  compatibility_error: string | null;
-}
