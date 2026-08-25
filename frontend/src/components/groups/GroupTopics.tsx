@@ -8,13 +8,15 @@ export default function GroupTopics() {
     <div>
       <h3 className="panel-header">Topics for the selected set</h3>
       {selectedTopics.length === 0 ? (
-        <p style={{ color: "#777" }}>No topics selected</p>
+        <p className="empty-note">No topics selected</p>
       ) : (
         <ul className="panel-list">
           {selectedTopics.map((t) => (
             <li key={t} className="list-item">
-              {t}
-              <button onClick={() => removeTopic(t)}>x</button>
+              <span title={t}>{t}</span>
+              <button onClick={() => removeTopic(t)} title="Remove topic">
+                ×
+              </button>
             </li>
           ))}
         </ul>

@@ -38,19 +38,21 @@ export default function GroupGraph() {
   }, [topics]);
 
   if (topics.length === 0) {
-    return <p style={{ color: "#aaa" }}>Select a tag set to view topics</p>;
+    return <p className="empty-note">Select a tag set to view topics</p>;
   }
 
   return (
     <>
+      <h3 className="panel-header">Tag Set Graph</h3>
+
       {/* Big combined graph */}
-      <GraphBox height="260px" title="Combined Graph">
+      <GraphBox height="var(--graph-h)" title="Combined Graph">
         <RealtimeGraph topics={topics} initialData={series} />
       </GraphBox>
 
       {/* Individual graphs */}
       {topics.length > 1 && (
-        <GraphGrid rowHeight={220}>
+        <GraphGrid>
           {series.map((ts) => (
             <GraphBox key={ts.measurement} title={ts.measurement}>
               <RealtimeGraph topics={[ts.measurement]} initialData={[ts]} />

@@ -42,7 +42,9 @@ const SubscribeInput: React.FC = () => {
           ✓
         </button>
       </div>
-      {alert && <div style={{ color: "red" }}>{alert}</div>}
+      {alert && (
+        <div style={{ color: "var(--danger)", fontSize: "0.78rem" }}>{alert}</div>
+      )}
     </div>
   );
 };

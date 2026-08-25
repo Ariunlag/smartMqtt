@@ -9,12 +9,14 @@ export default function SelectedMeasurements() {
       <h4>Selected Measurements</h4>
       <ul className="panel-list">
         {selected.length === 0 ? (
-          <li style={{ color: "#aaa" }}>None selected</li>
+          <li className="empty-note">None selected</li>
         ) : (
           selected.map((m) => (
             <li key={m} className="list-item">
-              {m}
-              <button onClick={() => remove(m)}>x</button>
+              <span title={m}>{m}</span>
+              <button onClick={() => remove(m)} title="Remove measurement">
+                ×
+              </button>
             </li>
           ))
         )}

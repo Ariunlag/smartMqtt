@@ -13,11 +13,16 @@ export default function MeasurementsList() {
     <div>
       <h4>Available Measurements</h4>
       {available.length === 0 ? (
-        <p style={{ color: "#aaa" }}>No more measurements</p>
+        <p className="empty-note">No more measurements</p>
       ) : (
         <ul className="panel-list">
           {available.map((m) => (
-            <li key={m} className="narrow-list-item" onClick={() => addMeasurement(m)}>
+            <li
+              key={m}
+              className="narrow-list-item"
+              title={m}
+              onClick={() => addMeasurement(m)}
+            >
               {m}
             </li>
           ))}

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef } from "react";
 import { Line } from "react-chartjs-2";
 import type { Chart as ChartJS, ChartDataset } from "chart.js";
 import { useMqttStore } from "../../store/useMqttStore";
-import { createLineChartConfig } from "../../services/lineChartService";
+import { createLineChartConfig, SERIES_COLORS } from "../../services/lineChartService";
 import { collectNewPoints } from "../../services/chartPoints";
 import type { MeasurementSeriesResponse } from "../../types/api_models";
 
@@ -24,9 +24,12 @@ export default function RealtimeGraph({
   // historical baseline change, so stale identifiers never suppress new points.
   const seenRef = useRef<Set<string>>(new Set());
 
+  // A one-topic chart is labelled by its GraphBox heading; skip the legend.
+  const showLegend = topics.length !== 1;
+
   const { data, options } = useMemo(
-    () => createLineChartConfig(initialData),
-    [initialData]
+    () => createLineChartConfig(initialData, { showLegend }),
+    [initialData, showLegend]
   );
 
   useEffect(() => {
@@ -47,10 +50,12 @@ export default function RealtimeGraph({
         const created: ChartDataset<"line"> = {
           label: topic,
           data: [],
-          borderColor: "#36a2eb",
+          borderColor:
+            SERIES_COLORS[chart.data.datasets.length % SERIES_COLORS.length],
           borderWidth: 2,
           fill: false,
           pointRadius: 1,
+          pointHoverRadius: 4,
           tension: 0.1,
         };
         chart.data.datasets.push(created);

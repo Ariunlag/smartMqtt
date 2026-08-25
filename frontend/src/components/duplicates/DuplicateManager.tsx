@@ -19,15 +19,14 @@ export default function DupeManager() {
 
   return (
     <SplitLayout
-
       left={
-        <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
+        <>
           <h2 className="panel-header">Detected Duplicate Pairs</h2>
           <DupeList />
-        </div>
+        </>
       }
       right={
-        <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+        <>
           <h3 className="panel-header">Duplicate Pair Details</h3>
           <DupeGraph dupe={selectedPair} />
 
@@ -53,7 +52,7 @@ export default function DupeManager() {
               </button>
             </div>
           )}
-        </div>
+        </>
       }
     />
   );

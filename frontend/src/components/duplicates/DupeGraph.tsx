@@ -15,13 +15,13 @@ export default function DupeGraph({ dupe }: { dupe?: DupeRecord | null }) {
   }, [effectivePair, loadPairTimeseries]);
 
   if (!effectivePair) {
-    return <p style={{ color: "#aaa" }}>Select a duplicate to visualize</p>;
+    return <p className="empty-note">Select a duplicate to visualize</p>;
   }
 
   const topics = effectivePair.topics || [];
 
   return (
-    <GraphBox height="260px" >
+    <GraphBox height="var(--graph-h)">
       <RealtimeGraph topics={topics} initialData={series} />
     </GraphBox>
   );

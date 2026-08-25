@@ -25,7 +25,7 @@ const SubscribedTopicsList: React.FC = () => {
   };
 
   if (topics.length === 0) {
-    return <p style={{ color: "#aaa" }}>No subscribed topics yet.</p>;
+    return <p className="empty-note">No subscribed topics yet.</p>;
   }
 
   return (
@@ -34,7 +34,7 @@ const SubscribedTopicsList: React.FC = () => {
       <div className="panel-list">
         {topics.map((topic) => (
           <div key={topic} className="list-item">
-            <span>{topic}</span>
+            <span title={topic}>{topic}</span>
             {failed[topic] && (
               <span role="alert" style={{ color: "var(--danger)", fontSize: "0.75rem" }}>
                 Unsubscribe failed.

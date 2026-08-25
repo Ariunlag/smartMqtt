@@ -56,17 +56,42 @@ function chooseTimeUnit(minX: number, maxX: number): TimeUnit {
 }
 
 // --------------------------- Factory ---------------------------
+// Categorical series palette: distinguishable by hue, all readable on a light
+// surface. Extend rather than reorder — index N must stay stable per series.
+export const SERIES_COLORS = [
+  "#0e7490", // teal
+  "#c2410c", // orange
+  "#4338ca", // indigo
+  "#15803d", // green
+  "#b91c1c", // red
+  "#a16207", // amber
+  "#7e22ce", // purple
+  "#0369a1", // blue
+];
+
+/**
+ * MQTT topics are long ("site/floor1/room3/sensor-a/temperature") and blow the
+ * legend up to several rows, eating the plot area. Keep the tail segments —
+ * they carry the distinguishing part — and let the tooltip show the full name.
+ */
+export function shortenTopic(topic: string, max = 24): string {
+  if (topic.length <= max) return topic;
+
+  const parts = topic.split("/").filter(Boolean);
+  for (let take = 2; take >= 1; take -= 1) {
+    if (parts.length <= take) break;
+    const tail = `…/${parts.slice(-take).join("/")}`;
+    if (tail.length <= max) return tail;
+  }
+  return `…${topic.slice(-(max - 1))}`;
+}
+
 export function createLineChartConfig(
   seriesList: MeasurementSeriesResponse[],
-  colors: string[] = [
-  cssVar("--accent", "#2fa4c7"),
-  cssVar("--accent-dark", "#1f6f8b"),
-  cssVar("--accent-soft", "#9fd3e2"),
-  cssVar("--primary-text", "#1f2933"),
-  cssVar("--border-color", "#d9e1e8"),
-]
+  opts: { colors?: string[]; showLegend?: boolean } = {}
 ): { data: ChartData<"line">; options: ChartOptions<"line"> } {
   ensureChartRegistration();
+  const colors = opts.colors ?? SERIES_COLORS;
 
   // datasets
   const datasets = seriesList
@@ -104,18 +129,52 @@ export function createLineChartConfig(
 
   const data: ChartData<"line"> = { datasets };
 
+  const tickColor = cssVar("--muted-text", "#64748b");
+  const gridColor = cssVar("--border-color", "#e2e8f0");
+
+  // A single-series box is already labelled by its GraphBox heading, so the
+  // legend would only repeat the topic and steal vertical space.
+  const showLegend = opts.showLegend ?? datasets.length !== 1;
+
   const options: ChartOptions<"line"> = {
     responsive: true,
     maintainAspectRatio: false,
     animation: false,
     parsing: false,
     normalized: true,
+    layout: { padding: { top: 2, right: 6, bottom: 0, left: 0 } },
     plugins: {
-      legend: { display: true, position: "top" },
+      legend: {
+        display: showLegend,
+        position: "top",
+        align: "start",
+        maxHeight: 44, // hard cap: never let labels crowd out the plot
+        labels: {
+          boxWidth: 8,
+          boxHeight: 8,
+          padding: 10,
+          usePointStyle: true,
+          pointStyle: "circle",
+          color: tickColor,
+          font: { size: 11 },
+          generateLabels(chart) {
+            const base =
+              ChartJS.defaults.plugins.legend.labels.generateLabels(chart);
+            return base.map((item) => ({
+              ...item,
+              text: shortenTopic(item.text ?? ""),
+            }));
+          },
+        },
+      },
       tooltip: {
         intersect: false,
-          mode: "nearest",
-          callbacks: {
+        mode: "nearest",
+        callbacks: {
+          // Full topic name here — the legend only carries the shortened form.
+          title(items) {
+            return items[0]?.dataset?.label ?? "";
+          },
           label(ctx) {
             const iso =
               ctx.parsed.x == null
@@ -130,11 +189,15 @@ export function createLineChartConfig(
       x: {
         type: "time",
         time: { unit },
-        ticks: { color: "#bbb" },
+        border: { display: false },
+        grid: { color: gridColor },
+        ticks: { color: tickColor, font: { size: 10 }, maxRotation: 0 },
       },
       y: {
         beginAtZero: true,
-        ticks: { color: "#bbb" },
+        border: { display: false },
+        grid: { color: gridColor },
+        ticks: { color: tickColor, font: { size: 10 } },
       },
     },
   };

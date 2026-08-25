@@ -8,25 +8,14 @@ export default function GroupManager() {
   return (
     <SplitLayout
       left={
-        <div style={{ display: "flex", flexDirection: "column", height: "100%", minHeight: 0 }}>
-          {/* Scrollable shorter GroupList */}
-          <div
-            style={{
-              flex: "0 0 240px", // fixed height (~shorter)
-              overflowY: "auto",
-              borderBottom: "1px solid #333",
-              marginBottom: "0.5rem",
-              paddingRight: "0.3rem",
-            }}
-          >
+        <div style={{ display: "flex", flexDirection: "column", gap: "0.85rem" }}>
+          {/* Keep the detected-set list short so the editor below stays reachable */}
+          <div style={{ maxHeight: "220px", overflowY: "auto" }}>
             <GroupList />
           </div>
-
-          {/* Non-scrolling below */}
-          <div style={{ flex: "1 1 auto", display: "flex", flexDirection: "column", gap: "1rem" }}>
-            <GroupTopics />
-            <SaveAsClass />
-          </div>
+          <hr />
+          <GroupTopics />
+          <SaveAsClass />
         </div>
       }
       right={<GroupGraph />}
