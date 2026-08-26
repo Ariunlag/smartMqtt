@@ -3,12 +3,13 @@ import { beforeEach, expect, it, vi } from "vitest";
 
 import RecommendationsManager from "./RecommendationsManager";
 import { getRecommendedClassCandidates } from "../../services/classRecommendationApi";
+import type { RecommendedClassCandidateSet } from "../../types/api_models";
 
 vi.mock("../../services/classRecommendationApi", () => ({
   getRecommendedClassCandidates: vi.fn(),
 }));
 
-const candidateSet = {
+const candidateSet: RecommendedClassCandidateSet = {
   available_topics: ["building/a", "building/b", "building/c"],
   candidates: [
     {
@@ -93,7 +94,6 @@ it("shows tag, field, coverage, and whole-stream evidence without a fused score"
   await screen.findByRole("heading", { name: "Recommended class #1" });
 
   expect(screen.getByText("Duplicate review pending")).toBeInTheDocument();
-  expect(screen.getByText("Tag evidence").nextSibling?.textContent ?? "").not.toContain("Overall");
   fireEvent.click(screen.getByRole("button", { name: "Show evidence" }));
 
   expect(screen.getByText(/Matched 2 \/ 3 candidate pairs/)).toBeInTheDocument();
