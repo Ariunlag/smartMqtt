@@ -1,18 +1,25 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
-import {
-  applyClassAction,
-  getClassRecommendations,
-} from "../../services/classRecommendationApi";
-import { useInfluxStore } from "../../store/useInfluxStore";
+import { getRecommendedClassCandidates } from "../../services/classRecommendationApi";
 import type {
-  ClassActionType,
-  ClassRecommendation,
+  MatchedPairEvidence,
+  RecommendationDiscoveryChannel,
+  RecommendedClassCandidate,
+  RecommendedClassTopicEvidence,
 } from "../../types/api_models";
 
 const percent = (value: number | null) =>
   value === null ? "N/A" : `${(value * 100).toFixed(1)}%`;
+
+const CHANNEL_LABELS: Record<RecommendationDiscoveryChannel, string> = {
+  key: "Similar keys",
+  value: "Similar values",
+  key_value: "Similar key + value meaning",
+  schema: "Similar structure",
+  numeric_key: "Similar numeric measurement key",
+  stream_context: "Similar whole-stream context",
+};
 
 function errorMessage(error: unknown) {
   if (axios.isAxiosError<{ detail?: string }>(error)) {
@@ -22,30 +29,18 @@ function errorMessage(error: unknown) {
 }
 
 export default function RecommendationsManager() {
-  const classes = useInfluxStore((state) => state.classes);
-  const getClasses = useInfluxStore((state) => state.getClasses);
-  const [className, setClassName] = useState("");
-  const [recommendations, setRecommendations] = useState<ClassRecommendation[]>([]);
-  const [manualTopic, setManualTopic] = useState("");
+  const [candidates, setCandidates] = useState<RecommendedClassCandidate[]>([]);
+  const [availableTopicCount, setAvailableTopicCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const selected = useMemo(
-    () => classes.find((item) => item.name === className) ?? null,
-    [classes, className],
-  );
-
-  useEffect(() => {
-    if (!className && classes[0]) setClassName(classes[0].name);
-  }, [className, classes]);
-
   const refresh = async () => {
-    if (!className) return;
     setLoading(true);
     setError(null);
     try {
-      const result = await getClassRecommendations(className);
-      setRecommendations(result.recommendations);
+      const result = await getRecommendedClassCandidates();
+      setCandidates(result.candidates);
+      setAvailableTopicCount(result.available_topics.length);
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
@@ -55,157 +50,167 @@ export default function RecommendationsManager() {
 
   useEffect(() => {
     void refresh();
-    // refresh is intentionally keyed by the selected source-of-truth class.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [className]);
-
-  const act = async (action: ClassActionType, row: ClassRecommendation) => {
-    setError(null);
-    try {
-      await applyClassAction(className, {
-        action,
-        topic: row.canonical_topic,
-        topic_representation_version: row.topic_representation_version,
-        class_profile_version: row.class_profile_version,
-        recommendation_id: row.recommendation_id,
-      });
-      await getClasses();
-      await refresh();
-    } catch (requestError) {
-      setError(errorMessage(requestError));
-    }
-  };
-
-  const manual = async (action: "MANUAL_ADD" | "MANUAL_REMOVE", topic: string) => {
-    if (!topic.trim()) return;
-    setError(null);
-    try {
-      await applyClassAction(className, { action, topic: topic.trim() });
-      setManualTopic("");
-      await getClasses();
-      await refresh();
-    } catch (requestError) {
-      setError(errorMessage(requestError));
-    }
-  };
+  }, []);
 
   return (
     <section className="recommendations" aria-labelledby="recommendations-title">
       <header className="recommendations__header">
         <div>
-          <h2 id="recommendations-title">Class recommendations</h2>
-          <p>Pair-level comparison evidence against your saved classes.</p>
+          <h2 id="recommendations-title">Recommended classes</h2>
+          <p>
+            System-derived topic groups. Your manually saved classes remain separate.
+          </p>
         </div>
-        <button type="button" onClick={() => void refresh()} disabled={!className || loading}>
+        <button type="button" onClick={() => void refresh()} disabled={loading}>
           {loading ? "Refreshing…" : "Refresh"}
         </button>
       </header>
 
-      <div className="recommendations__class-controls">
-        <label>
-          Saved class
-          <select value={className} onChange={(event) => setClassName(event.target.value)}>
-            {classes.length === 0 && <option value="">No saved classes</option>}
-            {classes.map((item) => <option key={item.class_id} value={item.name}>{item.name}</option>)}
-          </select>
-        </label>
-        <label>
-          Manual topic membership
-          <span className="recommendations__manual">
-            <input
-              className="panel-input"
-              value={manualTopic}
-              onChange={(event) => setManualTopic(event.target.value)}
-              placeholder="topic/path"
-            />
-            <button type="button" onClick={() => void manual("MANUAL_ADD", manualTopic)} disabled={!className || !manualTopic.trim()}>
-              Manual Add
-            </button>
-          </span>
-        </label>
-      </div>
-
-      {selected && (
-        <div className="recommendations__members">
-          <strong>Current members</strong>
-          {selected.topics.length === 0 ? <span>None</span> : selected.topics.map((topic) => (
-            <span key={topic} className="recommendations__member">
-              {topic}
-              <button type="button" onClick={() => void manual("MANUAL_REMOVE", topic)} aria-label={`Remove member ${topic}`}>
-                Remove Member
-              </button>
-            </span>
-          ))}
-        </div>
-      )}
-
+      <p className="empty-note">
+        Discovery evidence available for {availableTopicCount} active topics.
+      </p>
       {error && <p className="recommendations__error" role="alert">{error}</p>}
-      {!loading && className && recommendations.length === 0 && (
-        <p className="empty-note">No current recommendations for this class.</p>
+      {!loading && candidates.length === 0 && (
+        <p className="empty-note">No current system-recommended class candidates.</p>
       )}
 
       <div className="recommendations__list">
-        {recommendations.map((row) => <RecommendationCard key={row.recommendation_id} row={row} act={act} />)}
+        {candidates.map((candidate) => (
+          <RecommendedClassCard key={candidate.candidate_id} candidate={candidate} />
+        ))}
       </div>
     </section>
   );
 }
 
-function RecommendationCard({
-  row,
-  act,
-}: {
-  row: ClassRecommendation;
-  act: (action: ClassActionType, row: ClassRecommendation) => Promise<void>;
-}) {
+function RecommendedClassCard({ candidate }: { candidate: RecommendedClassCandidate }) {
   const [expanded, setExpanded] = useState(false);
-  const channels = [
-    ["Key", row.channel_scores.key],
-    ["Value", row.channel_scores.value],
-    ["Key + Value", row.channel_scores.key_value],
-    ["Schema", row.channel_scores.schema],
-    ["Numeric Key", row.channel_scores.numeric_key],
-    ["Stream Context", row.channel_scores.stream_context],
-  ] as const;
+  const summary = useMemo(() => summarizeEvidence(candidate.evidence), [candidate.evidence]);
+
   return (
     <article className="recommendation-card">
       <div className="recommendation-card__heading">
         <div>
-          <h3>#{row.rank} {row.canonical_topic}</h3>
+          <h3>Recommended class #{candidate.rank}</h3>
           <p>
-            Overall similarity <strong>{percent(row.overall_score)}</strong> · Coverage {row.coverage.matched_pair_count} / {row.coverage.candidate_pair_count} pairs
+            {candidate.member_topics.length} suggested members · anchor {candidate.anchor_topic}
           </p>
         </div>
-        {row.duplicate_pending && <span className="recommendation-card__pending">Duplicate review pending</span>}
+        {summary.pendingDuplicateCount > 0 && (
+          <span className="recommendation-card__pending">Duplicate review pending</span>
+        )}
       </div>
+
+      <section aria-label="Recommendation reasons">
+        <strong>Recommended because</strong>
+        <div className="recommendation-card__channels">
+          {candidate.discovery_channels.map((channel) => (
+            <span key={channel}>{CHANNEL_LABELS[channel]}</span>
+          ))}
+        </div>
+      </section>
+
+      <section className="recommendations__members" aria-label="Suggested members">
+        <strong>Suggested members</strong>
+        {candidate.member_topics.map((topic) => <span key={topic}>{topic}</span>)}
+      </section>
+
       <dl className="recommendation-card__channels">
-        {channels.map(([label, value]) => <div key={label}><dt>{label}</dt><dd>{percent(value)}</dd></div>)}
+        <div><dt>Matched pair evidence</dt><dd>{summary.matchedPairCount}</dd></div>
+        <div><dt>Tag evidence</dt><dd>{summary.tagEvidenceCount}</dd></div>
+        <div><dt>Field evidence</dt><dd>{summary.fieldEvidenceCount}</dd></div>
+        <div><dt>Whole-stream context</dt><dd>{percent(summary.streamContext)}</dd></div>
       </dl>
-      <button type="button" className="recommendation-card__evidence-toggle" onClick={() => setExpanded((value) => !value)} aria-expanded={expanded}>
-        {expanded ? "Hide pair evidence" : "Show pair evidence"}
+
+      <button
+        type="button"
+        className="recommendation-card__evidence-toggle"
+        onClick={() => setExpanded((value) => !value)}
+        aria-expanded={expanded}
+      >
+        {expanded ? "Hide evidence" : "Show evidence"}
       </button>
+
       {expanded && (
         <div className="recommendation-card__evidence">
-          {row.matched_pairs.map((match) => (
-            <div key={`${match.candidate.source}:${match.candidate.normalized_key}:${match.prototype_id}`}>
-              <strong>{match.candidate.source}/{match.candidate.normalized_key}:{match.candidate.datatype}</strong>
-              <span aria-hidden>→</span>
-              <strong>{match.prototype.source}/{match.prototype.normalized_key}:{match.prototype.datatype}</strong>
-              <small>
-                Key {percent(match.scores.key)} · Value {percent(match.scores.value)} · Key + Value {percent(match.scores.key_value)} · Schema {percent(match.scores.schema)} · Numeric Key {percent(match.scores.numeric_key)}
-              </small>
-            </div>
+          {candidate.evidence.map((evidence) => (
+            <TopicEvidence key={evidence.topic} evidence={evidence} anchor={candidate.anchor_topic} />
           ))}
-          {row.unmatched_candidate_pairs.length > 0 && (
-            <p>Unmatched candidate pairs: {row.unmatched_candidate_pairs.map((pair) => `${pair.source}/${pair.normalized_key}:${pair.datatype}`).join(", ")}</p>
-          )}
         </div>
       )}
-      <div className="recommendation-card__actions">
-        <button type="button" className="success" onClick={() => void act("RECOMMENDATION_ACCEPT", row)}>Accept Recommendation</button>
-        <button type="button" className="danger" onClick={() => void act("RECOMMENDATION_REJECT", row)}>Reject Recommendation</button>
-        <button type="button" onClick={() => void act("RECOMMENDATION_DISMISS", row)}>Dismiss</button>
-      </div>
     </article>
   );
+}
+
+function TopicEvidence({
+  evidence,
+  anchor,
+}: {
+  evidence: RecommendedClassTopicEvidence;
+  anchor: string;
+}) {
+  const tags = evidence.matched_pairs.filter((match) => match.candidate.source === "tag");
+  const fields = evidence.matched_pairs.filter((match) => match.candidate.source === "field");
+
+  return (
+    <section aria-label={`Evidence for ${evidence.topic}`}>
+      <h4>{evidence.topic} ↔ {anchor}</h4>
+      <p>
+        Matched {evidence.coverage.matched_pair_count} / {evidence.coverage.candidate_pair_count} candidate pairs · whole-stream context {percent(evidence.channel_scores.stream_context)}
+      </p>
+      {tags.length > 0 && <PairEvidenceGroup title="Tag evidence" matches={tags} />}
+      {fields.length > 0 && <PairEvidenceGroup title="Field evidence" matches={fields} />}
+    </section>
+  );
+}
+
+function PairEvidenceGroup({ title, matches }: { title: string; matches: MatchedPairEvidence[] }) {
+  return (
+    <div>
+      <strong>{title}</strong>
+      {matches.map((match) => (
+        <div
+          key={`${match.candidate.source}:${match.candidate.normalized_key}:${match.prototype_id}`}
+        >
+          <strong>
+            {match.candidate.normalized_key}:{match.candidate.datatype} ↔ {match.prototype.normalized_key}:{match.prototype.datatype}
+          </strong>
+          <small>
+            Key {percent(match.scores.key)} · Value {percent(match.scores.value)} · Key + Value {percent(match.scores.key_value)} · Schema {percent(match.scores.schema)} · Numeric Key {percent(match.scores.numeric_key)}
+          </small>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function summarizeEvidence(evidence: RecommendedClassTopicEvidence[]) {
+  let matchedPairCount = 0;
+  let tagEvidenceCount = 0;
+  let fieldEvidenceCount = 0;
+  let pendingDuplicateCount = 0;
+  const streamContexts: number[] = [];
+
+  for (const topicEvidence of evidence) {
+    matchedPairCount += topicEvidence.matched_pairs.length;
+    if (topicEvidence.duplicate_pending) pendingDuplicateCount += 1;
+    for (const match of topicEvidence.matched_pairs) {
+      if (match.candidate.source === "tag") tagEvidenceCount += 1;
+      else fieldEvidenceCount += 1;
+    }
+    if (topicEvidence.channel_scores.stream_context !== null) {
+      streamContexts.push(topicEvidence.channel_scores.stream_context);
+    }
+  }
+
+  return {
+    matchedPairCount,
+    tagEvidenceCount,
+    fieldEvidenceCount,
+    pendingDuplicateCount,
+    streamContext:
+      streamContexts.length > 0
+        ? Math.min(...streamContexts)
+        : null,
+  };
 }

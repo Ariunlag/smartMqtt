@@ -20,8 +20,8 @@ export interface TopicResponse {
 // ---------------------------
 
 export interface MeasurementPoint {
-  timestamp: string; // ISO datetime string from backend
-  value: number;     // numeric field for UI plotting
+  timestamp: string;
+  value: number;
 }
 
 export interface MeasurementSeriesResponse {
@@ -63,7 +63,7 @@ export interface ConfirmDupeRequest {
 }
 
 // ---------------------------
-// Classes (user groups)
+// Classes (user-owned Saved Classes)
 // ---------------------------
 
 export interface ClassRecord {
@@ -86,6 +86,7 @@ export interface UpdateClassRequest {
   topics: string[];
 }
 
+// Legacy Saved-Class recommendation actions are retained for API compatibility.
 export type ClassActionType =
   | "RECOMMENDATION_ACCEPT"
   | "RECOMMENDATION_REJECT"
@@ -115,6 +116,23 @@ export interface MatchedPairEvidence {
   compatibility_score: number;
 }
 
+export interface ChannelScores {
+  key: number | null;
+  value: number | null;
+  key_value: number | null;
+  schema: number | null;
+  numeric_key: number | null;
+  stream_context: number | null;
+}
+
+export interface PairCoverage {
+  candidate_pair_count: number;
+  class_prototype_count: number;
+  matched_pair_count: number;
+  candidate_coverage: number;
+  prototype_coverage: number;
+}
+
 export interface ClassRecommendation {
   recommendation_id: string;
   canonical_topic: string;
@@ -123,22 +141,9 @@ export interface ClassRecommendation {
   class_name: string;
   rank: number;
   overall_score: number;
-  channel_scores: {
-    key: number | null;
-    value: number | null;
-    key_value: number | null;
-    schema: number | null;
-    numeric_key: number | null;
-    stream_context: number | null;
-  };
+  channel_scores: ChannelScores;
   valid_channels: string[];
-  coverage: {
-    candidate_pair_count: number;
-    class_prototype_count: number;
-    matched_pair_count: number;
-    candidate_coverage: number;
-    prototype_coverage: number;
-  };
+  coverage: PairCoverage;
   matched_pairs: MatchedPairEvidence[];
   unmatched_candidate_pairs: PairIdentity[];
   unmatched_prototypes: PairIdentity[];
@@ -163,6 +168,40 @@ export interface ClassActionResult {
   class_id: string;
   class_name: string;
   class_profile_version: number;
+}
+
+// ---------------------------
+// System-derived Recommended Classes
+// ---------------------------
+
+export type RecommendationDiscoveryChannel =
+  | "key"
+  | "value"
+  | "key_value"
+  | "schema"
+  | "numeric_key"
+  | "stream_context";
+
+export interface RecommendedClassTopicEvidence {
+  topic: string;
+  channel_scores: ChannelScores;
+  coverage: PairCoverage;
+  matched_pairs: MatchedPairEvidence[];
+  duplicate_pending: boolean;
+}
+
+export interface RecommendedClassCandidate {
+  candidate_id: string;
+  rank: number;
+  anchor_topic: string;
+  member_topics: string[];
+  discovery_channels: RecommendationDiscoveryChannel[];
+  evidence: RecommendedClassTopicEvidence[];
+}
+
+export interface RecommendedClassCandidateSet {
+  candidates: RecommendedClassCandidate[];
+  available_topics: string[];
 }
 
 // ---------------------------

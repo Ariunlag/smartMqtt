@@ -31,7 +31,7 @@ class Config:
         self.BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
         self.BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8000"))
 
-        # Embedding model config ( NEW)
+        # Embedding model config
         self.EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
         self.EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "cpu")
 
@@ -65,10 +65,26 @@ class Config:
             os.getenv("INGEST_METRICS_INTERVAL", "30.0")
         )
 
-        # Topic-aware class recommendation sidecar. The model remains lazy.
+        # Topic-aware pair representation sidecar. The model remains lazy.
         self.CLASS_RECOMMENDATION_QUEUE_MAXSIZE = int(
             os.getenv("CLASS_RECOMMENDATION_QUEUE_MAXSIZE", "1000")
         )
+
+        # System-derived recommended-class discovery. These are clustering
+        # controls, not semantic-similarity thresholds or hand-tuned weights.
+        self.SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE = int(
+            os.getenv("SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE", "2")
+        )
+        self.SYSTEM_RECOMMENDATION_MIN_SAMPLES = int(
+            os.getenv("SYSTEM_RECOMMENDATION_MIN_SAMPLES", "1")
+        )
+        self.SYSTEM_RECOMMENDATION_ALLOW_SINGLE_CLUSTER = self._boolean(
+            "SYSTEM_RECOMMENDATION_ALLOW_SINGLE_CLUSTER", False
+        )
+        if self.SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE < 2:
+            raise ValueError("SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE must be at least 2")
+        if self.SYSTEM_RECOMMENDATION_MIN_SAMPLES < 1:
+            raise ValueError("SYSTEM_RECOMMENDATION_MIN_SAMPLES must be at least 1")
 
     @staticmethod
     def _ratio(name: str, default: float) -> float:

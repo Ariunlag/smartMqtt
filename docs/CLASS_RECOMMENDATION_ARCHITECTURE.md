@@ -1,155 +1,154 @@
-# Pair-level class recommendation architecture
+# System recommended-class architecture
 
-SmartMQTT recommends existing Saved Classes for MQTT streams. The PostgreSQL
-`classes` and `class_topics` tables are the only class ontology and membership
-source of truth. Recommendation state is derived from those records; it never
-creates a second class catalog.
+SmartMQTT has two deliberately separate class concepts.
+
+1. **Saved Classes** are created and edited by the user. PostgreSQL `classes` and
+   `class_topics` remain their source of truth. The Class Builder and Saved Classes
+   UI own this workflow.
+2. **Recommended Classes** are system-derived candidate topic groups. They are
+   discovery output, not Saved Classes, and are never inserted into `classes` or
+   `class_topics` merely because the system found them.
+
+The dashboard recommendation path must not present an existing Saved Class as a
+system recommendation. Manual Saved Classes may later be used as supervised evidence
+for learning, but that is a separate feedback policy.
 
 ## Processing flow
 
 ```text
 MQTT message
-  ├─ canonical identity guard
-  ├─ topic discovery and authoritative flat topic embedding
+  ├─ canonical duplicate-identity guard
+  ├─ authoritative flat stream embedding
   ├─ InfluxDB persistence
   ├─ WebSocket broadcast
-  └─ bounded topic-aware recommendation sidecar
+  └─ bounded pair-evidence sidecar
        ├─ deterministic tag/field profiling
        ├─ one independent record per key:value pair
-       ├─ batched five-view embedding
-       ├─ exact affected-class prototype rebuild
-       └─ versioned recommendation-cache invalidation
+       ├─ five pair embedding views
+       └─ versioned evidence persistence
 
-Saved Class membership
-  ├─ compact per-role pair prototypes
-  └─ one stream-context centroid from existing flat topic vectors
-
-Candidate topic
-  ├─ candidate pair × class prototype cosine evidence
-  ├─ deterministic greedy one-to-one matching
-  ├─ coverage and unmatched evidence
-  ├─ five pair-channel means
-  ├─ shared stream-context cosine
-  └─ equal mean of valid channels
+Active canonical topics
+  ├─ key evidence
+  ├─ value evidence
+  ├─ key + value evidence
+  ├─ schema evidence
+  ├─ numeric-key evidence when applicable
+  └─ shared whole-stream context evidence
+       ↓
+independent per-channel candidate discovery
+       ↓
+merge identical member sets as multi-channel consensus
+       ↓
+Recommended Class candidates
 ```
 
-The primary MQTT/Influx path does not depend on recommendation success. The
-sidecar has a bounded queue and coalesces pending observations by topic so a
-newer observation replaces stale pending work for that topic.
+Confirmed duplicate aliases never contribute as independent candidate members.
+Pending duplicate topics stay eligible and carry a pending-review flag.
 
-## Pair contract
+## Evidence contract
 
-Every tag and field remains independently identifiable by canonical topic,
-original topic, source, raw and normalized key/value, datatype, numeric flag,
-and representation version. The five dense embedding views are:
+Every tag and field remains an independent pair identified by canonical topic,
+original topic, source (`tag` or `field`), normalized key, datatype, numeric state,
+and representation version.
+
+The five pair views are:
 
 1. `key`
 2. `value`
 3. `key_value`
 4. `schema`
-5. `numeric_key`, only for numeric pairs
+5. `numeric_key` for numeric pairs only
 
-No lexical fallback, synonym dictionary, string-distance score, or concatenated
-whole-stream pair view is used. One model batch may contain many texts, but
-every returned vector maps back to one pair and one view.
+The sixth channel is `stream_context`, reusing the authoritative flat topic vector
+already produced for duplicate detection. It is not a duplicate recommendation-only
+embedding.
 
-The sixth class-level channel is `stream_context`. It reuses the authoritative
-flat vector produced by `EmbeddingManager.embed_flattened_topic()` for duplicate
-detection. It is not embedded or stored a second time for recommendation.
+`tag` and `field` are pair sources, not extra embedding channels. The UI groups pair
+evidence by these sources so users can see tag evidence separately from field
+evidence.
 
-## Prototypes and matching
+## Discovery and ranking
 
-A prototype identity is `(class_id, source, normalized_key, datatype)`. Keys
-such as `temp`, `temperature`, and `heat_level` remain separate prototypes.
-Each compact prototype contains five centroids at most, a member count, and a
-prototype version. Raw member vectors remain solely in the pair embedding
-store.
+Candidate discovery runs independently for each of the six evidence channels. The
+current baseline uses HDBSCAN over a precomputed cosine-distance matrix for each
+channel. There is no hand-tuned weighted fusion and no global user-facing average
+similarity score.
 
-For a candidate pair and class prototype, compatibility is the mean of valid
-pair-view cosine scores. All candidate/prototype compatibilities are ordered by
-descending score, then stable pair and prototype identities. A match is
-accepted only if neither side was previously matched. Candidate coverage and
-prototype coverage are reported separately; unmatched pairs and prototypes are
-retained in the response.
+If the exact same topic membership is independently discovered by multiple channels,
+those channels are attached to one candidate as consensus reasons. Candidate ordering
+is deterministic:
 
-Class channel scores are means over matched evidence. An unavailable numeric
-channel is `null`, never fabricated as zero. The overall similarity is an equal
-mean of valid class channels. It is a similarity score, not a probability.
+1. more independent supporting discovery channels,
+2. larger candidate membership,
+3. stable topic identity ordering.
 
-## Version and action contract
+A scalar compatibility may be used internally to make pair-to-pair one-to-one
+matching deterministic. It is not presented as the reason the class was recommended.
 
-Each canonical topic has a representation version. Rapid numeric value changes
-do not repeatedly rebuild representation state; key, datatype, source, schema,
-and stable categorical changes do. Each class has a profile version that
-increments for membership, canonical remap, or representation-relevant profile
-changes.
+## User-facing explanation
 
-Recommendation identity includes canonical topic, topic version, class ID,
-class profile version, and algorithm version. Accept/reject/dismiss requests
-must present the current identity; stale actions receive HTTP 409.
+The Recommendations UI shows evidence such as:
 
-- `RECOMMENDATION_ACCEPT` adds membership and records recommendation evidence.
-- `RECOMMENDATION_REJECT` stores a version-scoped negative constraint.
-- `RECOMMENDATION_DISMISS` hides only that unchanged version and is not a label.
-- `MANUAL_ADD` and `MANUAL_REMOVE` change membership with distinct provenance.
-- duplicate confirm and keep-both actions remain separate identity decisions.
+- which channels independently discovered the group,
+- suggested member topics,
+- matched pair coverage,
+- tag pair evidence,
+- field pair evidence,
+- individual key/value/key+value/schema/numeric-key cosine scores,
+- whole-stream context similarity,
+- pending duplicate-review state.
 
-Audit rows are append-only and contain factual versions, scores, coverage, and
-matched identities. They contain no dense vectors or generated explanations.
+The UI does not reduce those facts to one `Overall similarity` number.
 
-## Storage classification and migration map
+## Human feedback boundary
 
-| Object | Classification | Current role |
-| --- | --- | --- |
-| PostgreSQL `classes`, `class_topics` | Source of truth | Class identity and ordered canonical membership |
-| PostgreSQL `duplicate_canonical_topics` | Source of truth | Direct canonical roots; alias chains are forbidden |
-| PostgreSQL `duplicates` | Source of truth | Pending and terminal duplicate decisions |
-| PostgreSQL `topic_representations` | Derived persistent state | Pair contract fingerprint and topic version |
-| PostgreSQL `class_recommendation_constraints` | Human decision | Version-scoped rejection evidence |
-| PostgreSQL `class_recommendation_dismissals` | Product state | Hide-until-change state, not model training |
-| PostgreSQL `class_recommendation_actions` | Audit | Append-only factual action provenance |
-| PostgreSQL `semantic_application_state` | Legacy migration | Preserved non-destructively; production no longer reads or writes it |
-| Qdrant `topic_embeddings` | Shared derived evidence | Authoritative duplicate and stream-context vector |
-| Qdrant `tag_key_value_embeddings` | Derived exploratory evidence | Existing Tag Groups only; not a recommendation channel |
-| Qdrant `tag_group_centroids` | Derived exploratory state | Existing Tag Groups only |
-| Qdrant `class_pair_embeddings` | Derived persistent evidence | One raw vector per canonical pair/view |
-| Qdrant `class_pair_prototypes` | Derived materialization | Compact per-role centroid points |
-| Qdrant `class_stream_context_prototypes` | Derived materialization | One shared-context centroid per class |
-| Qdrant `stream_representation_embeddings` | Legacy migration | Preserved in existing deployments; production no longer reads or writes it |
-| In-memory recommendation cache | Derived cache | Version-keyed deterministic results |
+This change establishes discovery and explanation only. The next feedback layer keeps
+candidate review separate from Saved Class membership:
 
-The migration is non-destructive. It adds IDs, versions, action tables, and new
-derived vector collections. It stops legacy reads/writes but does not drop the
-legacy PostgreSQL table or old Qdrant collection. No volume reset is required.
+```text
+system candidate
+  ├─ keep member
+  ├─ remove member
+  ├─ add member
+  ├─ dismiss/reject
+  └─ optionally save an accepted result as a user class
+```
 
-## Module disposition
+Kept/added/removed decisions should be persisted as candidate feedback and can later
+be used as learning evidence. Existing manually created Saved Classes can also become
+supervised examples later, but they are not silently treated as system candidates.
 
-The pre-refactor package was classified before removal:
+## Duplicate boundary
 
-- **Moved:** deterministic profiler and temporal stability logic to
-  `services/class_recommendation`; RQ1 dataset leakage controls to the research
-  evaluation subpackage.
-- **Retained:** embedding model, authoritative flat topic vector, cosine and
-  centroid concepts, canonical identity, duplicate lifecycle, Tag Groups,
-  MQTT/Influx/WebSocket paths, Saved Classes, and all intentional dashboard and
-  graph work.
-- **Research:** prior open-world documents moved under
-  `docs/research/archive/` and clearly marked historical.
-- **Removed:** production discovery pool, clustering, open-world decision
-  lifecycle, separate review/catalog API and UI, six flattened stream-view
-  runtime, snapshot workers, and tests that only asserted those retired paths.
+Duplicate detection is an identity workflow, not a class workflow.
+
+- `PENDING`: both topics stay independently active; recommendation only displays the
+  pending flag.
+- `NOT_DUPLICATE` / keep-both: both remain independent.
+- confirmed duplicate: the alias stops independent processing and candidate
+  contribution; the canonical root remains active.
 
 ## APIs
+
+User-owned Saved Classes remain under:
 
 - `GET /api/classes/`
 - `POST /api/classes/`
 - `PUT /api/classes/{name}`
 - `DELETE /api/classes/{name}`
-- `GET /api/topics/{topic}/class-recommendations`
-- `GET /api/classes/{name}/recommendations`
-- `POST /api/classes/{name}/recommendation-actions`
+
+System discovery is exposed through:
+
+- `GET /api/recommended-classes`
 - `GET /api/class-recommendations/status`
 
-Recommendation responses expose pair identities, actual cosine evidence,
-coverage, unmatched evidence, versions, and pending duplicate state. They do
-not expose vectors, model internals, credentials, DSNs, or SQL.
+Older Saved-Class matching endpoints are retained temporarily for compatibility but
+are not the dashboard Recommended Classes workflow and should not be used to mix the
+two class concepts.
+
+## Persistence direction
+
+The current vector persistence remains unchanged in this semantics/UI commit. A later
+persistence change may move vector evidence from Qdrant to PostgreSQL + pgvector.
+That migration must not change the class separation or evidence contract described
+above.
