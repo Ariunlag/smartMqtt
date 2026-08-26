@@ -2,7 +2,10 @@ import json
 
 import pytest
 
-from services.database.vector import PostgresVectorStore
+from services.database.vector import (
+    PostgresVectorStore,
+    deterministic_vector_identity,
+)
 
 
 class FakeDatabase:
@@ -58,7 +61,7 @@ def test_pgvector_store_upserts_and_uses_cosine_ann_query():
     assert points[0].vector == _vector(0.5)
     sql, _ = database.executed[-1]
     assert "embedding <=>" in sql
-    assert "ORDER BY" in sql
+    assert "ORDER BY embedding <=>" in sql
 
 
 def test_pgvector_store_filters_delete_in_sql_instead_of_scanning_points():
@@ -79,3 +82,35 @@ def test_pgvector_store_rejects_unknown_collection_and_wrong_dimension():
         store.all_points("not-a-collection")
     with pytest.raises(ValueError, match="Embedding dimension mismatch"):
         store.upsert("topic_embeddings", "topic/a", [1.0, 2.0], {})
+
+
+def test_composite_vector_identity_is_deterministic_and_postgres_text_safe():
+    first = deterministic_vector_identity(
+        "class_pair_embeddings",
+        "topic\0with-null",
+        "field",
+        "temperature",
+        "numeric",
+        "key_value",
+    )
+    second = deterministic_vector_identity(
+        "class_pair_embeddings",
+        "topic\0with-null",
+        "field",
+        "temperature",
+        "numeric",
+        "key_value",
+    )
+    different = deterministic_vector_identity(
+        "class_pair_embeddings",
+        "topic\0with-null",
+        "field",
+        "temperature",
+        "numeric",
+        "schema",
+    )
+
+    assert first == second
+    assert first != different
+    assert "\0" not in first
+    assert len(first) == 36

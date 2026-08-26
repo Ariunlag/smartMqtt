@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import uuid
 from dataclasses import dataclass
 from typing import Any
 
@@ -22,6 +23,16 @@ _COLLECTION_TABLES = {
     "class_pair_prototypes": "class_pair_prototypes",
     "class_stream_context_prototypes": "class_stream_context_prototypes",
 }
+
+
+def deterministic_vector_identity(namespace: str, *parts: object) -> str:
+    """Return a fixed-size, PostgreSQL TEXT-safe identity for composite keys."""
+    material = json.dumps(
+        [str(part) for part in parts],
+        ensure_ascii=False,
+        separators=(",", ":"),
+    )
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"influxai:{namespace}:{material}"))
 
 
 @dataclass(frozen=True, slots=True)
@@ -121,7 +132,7 @@ class PostgresVectorStore:
             SELECT identity, payload, embedding::text AS embedding,
                    1 - (embedding <=> %s::vector) AS score
             FROM {table}
-            ORDER BY embedding <=> %s::vector, identity
+            ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
             (literal, literal, int(limit)),
