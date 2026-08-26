@@ -51,43 +51,30 @@ Every tag and field remains an independent pair identified by canonical topic,
 original topic, source (`tag` or `field`), normalized key, datatype, numeric state,
 and representation version.
 
-The five pair views are:
-
-1. `key`
-2. `value`
-3. `key_value`
-4. `schema`
-5. `numeric_key` for numeric pairs only
-
-The sixth channel is `stream_context`, reusing the authoritative flat topic vector
-already produced for duplicate detection. It is not a duplicate recommendation-only
-embedding.
+The five pair views are `key`, `value`, `key_value`, `schema`, and `numeric_key` for
+numeric pairs only. The sixth channel is `stream_context`, reusing the authoritative
+flat topic vector already produced for duplicate detection.
 
 `tag` and `field` are pair sources, not extra embedding channels. The UI groups pair
-evidence by these sources so users can see tag evidence separately from field
-evidence.
+evidence by source so tag evidence and field evidence remain understandable.
 
 ## Discovery and ranking
 
 Candidate discovery runs independently for each of the six evidence channels. The
-current baseline uses HDBSCAN over a precomputed cosine-distance matrix for each
-channel. There is no hand-tuned weighted fusion and no global user-facing average
-similarity score.
+baseline uses HDBSCAN over a precomputed cosine-distance matrix for each channel.
+There is no hand-tuned weighted fusion and no global user-facing average similarity.
 
 If the exact same topic membership is independently discovered by multiple channels,
 those channels are attached to one candidate as consensus reasons. Candidate ordering
-is deterministic:
+is deterministic: more supporting channels first, then larger membership, then stable
+topic ordering.
 
-1. more independent supporting discovery channels,
-2. larger candidate membership,
-3. stable topic identity ordering.
-
-A scalar compatibility may be used internally to make pair-to-pair one-to-one
-matching deterministic. It is not presented as the reason the class was recommended.
+A scalar compatibility is allowed internally only to make pair-to-pair one-to-one
+assignment deterministic. It is not presented as recommendation confidence.
 
 ## User-facing explanation
 
-The Recommendations UI shows evidence such as:
+The Recommendations UI shows:
 
 - which channels independently discovered the group,
 - suggested member topics,
@@ -102,31 +89,33 @@ The UI does not reduce those facts to one `Overall similarity` number.
 
 ## Human feedback boundary
 
-This change establishes discovery and explanation only. The next feedback layer keeps
-candidate review separate from Saved Class membership:
-
-```text
-system candidate
-  ├─ keep member
-  ├─ remove member
-  ├─ add member
-  ├─ dismiss/reject
-  └─ optionally save an accepted result as a user class
-```
-
-Kept/added/removed decisions should be persisted as candidate feedback and can later
-be used as learning evidence. Existing manually created Saved Classes can also become
-supervised examples later, but they are not silently treated as system candidates.
+Candidate review remains separate from Saved Class membership. A later feedback layer
+will persist keep/add/remove/reject decisions as supervised candidate evidence. An
+accepted candidate may optionally be saved into a user-owned class, but it is not a
+Saved Class before that explicit action.
 
 ## Duplicate boundary
 
 Duplicate detection is an identity workflow, not a class workflow.
 
-- `PENDING`: both topics stay independently active; recommendation only displays the
+- `PENDING`: both topics remain independently active; recommendation only displays a
   pending flag.
-- `NOT_DUPLICATE` / keep-both: both remain independent.
+- `NOT_DUPLICATE`: both remain independent.
 - confirmed duplicate: the alias stops independent processing and candidate
   contribution; the canonical root remains active.
+
+## Persistence
+
+PostgreSQL is now both the relational source of truth and the dense-vector store via
+pgvector. HNSW cosine indexes back topic ANN search, pair evidence, tag evidence, and
+prototype material. InfluxDB remains the telemetry time-series store.
+
+The vector schema currently enforces 384 dimensions. A model-dimensionality change
+requires an explicit migration rather than silently mixing vector shapes.
+
+The compatibility module `services.database.qdrant` temporarily re-exports the
+PostgreSQL vector adapter so older store imports do not require a flag-day rewrite; it
+does not connect to Qdrant.
 
 ## APIs
 
@@ -143,12 +132,4 @@ System discovery is exposed through:
 - `GET /api/class-recommendations/status`
 
 Older Saved-Class matching endpoints are retained temporarily for compatibility but
-are not the dashboard Recommended Classes workflow and should not be used to mix the
-two class concepts.
-
-## Persistence direction
-
-The current vector persistence remains unchanged in this semantics/UI commit. A later
-persistence change may move vector evidence from Qdrant to PostgreSQL + pgvector.
-That migration must not change the class separation or evidence contract described
-above.
+are not the dashboard Recommended Classes workflow.

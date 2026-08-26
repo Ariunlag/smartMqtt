@@ -17,23 +17,25 @@ class Config:
         self.INFLUX_ORG = os.getenv("INFLUX_ORG", "influxai")
         self.INFLUX_TOKEN = os.getenv("INFLUX_TOKEN", "")
 
-        # PostgreSQL metadata and relationships
+        # PostgreSQL metadata, relationships, and pgvector embeddings
         self.POSTGRES_DSN = os.getenv(
             "POSTGRES_DSN",
             "postgresql://influxai:influxai@localhost:5432/influxai",
         )
 
-        # Qdrant embedding vectors
-        self.QDRANT_URL = os.getenv("QDRANT_URL", "http://localhost:6333")
-        self.QDRANT_API_KEY = os.getenv("QDRANT_API_KEY") or None
-
         # Runtime host/port
         self.BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
         self.BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8000"))
 
-        # Embedding model config
+        # Embedding model config. The pgvector schema currently fixes the vector
+        # dimension at 384; changing model dimensionality requires a migration.
         self.EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "BAAI/bge-small-en-v1.5")
         self.EMBEDDING_DEVICE = os.getenv("EMBEDDING_DEVICE", "cpu")
+        self.EMBEDDING_DIMENSION = int(os.getenv("EMBEDDING_DIMENSION", "384"))
+        if self.EMBEDDING_DIMENSION != 384:
+            raise ValueError(
+                "EMBEDDING_DIMENSION must remain 384 until the pgvector schema is migrated"
+            )
 
         # Thresholds for duplicate detection
         self.ID_THRESH = self._ratio("ID_THRESH", 0.90)
@@ -55,7 +57,6 @@ class Config:
         # MQTT ingestion queue / backpressure
         self.INGEST_QUEUE_MAXSIZE = int(os.getenv("INGEST_QUEUE_MAXSIZE", "1000"))
         self.INGEST_WORKERS = int(os.getenv("INGEST_WORKERS", "4"))
-        # "drop_new" (reject newest) or "drop_oldest" (evict oldest to admit new)
         self.INGEST_QUEUE_FULL_POLICY = os.getenv(
             "INGEST_QUEUE_FULL_POLICY", "drop_new"
         )
@@ -88,7 +89,6 @@ class Config:
 
     @staticmethod
     def _ratio(name: str, default: float) -> float:
-        """Parse an env var as a similarity threshold in the inclusive [0, 1] range."""
         value = float(os.getenv(name, default))
         if not 0.0 <= value <= 1.0:
             raise ValueError(f"{name} must be between 0 and 1, got {value}")
@@ -107,5 +107,4 @@ class Config:
         raise ValueError(f"{name} must be a boolean, got {value!r}")
 
 
-# single instance used everywhere
 config = Config()

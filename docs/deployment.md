@@ -1,8 +1,8 @@
 # Deployment guide
 
-SmartMQTT's supported local deployment is the repository Docker Compose stack.
-It runs PostgreSQL, Qdrant, InfluxDB, Mosquitto, a one-off Alembic migration,
-the FastAPI backend, and the React/Nginx frontend.
+SmartMQTT's supported local deployment is the repository Docker Compose stack. It
+runs PostgreSQL with pgvector, InfluxDB, Mosquitto, a one-off Alembic migration, the
+FastAPI backend, and the React/Nginx frontend.
 
 ## Local startup
 
@@ -11,9 +11,9 @@ docker compose up -d --build
 docker compose ps
 ```
 
-The backend container starts only after PostgreSQL is healthy and the migration
-job completes. InfluxDB, Mosquitto, Qdrant, and the backend also expose Compose
-health checks. Runtime probes are:
+The backend starts only after PostgreSQL is healthy and the migration job completes.
+InfluxDB, Mosquitto, and the backend also expose Compose health checks. Runtime probes
+are:
 
 ```text
 GET /api/health/live     process liveness; independent of dependencies
@@ -21,27 +21,29 @@ GET /api/health/ready    200 only when every required dependency is healthy
 GET /api/health/details  per-dependency health and bounded check latency
 ```
 
-The frontend is available at `http://localhost:3000` and proxies `/api` to the
-backend. The backend is also published at `http://localhost:8000` for local
-diagnostics.
+The frontend is available at `http://localhost:3000` and proxies `/api` to the backend.
+The backend is also published at `http://localhost:8000` for local diagnostics.
 
 ## Configuration and secrets
 
-Compose includes developer-only defaults so an isolated workstation can start
-without a secret manager. They must not be used for a shared environment.
+Compose includes developer-only defaults so an isolated workstation can start without
+a secret manager. They must not be used for a shared environment.
 
-Use `.env.acceptance.example` as a key inventory, copy it to an untracked env
-file, and replace every `CHANGE_ME`. Never commit passwords, tokens, populated
-DSNs, `.env` files, or model-provider credentials. In a managed deployment,
-inject secrets with the platform's secret store and restrict published ports.
+Use `.env.acceptance.example` as a key inventory, copy it to an untracked env file,
+and replace every `CHANGE_ME`. Never commit passwords, tokens, populated DSNs, `.env`
+files, or model-provider credentials.
 
 Important runtime settings include:
 
 - PostgreSQL database/user/password and `POSTGRES_DSN`
 - InfluxDB initialization password/token, organization, and bucket
-- optional `QDRANT_API_KEY`
-- `EMBEDDING_MODEL` and `EMBEDDING_DEVICE`
-- ingestion and class recommendation queue bounds
+- `EMBEDDING_MODEL`, `EMBEDDING_DEVICE`, and the current 384-dimensional embedding
+  schema contract
+- ingestion and recommendation queue bounds
+
+PostgreSQL must provide the pgvector extension. The repository Compose stack uses
+`pgvector/pgvector:pg16`; Alembic migration `0005_pgvector_embeddings` enables the
+extension and creates the HNSW-indexed vector tables.
 
 ## Safe shutdown and recovery
 
@@ -49,19 +51,30 @@ Important runtime settings include:
 docker compose stop
 ```
 
-The backend stops primary ingestion and bounded recommendation processing,
-stops dependency monitoring, and disconnects clients. Compose volumes retain
-PostgreSQL, Qdrant, and InfluxDB data.
+The backend stops primary ingestion and bounded recommendation processing, stops
+dependency monitoring, and disconnects clients. Compose volumes retain PostgreSQL and
+InfluxDB data.
 
-`docker compose down -v` permanently deletes those volumes. It is not part of
-normal shutdown, acceptance, or recovery.
+`docker compose down -v` permanently deletes those volumes. It is not part of normal
+shutdown, acceptance, or recovery.
 
-The dependency monitor keeps liveness available during broker or database
-outages. Readiness becomes unavailable until recovery. MQTT recovery reconnects
-the existing client network loop and restores stored subscriptions. Class
-membership, versions, constraints, dismissals, and audits recover directly from
-PostgreSQL; derived Qdrant profiles rebuild from authoritative membership and
-pair evidence.
+The dependency monitor keeps liveness available during broker or database outages.
+Readiness becomes unavailable until recovery. MQTT recovery reconnects the existing
+client network loop and restores stored subscriptions. Relational metadata, human
+decisions, and dense vectors now recover from PostgreSQL; there is no separate vector
+service to coordinate.
+
+## Existing deployments moving from Qdrant
+
+The pgvector migration creates new PostgreSQL vector tables but does not copy bytes
+from an external Qdrant volume. Those vectors are derived state. Active MQTT
+observations rematerialize current topic/pair evidence into PostgreSQL. Export any
+historical vector-only artifacts that must be retained before retiring an old Qdrant
+service.
+
+For production cutover, take a database backup, deploy PostgreSQL with the pgvector
+extension available, run `alembic upgrade head`, then start the backend and verify
+current topics rematerialize before decommissioning the old vector service.
 
 ## Real-stack acceptance
 
@@ -72,12 +85,9 @@ changes:
 python -m scripts.run_real_stack_acceptance --run-id local-001
 ```
 
-The workflow uses real MQTT publication and all configured data services. It
-also verifies restart recovery, broker recovery, pair recommendation actions,
-canonical duplicate reconciliation, and bounded queue behavior. It does not
-delete volumes. Full
-details and failure guidance are in
-[`docs/REAL_STACK_ACCEPTANCE.md`](REAL_STACK_ACCEPTANCE.md).
+The workflow uses real MQTT publication and configured data services. It verifies
+restart recovery, broker recovery, recommendation evidence, canonical duplicate
+reconciliation, and bounded queue behavior. It does not delete volumes.
 
 ## External deployment hardening
 
