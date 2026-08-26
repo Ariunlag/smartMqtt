@@ -1,8 +1,8 @@
 services:
   backend:
     environment:
-      # Acceptance-only operational sizing. Recommendation scoring remains
-      # unchanged; the shorter duplicate delay keeps the test bounded.
+      # Acceptance-only operational sizing. Evidence scoring stays unchanged;
+      # these values keep delayed duplicate checks and small discovery fixtures bounded.
       CLASS_RECOMMENDATION_QUEUE_MAXSIZE: ${CLASS_RECOMMENDATION_QUEUE_MAXSIZE:-128}
       INGEST_QUEUE_MAXSIZE: ${INGEST_QUEUE_MAXSIZE:-512}
       INGEST_WORKERS: ${INGEST_WORKERS:-16}
@@ -10,3 +10,6 @@ services:
       ID_THRESH: ${ID_THRESH:-0.8}
       RECOVERY_BASE_DELAY: ${RECOVERY_BASE_DELAY:-1.0}
       RECOVERY_MAX_DELAY: ${RECOVERY_MAX_DELAY:-4.0}
+      SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE: ${SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE:-2}
+      SYSTEM_RECOMMENDATION_MIN_SAMPLES: ${SYSTEM_RECOMMENDATION_MIN_SAMPLES:-1}
+      SYSTEM_RECOMMENDATION_ALLOW_SINGLE_CLUSTER: ${SYSTEM_RECOMMENDATION_ALLOW_SINGLE_CLUSTER:-true}
