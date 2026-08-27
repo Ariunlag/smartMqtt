@@ -7,6 +7,7 @@ recommended-class workflow used by the dashboard.
 
 import asyncio
 from dataclasses import asdict
+from uuid import UUID
 
 from config import config
 from fastapi import APIRouter, HTTPException, Request
@@ -67,14 +68,14 @@ async def recommended_class_candidates(
 
 @router.post("/recommended-classes/{candidate_id}/feedback")
 async def recommended_class_feedback(
-    candidate_id: str,
+    candidate_id: UUID,
     payload: RecommendedClassFeedbackRequest,
 ):
     """Record an immutable label against an exact persistent candidate version."""
     try:
         return await asyncio.to_thread(
             recommended_candidate_store.record_feedback,
-            candidate_id=candidate_id,
+            candidate_id=str(candidate_id),
             candidate_version=payload.candidate_version,
             action_type=payload.action,
             topic=payload.topic,
