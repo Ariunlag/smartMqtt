@@ -40,6 +40,11 @@ class TemporalEntryState:
     is_unit_like: bool
     is_timestamp_like: bool
 
+    @property
+    def is_numeric(self) -> bool:
+        """Compatibility view derived from datatype; not recommendation evidence."""
+        return self.current_value_type == "numeric"
+
 
 @dataclass(frozen=True, slots=True)
 class TemporalStreamProfile:
