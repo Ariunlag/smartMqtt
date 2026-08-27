@@ -39,6 +39,8 @@ APP_TABLES = [
     "class_stream_context_prototypes",
 ]
 
+HEAD_REVISION = "0006_duplicate_pair_ordering"
+
 
 def _make_config(url: str) -> Config:
     cfg = Config(str(BACKEND_DIR / "alembic.ini"))
@@ -94,14 +96,23 @@ def pg_url():
 
 def test_clean_database_upgrades_to_head(pg_url):
     command.upgrade(_make_config(pg_url), "head")
-    assert _alembic_version(pg_url) == "0005_pgvector_embeddings"
+    assert _alembic_version(pg_url) == HEAD_REVISION
     for table in APP_TABLES:
         assert _table_exists(pg_url, table), table
     with psycopg.connect(pg_url) as conn:
         extension = conn.execute(
             "SELECT extname FROM pg_extension WHERE extname = 'vector'"
         ).fetchone()
+        constraint = conn.execute(
+            """
+            SELECT pg_get_constraintdef(oid)
+            FROM pg_constraint
+            WHERE conrelid = 'duplicates'::regclass
+              AND conname = 'duplicates_topic_order_check'
+            """
+        ).fetchone()
     assert extension and extension[0] == "vector"
+    assert constraint and 'COLLATE "C"' in constraint[0]
 
 
 def test_existing_schema_adopts_baseline_without_data_loss(pg_url):
@@ -116,7 +127,7 @@ def test_existing_schema_adopts_baseline_without_data_loss(pg_url):
 
     command.upgrade(_make_config(pg_url), "head")
 
-    assert _alembic_version(pg_url) == "0005_pgvector_embeddings"
+    assert _alembic_version(pg_url) == HEAD_REVISION
     with psycopg.connect(pg_url) as conn:
         row = conn.execute("SELECT topic FROM streams").fetchone()
     assert row[0] == "keep/me"
@@ -126,7 +137,7 @@ def test_repeated_upgrade_is_idempotent(pg_url):
     cfg = _make_config(pg_url)
     command.upgrade(cfg, "head")
     command.upgrade(cfg, "head")
-    assert _alembic_version(pg_url) == "0005_pgvector_embeddings"
+    assert _alembic_version(pg_url) == HEAD_REVISION
 
 
 def test_downgrade_removes_baseline(pg_url):
