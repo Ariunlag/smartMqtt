@@ -14,6 +14,7 @@ from services.class_recommendation.domain import (
     PairRepresentation,
 )
 from services.class_recommendation.embedding import PairEmbedder, PairEmbeddingError
+from services.class_recommendation.evidence import PAIR_EVIDENCE_IDS
 from services.class_recommendation.matching import PairClassMatcher
 from services.class_recommendation.profiling import StreamProfiler
 from services.class_recommendation.representations import PairRepresentationBuilder
@@ -31,7 +32,7 @@ class CountingModel:
         ]
 
 
-def test_each_pair_keeps_identity_and_exact_valid_views():
+def test_each_pair_keeps_identity_and_exact_registered_views():
     profile = StreamProfiler().profile(
         "building/room",
         {"location": "Room_2"},
@@ -49,20 +50,10 @@ def test_each_pair_keeps_identity_and_exact_valid_views():
         "field:status:string",
         "field:temperature:numeric",
     ]
-    assert tuple(name for name, _ in pairs[0].texts) == (
-        "key",
-        "value",
-        "key_value",
-        "schema",
-    )
-    assert tuple(name for name, _ in pairs[2].texts) == (
-        "key",
-        "value",
-        "key_value",
-        "schema",
-        "numeric_key",
-    )
+    assert tuple(name for name, _ in pairs[0].texts) == PAIR_EVIDENCE_IDS
+    assert tuple(name for name, _ in pairs[2].texts) == PAIR_EVIDENCE_IDS
     assert pairs[2].text_for("key_value") == "temperature: 22.5"
+    assert pairs[2].text_for("numeric_key") is None
     assert all(" | " not in text for pair in pairs for _, text in pair.texts)
 
 
@@ -79,10 +70,10 @@ def test_pair_embedder_batches_once_without_collapsing_pair_or_view_identity():
     embedded = PairEmbedder(model).embed(pairs)
 
     assert len(model.calls) == 1
-    assert len(model.calls[0]) == 9
+    assert len(model.calls[0]) == 8
     assert len(embedded) == 2
     assert len(embedded[0].vectors) == 4
-    assert len(embedded[1].vectors) == 5
+    assert len(embedded[1].vectors) == 4
 
 
 def test_qdrant_pair_store_round_trip_preserves_views_and_text():
@@ -150,7 +141,6 @@ def _pair(key, vectors, *, datatype="numeric"):
         normalized_key=key,
         normalized_value="1",
         datatype=datatype,
-        is_numeric=datatype == "numeric",
         representation_version=1,
         texts=(),
     )
@@ -169,15 +159,14 @@ def _prototype(class_id, key, vectors, *, datatype="numeric", version=1):
 
 
 def test_matching_is_one_to_one_deterministic_and_keeps_coverage_and_unmatched_pairs():
-    five = {
+    four = {
         "key": (1.0, 0.0),
         "value": (1.0, 0.0),
         "key_value": (1.0, 0.0),
         "schema": (1.0, 0.0),
-        "numeric_key": (1.0, 0.0),
     }
-    pairs = (_pair("temp", five), _pair("temperature", five))
-    prototype = _prototype("temperature", "temperature", five)
+    pairs = (_pair("temp", four), _pair("temperature", four))
+    prototype = _prototype("temperature", "temperature", four)
     profile = ClassProfile("temperature", "Temperature", 3, (prototype,), None)
 
     first = PairClassMatcher.recommend(
@@ -206,16 +195,11 @@ def test_matching_is_one_to_one_deterministic_and_keeps_coverage_and_unmatched_p
     assert first.matched_pairs[0].candidate.normalized_key == "temp"
     assert first.unmatched_candidate_pairs[0].normalized_key == "temperature"
     assert first.duplicate_pending is True
-    assert first.valid_channels == (
-        "key",
-        "value",
-        "key_value",
-        "schema",
-        "numeric_key",
-    )
+    assert first.valid_channels == PAIR_EVIDENCE_IDS
+    assert "numeric_key" not in first.valid_channels
 
 
-def test_numeric_channel_is_null_when_pair_or_prototype_is_not_numeric():
+def test_stream_context_is_separate_registry_evidence_without_numeric_special_case():
     four = {
         "key": (1.0, 0.0),
         "value": (1.0, 0.0),
@@ -238,8 +222,8 @@ def test_numeric_channel_is_null_when_pair_or_prototype_is_not_numeric():
         profile=profile,
         duplicate_pending=False,
     )
-    assert result.channel_scores.numeric_key is None
-    assert result.channel_scores.stream_context == pytest.approx(1.0)
+    assert result.channel_scores.get("stream_context") == pytest.approx(1.0)
+    assert result.channel_scores.get("numeric_key") is None
     assert result.overall_score == pytest.approx(1.0)
 
 
