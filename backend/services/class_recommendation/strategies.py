@@ -14,10 +14,12 @@ from sklearn.cluster import HDBSCAN
 
 from .domain import PairEmbeddingRecord
 from .evidence import DISCOVERY_EVIDENCE_IDS
+from .matching import centroid, cosine
 
 DistanceMatrix = tuple[tuple[float, ...], ...]
 ClusterLabels = Callable[[str, DistanceMatrix], Sequence[int]]
 DEFAULT_STRATEGY_ID = "independent_hdbscan"
+TAG_VALUE_CENTROID_STRATEGY_ID = "tag_value_centroid"
 
 
 @dataclass(frozen=True, slots=True)
@@ -65,12 +67,24 @@ class HdbscanStrategyConfig:
             raise ValueError("min_samples must be at least 1")
 
 
+@dataclass(frozen=True, slots=True)
+class TagValueCentroidStrategyConfig:
+    threshold: float = 0.85
+    min_topic_count: int = 2
+
+    def __post_init__(self) -> None:
+        if not 0.0 <= self.threshold <= 1.0:
+            raise ValueError("centroid threshold must be between 0 and 1")
+        if self.min_topic_count < 2:
+            raise ValueError("min_topic_count must be at least 2")
+
+
 class IndependentEvidenceHdbscanStrategy:
     """Cluster every registered evidence channel independently, without fusion."""
 
     definition = RecommendationStrategyDefinition(
         strategy_id=DEFAULT_STRATEGY_ID,
-        label="Independent evidence",
+        label="Independent evidence (HDBSCAN)",
         description=(
             "Runs HDBSCAN separately for each evidence type and merges identical "
             "topic groups as consensus. No cross-evidence weighting is applied."
@@ -162,8 +176,82 @@ class IndependentEvidenceHdbscanStrategy:
         ).fit_predict(matrix)
 
 
+class TagValueCentroidStrategy:
+    """Deterministic batch form of the original tag-value centroid baseline.
+
+    Every tag pair contributes only its already-materialized `value` vector. Vectors
+    are processed in stable topic/pair order, assigned to the nearest current centroid
+    when the configured cosine threshold is met, and otherwise start a new centroid.
+    The strategy owns no vector persistence and creates no extra embeddings.
+    """
+
+    definition = RecommendationStrategyDefinition(
+        strategy_id=TAG_VALUE_CENTROID_STRATEGY_ID,
+        label="Tag value centroid",
+        description=(
+            "Uses only tag pair value embeddings and the original nearest-centroid "
+            "assignment idea. It is a baseline over the same stored evidence."
+        ),
+    )
+
+    def __init__(self, config: TagValueCentroidStrategyConfig) -> None:
+        self.config = config
+
+    def discover(
+        self, evidence: RecommendationStrategyInput
+    ) -> tuple[StrategyCandidateGroup, ...]:
+        items = []
+        for topic in evidence.topics:
+            for record in evidence.pairs_by_topic.get(topic, ()):
+                identity = record.representation.identity
+                if identity.source != "tag":
+                    continue
+                vector = record.vector_for("value")
+                if vector is None:
+                    continue
+                items.append((topic, identity, tuple(vector)))
+        items.sort(key=lambda item: (item[0], item[1]))
+
+        groups: list[dict] = []
+        for topic, identity, vector in items:
+            del identity
+            best_index = None
+            best_score = -2.0
+            for index, group in enumerate(groups):
+                score = cosine(vector, group["centroid"])
+                if score > best_score:
+                    best_score = score
+                    best_index = index
+
+            if best_index is None or best_score < self.config.threshold:
+                groups.append(
+                    {
+                        "vectors": [vector],
+                        "centroid": vector,
+                        "topics": {topic},
+                    }
+                )
+                continue
+
+            group = groups[best_index]
+            group["vectors"].append(vector)
+            group["topics"].add(topic)
+            group["centroid"] = centroid(group["vectors"])
+
+        memberships = {
+            tuple(sorted(group["topics"]))
+            for group in groups
+            if len(group["topics"]) >= self.config.min_topic_count
+        }
+        return tuple(
+            StrategyCandidateGroup(members=members, evidence_ids=("value",))
+            for members in sorted(memberships)
+        )
+
+
 STRATEGY_DEFINITIONS: tuple[RecommendationStrategyDefinition, ...] = (
     IndependentEvidenceHdbscanStrategy.definition,
+    TagValueCentroidStrategy.definition,
 )
 
 
@@ -171,11 +259,16 @@ def build_strategy(
     strategy_id: str,
     *,
     hdbscan_config: HdbscanStrategyConfig,
+    centroid_config: TagValueCentroidStrategyConfig | None = None,
     cluster_labels: ClusterLabels | None = None,
 ) -> RecommendationStrategy:
     if strategy_id == DEFAULT_STRATEGY_ID:
         return IndependentEvidenceHdbscanStrategy(
             hdbscan_config,
             cluster_labels=cluster_labels,
+        )
+    if strategy_id == TAG_VALUE_CENTROID_STRATEGY_ID:
+        return TagValueCentroidStrategy(
+            centroid_config or TagValueCentroidStrategyConfig()
         )
     raise ValueError(f"Unknown recommendation strategy: {strategy_id}")
