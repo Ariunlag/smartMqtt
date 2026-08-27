@@ -38,8 +38,6 @@ def upgrade() -> None:
             created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
             PRIMARY KEY (candidate_id, candidate_version)
         );
-        CREATE UNIQUE INDEX uq_recommended_candidate_snapshot
-            ON recommended_class_candidate_versions(candidate_id, snapshot_fingerprint);
 
         CREATE TABLE recommended_class_feedback (
             feedback_id UUID PRIMARY KEY,
