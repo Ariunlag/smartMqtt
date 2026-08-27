@@ -104,8 +104,21 @@ class PostgresVectorStore:
             conn=conn,
         )
 
-    def nearest(self, collection: str, vector: list[float], *, conn=None):
-        rows = self.nearest_many(collection, vector, limit=1, conn=conn)
+    def nearest(
+        self,
+        collection: str,
+        vector: list[float],
+        *,
+        payload_filter: dict[str, Any] | None = None,
+        conn=None,
+    ):
+        rows = self.nearest_many(
+            collection,
+            vector,
+            limit=1,
+            payload_filter=payload_filter,
+            conn=conn,
+        )
         return rows[0] if rows else None
 
     def nearest_many(
@@ -114,21 +127,29 @@ class PostgresVectorStore:
         vector: list[float],
         limit: int = 10,
         *,
+        payload_filter: dict[str, Any] | None = None,
         conn=None,
     ) -> list[VectorPoint]:
         if limit <= 0:
             return []
         table = self._table(collection)
         literal = self._vector_literal(vector)
+        where = ""
+        params: list[Any] = [literal]
+        if payload_filter:
+            where = "WHERE payload @> %s::jsonb"
+            params.append(json.dumps(payload_filter))
+        params.extend((literal, int(limit)))
         rows = self._fetch_all(
             f"""
             SELECT identity, payload, embedding::text AS embedding,
                    1 - (embedding <=> %s::vector) AS score
             FROM {table}
+            {where}
             ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
-            (literal, literal, int(limit)),
+            tuple(params),
             conn=conn,
         )
         return [
