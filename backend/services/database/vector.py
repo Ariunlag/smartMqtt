@@ -1,4 +1,4 @@
-"""PostgreSQL + pgvector storage for all dense embedding collections."""
+"""PostgreSQL + pgvector storage for active dense embedding collections."""
 
 from __future__ import annotations
 
@@ -11,13 +11,10 @@ from config import config
 from services.database.postgres import postgres_client
 
 TOPIC_COLLECTION = "topic_embeddings"
-TAG_COLLECTION = "tag_key_value_embeddings"
 GROUP_COLLECTION = "tag_group_centroids"
-REPRESENTATION_COLLECTION = "stream_representation_embeddings"  # legacy name only
 
 _COLLECTION_TABLES = {
     TOPIC_COLLECTION: "topic_embeddings",
-    TAG_COLLECTION: "tag_key_value_embeddings",
     GROUP_COLLECTION: "tag_group_centroids",
     "class_pair_embeddings": "class_pair_embeddings",
     "class_pair_prototypes": "class_pair_prototypes",
@@ -44,11 +41,7 @@ class VectorPoint:
 
 
 class PostgresVectorStore:
-    """Small collection-style adapter backed by pgvector tables.
-
-    Keeping the collection interface localizes the storage migration while all
-    vector search, payload filtering, and deletes execute inside PostgreSQL.
-    """
+    """Small collection-style adapter backed by pgvector tables."""
 
     def __init__(self, database=postgres_client) -> None:
         self.database = database
