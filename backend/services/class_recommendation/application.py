@@ -22,6 +22,7 @@ from .domain import (
     TopicRecommendations,
 )
 from .embedding import PairEmbedder
+from .evidence import PAIR_EVIDENCE_IDS
 from .matching import PairClassMatcher, centroid
 from .profiling import StreamProfiler
 from .representations import PairRepresentationBuilder
@@ -248,14 +249,14 @@ class ClassRecommendationApplication:
         for identity in sorted(grouped):
             members = grouped[identity]
             view_centroids = []
-            for view in ("key", "value", "key_value", "schema", "numeric_key"):
+            for evidence_id in PAIR_EVIDENCE_IDS:
                 vectors = [
                     vector
                     for member in members
-                    if (vector := member.vector_for(view)) is not None
+                    if (vector := member.vector_for(evidence_id)) is not None
                 ]
                 if vectors:
-                    view_centroids.append((view, centroid(vectors)))
+                    view_centroids.append((evidence_id, centroid(vectors)))
             prototypes.append(
                 ClassPairPrototype(
                     class_id=class_record["class_id"],
