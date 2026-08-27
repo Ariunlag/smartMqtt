@@ -174,6 +174,12 @@ export interface ClassActionResult {
 // System-derived Recommended Classes
 // ---------------------------
 
+export interface RecommendationStrategyDefinition {
+  strategy_id: string;
+  label: string;
+  description: string;
+}
+
 export interface RecommendedClassTopicEvidence {
   topic: string;
   channel_scores: EvidenceScores;
@@ -194,6 +200,8 @@ export interface RecommendedClassCandidate {
 export interface RecommendedClassCandidateSet {
   candidates: RecommendedClassCandidate[];
   available_topics: string[];
+  strategy: RecommendationStrategyDefinition;
+  strategy_catalog: RecommendationStrategyDefinition[];
   evidence_catalog: EvidenceDefinition[];
 }
 
