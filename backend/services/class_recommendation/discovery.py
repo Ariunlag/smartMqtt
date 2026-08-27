@@ -12,7 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import uuid
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 
 from .domain import (
     REPRESENTATION_CONTRACT_VERSION,
@@ -57,6 +57,7 @@ class TopicComparisonEvidence:
 @dataclass(frozen=True, slots=True)
 class RecommendedClassCandidate:
     candidate_id: str
+    candidate_version: int
     rank: int
     anchor_topic: str
     member_topics: tuple[str, ...]
@@ -207,6 +208,7 @@ class RecommendedClassDiscovery:
         centroid_config: TagValueCentroidStrategyConfig | None = None,
         cluster_labels: ClusterLabels | None = None,
         strategy_id: str = DEFAULT_STRATEGY_ID,
+        candidate_store=None,
     ) -> None:
         self.metadata_store = metadata_store
         self.pair_store = pair_store
@@ -217,6 +219,7 @@ class RecommendedClassDiscovery:
         self.centroid_config = centroid_config or TagValueCentroidStrategyConfig()
         self.cluster_labels = cluster_labels
         self.strategy_id = strategy_id
+        self.candidate_store = candidate_store
 
     def discover(self, strategy_id: str | None = None) -> RecommendedClassCandidateSet:
         selected_strategy_id = strategy_id or self.strategy_id
@@ -285,12 +288,29 @@ class RecommendedClassDiscovery:
             )
             candidate_id = self._candidate_id(
                 members,
-                versions,
                 strategy.definition.strategy_id,
             )
+            evidence_snapshot = self._candidate_snapshot(
+                anchor=anchor,
+                members=members,
+                discovery_channels=group.evidence_ids,
+                evidence=evidence,
+                versions=versions,
+                strategy_id=strategy.definition.strategy_id,
+            )
+            candidate_version = 1
+            if self.candidate_store is not None:
+                candidate_version = self.candidate_store.persist_snapshot(
+                    candidate_id=candidate_id,
+                    strategy_id=strategy.definition.strategy_id,
+                    member_topics=members,
+                    discovery_evidence=group.evidence_ids,
+                    evidence_snapshot=evidence_snapshot,
+                )
             candidates.append(
                 RecommendedClassCandidate(
                     candidate_id=candidate_id,
+                    candidate_version=candidate_version,
                     rank=0,
                     anchor_topic=anchor,
                     member_topics=members,
@@ -309,6 +329,7 @@ class RecommendedClassDiscovery:
         ranked = tuple(
             RecommendedClassCandidate(
                 candidate_id=item.candidate_id,
+                candidate_version=item.candidate_version,
                 rank=index,
                 anchor_topic=item.anchor_topic,
                 member_topics=item.member_topics,
@@ -376,15 +397,36 @@ class RecommendedClassDiscovery:
         return result
 
     @staticmethod
-    def _candidate_id(
+    def _candidate_snapshot(
+        *,
+        anchor: str,
         members: tuple[str, ...],
+        discovery_channels: tuple[str, ...],
+        evidence: tuple[TopicComparisonEvidence, ...],
         versions: dict[str, int],
         strategy_id: str,
+    ) -> dict:
+        return {
+            "representation_contract_version": REPRESENTATION_CONTRACT_VERSION,
+            "strategy_id": strategy_id,
+            "anchor_topic": anchor,
+            "member_topics": list(members),
+            "member_representation_versions": {
+                topic: versions[topic] for topic in members
+            },
+            "discovery_evidence": list(discovery_channels),
+            "topic_evidence": [asdict(item) for item in evidence],
+        }
+
+    @staticmethod
+    def _candidate_id(
+        members: tuple[str, ...],
+        strategy_id: str,
     ) -> str:
+        """Stable identity for one strategy/member set, independent of evidence version."""
         payload = {
-            "contract": REPRESENTATION_CONTRACT_VERSION,
             "strategy": strategy_id,
-            "members": [(topic, versions[topic]) for topic in members],
+            "members": list(members),
         }
         fingerprint = hashlib.sha256(
             json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
