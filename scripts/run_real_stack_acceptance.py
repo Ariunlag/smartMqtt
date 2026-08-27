@@ -66,6 +66,7 @@ class RealStackAcceptance:
             self._start_stack()
             topics = self._publish_recommendation_fixture()
             self._verify_system_candidate(topics)
+            self._verify_strategy_selection(topics)
             self._verify_pgvector_material()
             self._verify_duplicate_keep_both()
             self._verify_confirmed_duplicate_identity()
@@ -149,6 +150,34 @@ class RealStackAcceptance:
         self._require(sources.issubset({"tag", "field"}), "unexpected pair source")
         self.report.candidate_id = candidate["candidate_id"]
         self.report.passed("system candidate separated from Saved Classes with evidence")
+
+    def _verify_strategy_selection(self, expected_topics: tuple[str, ...]) -> None:
+        query = urllib.parse.urlencode({"strategy": "tag_value_centroid"})
+        state = self._json("GET", f"{self.api}/recommended-classes?{query}")
+        self._require(
+            state["strategy"]["strategy_id"] == "tag_value_centroid",
+            "tag-value centroid strategy was not selected",
+        )
+        strategy_ids = {item["strategy_id"] for item in state["strategy_catalog"]}
+        self._require(
+            {"independent_hdbscan", "tag_value_centroid"}.issubset(strategy_ids),
+            "registered recommendation strategy catalog is incomplete",
+        )
+        expected = set(expected_topics)
+        candidate = next(
+            (
+                row
+                for row in state["candidates"]
+                if len(expected.intersection(row["member_topics"])) >= 2
+            ),
+            None,
+        )
+        self._require(candidate is not None, "tag-value centroid produced no fixture candidate")
+        self._require(
+            candidate["discovery_channels"] == ["value"],
+            "tag-value centroid did not report value-only discovery evidence",
+        )
+        self.report.passed("tag-value centroid strategy reuses shared pair evidence")
 
     def _verify_pgvector_material(self) -> None:
         prefix = self.prefix.replace("'", "''")
