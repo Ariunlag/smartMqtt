@@ -3,7 +3,6 @@ import logging
 
 from config import config
 from services.database.postgres import postgres_client
-from services.database.qdrant import qdrant_client
 from services.dependency_monitor import DependencyMonitor
 from services.influx.client import influx_client
 from services.mqtt.client import mqtt_client
@@ -14,9 +13,10 @@ logger = logging.getLogger(__name__)
 
 class ServiceManager:
     def __init__(self):
+        # Dense vectors now live in the same PostgreSQL dependency through
+        # pgvector, so there is no separate vector-database health target.
         self.services = [
             postgres_client,
-            qdrant_client,
             mqtt_client,
             influx_client,
         ]
@@ -30,21 +30,15 @@ class ServiceManager:
         self._class_recommendation_application = None
 
     async def _on_recover(self, name: str) -> None:
-        # When MQTT (re)connects, restore subscriptions. Runs off the event loop
-        # because resubscribe touches the (blocking) DB + broker client.
         if name == mqtt_client.__class__.__name__:
             logger.info("MQTT connected — restoring subscriptions")
             await asyncio.to_thread(topic_manager.resubscribe_all)
 
     async def startup(self, class_recommendation_application):
-        """Non-blocking startup: liveness is up immediately; dependencies are
-        connected in the background so the app does not crash-loop when a
-        dependency is temporarily unavailable."""
+        """Non-blocking startup with background dependency recovery."""
         loop = asyncio.get_running_loop()
         logger.info("[Startup] Using loop %s", id(loop))
 
-        # Import lazily so importing the FastAPI app does not construct the
-        # configured sentence-transformer embedding model.
         from services.mqtt.handler_setup import register_mqtt_handlers
 
         self._class_recommendation_application = class_recommendation_application
@@ -57,8 +51,6 @@ class ServiceManager:
             if hasattr(service, "set_loop"):
                 service.set_loop(loop)
 
-        # Start ingestion workers before MQTT connects so the queue is ready
-        # to receive messages the moment the broker delivers them.
         mqtt_client.start_ingestion()
 
         await self.monitor.start()

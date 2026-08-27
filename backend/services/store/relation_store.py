@@ -137,7 +137,9 @@ class ClassStore:
 class DupeStore:
     @staticmethod
     def _pair(topic_a: str, topic_b: str) -> tuple[str, str]:
-        return tuple(sorted((topic_a, topic_b)))
+        # Match PostgreSQL COLLATE "C" ordering used by the schema constraint.
+        # UTF-8 byte ordering is deterministic and locale-independent.
+        return tuple(sorted((topic_a, topic_b), key=lambda value: value.encode("utf-8")))
 
     def get_all(self) -> list[dict]:
         rows = postgres_client.fetch_all(

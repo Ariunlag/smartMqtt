@@ -6,6 +6,7 @@ from services.database.qdrant import (
     TOPIC_COLLECTION,
     qdrant_client,
 )
+from services.database.vector import deterministic_vector_identity
 from services.store.canonical_identity_store import canonical_identity_store
 
 # Serializes concurrent group assignment so the nearest-centroid read and the
@@ -54,7 +55,7 @@ class TopicEmbeddingStore:
     ) -> list[dict]:
         # Bounded over-fetch prevents a dense prefix of inactive aliases from
         # starving the requested active result set. PostgreSQL remains the
-        # durable authority; Qdrant vectors are retained for audit purposes.
+        # durable identity authority while pgvector supplies ANN candidates.
         points = qdrant_client.nearest_many(
             TOPIC_COLLECTION,
             embedding,
@@ -92,7 +93,12 @@ class TagSetStore:
         tag_value: str,
         vector: list[float],
     ):
-        identity = f"{topic}\0{tag_key}\0{tag_value}"
+        identity = deterministic_vector_identity(
+            TAG_COLLECTION,
+            topic,
+            tag_key,
+            tag_value,
+        )
         qdrant_client.upsert(
             TAG_COLLECTION,
             identity,

@@ -1,134 +1,105 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import RecommendationsManager from "./RecommendationsManager";
-import {
-  applyClassAction,
-  getClassRecommendations,
-} from "../../services/classRecommendationApi";
+import { getRecommendedClassCandidates } from "../../services/classRecommendationApi";
+import type { RecommendedClassCandidateSet } from "../../types/api_models";
 
 vi.mock("../../services/classRecommendationApi", () => ({
-  getClassRecommendations: vi.fn(),
-  applyClassAction: vi.fn(),
+  getRecommendedClassCandidates: vi.fn(),
 }));
 
-const getClasses = vi.fn();
-vi.mock("../../store/useInfluxStore", () => ({
-  useInfluxStore: (selector: (state: object) => unknown) =>
-    selector({
-      classes: [
+const candidateSet: RecommendedClassCandidateSet = {
+  available_topics: ["building/a", "building/b", "building/c"],
+  candidates: [
+    {
+      candidate_id: "candidate-1",
+      rank: 1,
+      anchor_topic: "building/a",
+      member_topics: ["building/a", "building/b"],
+      discovery_channels: ["key", "schema", "stream_context"],
+      evidence: [
         {
-          class_id: "temperature-id",
-          name: "Temperature",
-          topics: ["reference/topic"],
-          profile_version: 3,
+          topic: "building/b",
+          channel_scores: {
+            key: 0.96,
+            value: 0.71,
+            key_value: 0.91,
+            schema: 0.98,
+            numeric_key: 0.95,
+            stream_context: 0.89,
+          },
+          coverage: {
+            candidate_pair_count: 3,
+            class_prototype_count: 3,
+            matched_pair_count: 2,
+            candidate_coverage: 2 / 3,
+            prototype_coverage: 2 / 3,
+          },
+          matched_pairs: [
+            {
+              candidate: { source: "tag", normalized_key: "unit", datatype: "string" },
+              prototype: { source: "tag", normalized_key: "unit", datatype: "string" },
+              prototype_id: "building/a:tag:unit:string",
+              scores: {
+                key: 0.98,
+                value: 0.97,
+                key_value: 0.98,
+                schema: 1,
+                numeric_key: null,
+              },
+              compatibility_score: 0.9825,
+            },
+            {
+              candidate: { source: "field", normalized_key: "temp", datatype: "numeric" },
+              prototype: { source: "field", normalized_key: "temperature", datatype: "numeric" },
+              prototype_id: "building/a:field:temperature:numeric",
+              scores: {
+                key: 0.94,
+                value: 0.45,
+                key_value: 0.89,
+                schema: 0.96,
+                numeric_key: 0.95,
+              },
+              compatibility_score: 0.838,
+            },
+          ],
+          duplicate_pending: true,
         },
       ],
-      getClasses,
-    }),
-}));
-
-const recommendation = {
-  recommendation_id: "rec-1",
-  canonical_topic: "candidate/topic",
-  original_topic: "candidate/topic",
-  class_id: "temperature-id",
-  class_name: "Temperature",
-  rank: 1,
-  overall_score: 0.88,
-  channel_scores: {
-    key: 0.95,
-    value: 0.72,
-    key_value: 0.92,
-    schema: 0.94,
-    numeric_key: 0.96,
-    stream_context: 0.81,
-  },
-  valid_channels: ["key", "value", "key_value", "schema", "numeric_key", "stream_context"],
-  coverage: {
-    candidate_pair_count: 4,
-    class_prototype_count: 5,
-    matched_pair_count: 3,
-    candidate_coverage: 0.75,
-    prototype_coverage: 0.6,
-  },
-  matched_pairs: [
-    {
-      candidate: { source: "field", normalized_key: "temp", datatype: "numeric" },
-      prototype: { source: "field", normalized_key: "temperature", datatype: "numeric" },
-      prototype_id: "temperature-id:field:temperature:numeric",
-      scores: { key: 0.97, value: 0.42, key_value: 0.94, schema: 0.99, numeric_key: 0.97 },
-      compatibility_score: 0.858,
     },
   ],
-  unmatched_candidate_pairs: [
-    { source: "tag", normalized_key: "serial", datatype: "string" },
-  ],
-  unmatched_prototypes: [],
-  class_profile_version: 3,
-  topic_representation_version: 2,
-  duplicate_pending: true,
-  algorithm_version: "pair-greedy-equal-mean-v1",
 };
 
 beforeEach(() => {
   vi.clearAllMocks();
-  vi.mocked(getClassRecommendations).mockResolvedValue({
-    class_name: "Temperature",
-    recommendations: [recommendation],
-  });
-  vi.mocked(applyClassAction).mockResolvedValue({
-    event_id: "event-1",
-    action_type: "RECOMMENDATION_ACCEPT",
-    canonical_topic: "candidate/topic",
-    class_id: "temperature-id",
-    class_name: "Temperature",
-    class_profile_version: 4,
-  });
+  vi.mocked(getRecommendedClassCandidates).mockResolvedValue(candidateSet);
 });
 
-it("shows factual pair evidence, coverage, and pending duplicate state without vectors", async () => {
-  const { container } = render(<RecommendationsManager />);
+it("keeps Saved Classes out of system recommendations and explains independent evidence", async () => {
+  render(<RecommendationsManager />);
 
   expect(
-    await screen.findByRole("heading", { name: /candidate\/topic/ }),
+    await screen.findByRole("heading", { name: "Recommended class #1" }),
   ).toBeInTheDocument();
+  expect(screen.getByText("Similar keys")).toBeInTheDocument();
+  expect(screen.getByText("Similar structure")).toBeInTheDocument();
+  expect(screen.getByText("Similar whole-stream context")).toBeInTheDocument();
+  expect(screen.queryByText("Saved class")).not.toBeInTheDocument();
+  expect(screen.queryByText(/Overall similarity/i)).not.toBeInTheDocument();
+});
+
+it("shows tag, field, coverage, and whole-stream evidence without a fused score", async () => {
+  render(<RecommendationsManager />);
+  await screen.findByRole("heading", { name: "Recommended class #1" });
+
   expect(screen.getByText("Duplicate review pending")).toBeInTheDocument();
-  expect(screen.getByText(/Coverage 3 \/ 4 pairs/)).toBeInTheDocument();
-  fireEvent.click(screen.getByRole("button", { name: "Show pair evidence" }));
-  expect(screen.getByText("field/temp:numeric")).toBeInTheDocument();
-  expect(screen.getByText("field/temperature:numeric")).toBeInTheDocument();
-  expect(container.textContent).not.toMatch(/centroid|embedding|vector|dsn|credential|sql/i);
-});
+  fireEvent.click(screen.getByRole("button", { name: "Show evidence" }));
 
-it("sends an exact versioned accept action and refreshes class state", async () => {
-  render(<RecommendationsManager />);
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Accept Recommendation" }),
-  );
-
-  await waitFor(() =>
-    expect(applyClassAction).toHaveBeenCalledWith("Temperature", {
-      action: "RECOMMENDATION_ACCEPT",
-      topic: "candidate/topic",
-      topic_representation_version: 2,
-      class_profile_version: 3,
-      recommendation_id: "rec-1",
-    }),
-  );
-  expect(getClasses).toHaveBeenCalled();
-});
-
-it("labels manual member removal distinctly from recommendation rejection", async () => {
-  render(<RecommendationsManager />);
-  fireEvent.click(
-    await screen.findByRole("button", { name: "Remove member reference/topic" }),
-  );
-  await waitFor(() =>
-    expect(applyClassAction).toHaveBeenCalledWith("Temperature", {
-      action: "MANUAL_REMOVE",
-      topic: "reference/topic",
-    }),
-  );
-  expect(screen.getByRole("button", { name: "Reject Recommendation" })).toBeInTheDocument();
+  expect(screen.getByText(/Matched 2 \/ 3 candidate pairs/)).toBeInTheDocument();
+  expect(screen.getAllByText("Tag evidence").length).toBeGreaterThan(0);
+  expect(screen.getAllByText("Field evidence").length).toBeGreaterThan(0);
+  expect(screen.getByText(/unit:string ↔ unit:string/)).toBeInTheDocument();
+  expect(screen.getByText(/temp:numeric ↔ temperature:numeric/)).toBeInTheDocument();
+  expect(screen.queryByText(/Overall similarity/i)).not.toBeInTheDocument();
 });

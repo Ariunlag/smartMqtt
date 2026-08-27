@@ -1,9 +1,8 @@
 """Alembic migration tests (issue #9 / Phase 2 DB foundation).
 
-These require a disposable PostgreSQL database. Set TEST_DATABASE_URL
-(or POSTGRES_TEST_DSN) to run them; otherwise they are skipped. CI provides a
-Postgres service. The target database is wiped between tests, so never point
-these at a real database.
+These require a disposable PostgreSQL database with the pgvector extension available.
+Set TEST_DATABASE_URL (or POSTGRES_TEST_DSN) to run them; otherwise they are skipped.
+The target database is wiped between tests, so never point these at a real database.
 """
 
 import os
@@ -32,7 +31,15 @@ APP_TABLES = [
     "class_recommendation_constraints",
     "class_recommendation_dismissals",
     "class_recommendation_actions",
+    "topic_embeddings",
+    "tag_key_value_embeddings",
+    "tag_group_centroids",
+    "class_pair_embeddings",
+    "class_pair_prototypes",
+    "class_stream_context_prototypes",
 ]
+
+HEAD_REVISION = "0006_duplicate_pair_ordering"
 
 
 def _make_config(url: str) -> Config:
@@ -75,7 +82,12 @@ def pg_url():
     try:
         with psycopg.connect(url, connect_timeout=3) as conn:
             conn.execute("SELECT 1")
-    except Exception as exc:  # noqa: BLE001  # pragma: no cover - environment dependent
+            available = conn.execute(
+                "SELECT EXISTS(SELECT 1 FROM pg_available_extensions WHERE name = 'vector')"
+            ).fetchone()[0]
+            if not available:
+                pytest.skip("pgvector extension is not available on the test database")
+    except Exception as exc:  # noqa: BLE001  # pragma: no cover
         pytest.skip(f"test database not reachable: {exc}")
     _drop_everything(url)
     yield url
@@ -84,13 +96,26 @@ def pg_url():
 
 def test_clean_database_upgrades_to_head(pg_url):
     command.upgrade(_make_config(pg_url), "head")
-    assert _alembic_version(pg_url) == "0004_pair_class_recommendation"
+    assert _alembic_version(pg_url) == HEAD_REVISION
     for table in APP_TABLES:
         assert _table_exists(pg_url, table), table
+    with psycopg.connect(pg_url) as conn:
+        extension = conn.execute(
+            "SELECT extname FROM pg_extension WHERE extname = 'vector'"
+        ).fetchone()
+        constraint = conn.execute(
+            """
+            SELECT pg_get_constraintdef(oid)
+            FROM pg_constraint
+            WHERE conrelid = 'duplicates'::regclass
+              AND conname = 'duplicates_topic_order_check'
+            """
+        ).fetchone()
+    assert extension and extension[0] == "vector"
+    assert constraint and 'COLLATE "C"' in constraint[0]
 
 
 def test_existing_schema_adopts_baseline_without_data_loss(pg_url):
-    # Simulate a database created by the old startup path, with data present.
     with psycopg.connect(pg_url) as conn:
         conn.execute(
             "CREATE TABLE streams ("
@@ -102,17 +127,17 @@ def test_existing_schema_adopts_baseline_without_data_loss(pg_url):
 
     command.upgrade(_make_config(pg_url), "head")
 
-    assert _alembic_version(pg_url) == "0004_pair_class_recommendation"
+    assert _alembic_version(pg_url) == HEAD_REVISION
     with psycopg.connect(pg_url) as conn:
         row = conn.execute("SELECT topic FROM streams").fetchone()
-    assert row[0] == "keep/me"  # data preserved
+    assert row[0] == "keep/me"
 
 
 def test_repeated_upgrade_is_idempotent(pg_url):
     cfg = _make_config(pg_url)
     command.upgrade(cfg, "head")
-    command.upgrade(cfg, "head")  # must not error
-    assert _alembic_version(pg_url) == "0004_pair_class_recommendation"
+    command.upgrade(cfg, "head")
+    assert _alembic_version(pg_url) == HEAD_REVISION
 
 
 def test_downgrade_removes_baseline(pg_url):

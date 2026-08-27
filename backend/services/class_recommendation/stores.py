@@ -8,6 +8,7 @@ from dataclasses import asdict
 
 from services.database.postgres import postgres_client
 from services.database.qdrant import qdrant_client
+from services.database.vector import deterministic_vector_identity
 
 from .domain import (
     PAIR_VIEWS,
@@ -24,14 +25,21 @@ STREAM_CONTEXT_PROTOTYPE_COLLECTION = "class_stream_context_prototypes"
 
 
 class PairEmbeddingStore:
-    """Qdrant is the sole vector source for raw pair embedding evidence."""
+    """Persist raw pair embedding evidence in PostgreSQL + pgvector."""
 
     def __init__(self, client=qdrant_client) -> None:
         self.client = client
 
     @staticmethod
     def _identity(topic: str, identity: PairIdentity, view: str) -> str:
-        return f"{topic}\0{identity.value}\0{view}"
+        return deterministic_vector_identity(
+            PAIR_EMBEDDING_COLLECTION,
+            topic,
+            identity.source,
+            identity.normalized_key,
+            identity.datatype,
+            view,
+        )
 
     def replace_topic(
         self, topic: str, records: tuple[PairEmbeddingRecord, ...]
@@ -116,7 +124,7 @@ class PairEmbeddingStore:
 
 
 class ClassPrototypeStore:
-    """Qdrant materializes compact per-role centroids, never member vectors."""
+    """Persist compact per-role class centroids in PostgreSQL + pgvector."""
 
     def __init__(self, client=qdrant_client) -> None:
         self.client = client
@@ -131,7 +139,14 @@ class ClassPrototypeStore:
         self.remove_class(class_id)
         for prototype in prototypes:
             for view, vector in prototype.centroids:
-                identity = f"{prototype.prototype_id}\0{view}"
+                identity = deterministic_vector_identity(
+                    PAIR_PROTOTYPE_COLLECTION,
+                    prototype.class_id,
+                    prototype.identity.source,
+                    prototype.identity.normalized_key,
+                    prototype.identity.datatype,
+                    view,
+                )
                 self.client.upsert(
                     PAIR_PROTOTYPE_COLLECTION,
                     identity,
