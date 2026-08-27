@@ -37,9 +37,12 @@ APP_TABLES = [
     "class_pair_embeddings",
     "class_pair_prototypes",
     "class_stream_context_prototypes",
+    "recommended_class_candidates",
+    "recommended_class_candidate_versions",
+    "recommended_class_feedback",
 ]
 
-HEAD_REVISION = "0006_duplicate_pair_ordering"
+HEAD_REVISION = "0007_recommended_feedback"
 
 
 def _make_config(url: str) -> Config:
