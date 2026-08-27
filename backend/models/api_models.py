@@ -2,7 +2,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Literal
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, field_validator, model_validator
 
 # ---------------------------
 # Topics
@@ -112,3 +112,33 @@ class ClassRecommendationActionRequest(BaseModel):
     topic_representation_version: int | None = None
     class_profile_version: int | None = None
     recommendation_id: str | None = None
+
+
+# ---------------------------
+# System Recommended Class feedback
+# ---------------------------
+
+
+RecommendedClassFeedbackAction = Literal[
+    "KEEP_TOPIC",
+    "REMOVE_TOPIC",
+    "ACCEPT_CANDIDATE",
+    "DISMISS_CANDIDATE",
+]
+
+
+class RecommendedClassFeedbackRequest(BaseModel):
+    action: RecommendedClassFeedbackAction
+    candidate_version: int
+    topic: str | None = None
+
+    @model_validator(mode="after")
+    def validate_action_scope(self):
+        topic_actions = {"KEEP_TOPIC", "REMOVE_TOPIC"}
+        if self.candidate_version < 1:
+            raise ValueError("candidate_version must be at least 1")
+        if self.action in topic_actions and not self.topic:
+            raise ValueError(f"{self.action} requires a topic")
+        if self.action not in topic_actions and self.topic is not None:
+            raise ValueError(f"{self.action} does not accept a topic")
+        return self
