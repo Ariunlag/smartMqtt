@@ -1,21 +1,31 @@
-# RQ1 pair-level class recommendation evaluation
+# RQ1 pair-level recommendation evaluation
 
-RQ1 now evaluates the same unit and representations used by production:
-independent key:value pairs with `key`, `value`, `key_value`, `schema`, and
-numeric-only `numeric_key`, plus the separate shared `stream_context` channel.
+RQ1 evaluates the same raw evidence contract used by runtime: independent tag/field
+key:value pairs with `key`, `value`, `key_value`, and `schema` vectors plus the shared
+`stream_context` vector.
 
-The benchmark builds compact class prototypes from CALIBRATION examples and
-ranks VALIDATION or TEST examples with production one-to-one matching. It
-reports Top-1, Top-3, MRR, candidate coverage, prototype coverage, latency,
-embedding calls, vector counts, and a storage estimate. Pair matching accuracy
-is reported as unavailable unless a dataset supplies pair-role labels.
+The representation layer is fixed for an experiment run. Recommendation policy is a
+separate variable. This allows the same dataset/evidence to compare:
 
-Conditions include every channel independently and the production equal-mean
-fusion. The benchmark does not choose or tune production weights. Confirmed
-duplicate aliases are excluded by the dataset loader and cannot cross splits;
-keep-both topics remain independent.
+- individual evidence types;
+- evidence subsets;
+- equal or calibrated weighted combinations;
+- independent-evidence HDBSCAN;
+- centroid/prototype matching;
+- hybrid discovery + prototype matching;
+- learned ranking once human-action labels exist.
 
-Run with the real configured model:
+The existing benchmark builds compact prototypes from CALIBRATION examples and ranks
+VALIDATION or TEST examples with deterministic one-to-one pair matching. It reports
+Top-1, Top-3, MRR, candidate/prototype coverage, latency, embedding calls, vector
+counts, and storage estimates. Pair-role accuracy is only reported when the dataset
+contains pair-role labels.
+
+No benchmark condition should silently change the stored representation contract.
+Weights and decision thresholds must be calibrated from evaluation data rather than
+hard-coded into embedding generation.
+
+Run with the configured model:
 
 ```powershell
 python scripts/run_rq1_benchmark.py `
@@ -24,5 +34,5 @@ python scripts/run_rq1_benchmark.py `
   --split VALIDATION
 ```
 
-The deterministic hash backend exists only for smoke tests and does not replace
-the production embedding model.
+The deterministic hash backend exists only for smoke tests and does not replace the
+configured embedding model.
