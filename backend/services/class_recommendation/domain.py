@@ -5,12 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from .evidence import (
-    EVIDENCE_CATALOG,
-    PAIR_EVIDENCE_IDS,
-    EvidenceId,
-    EvidenceScope,
-)
+from .evidence import EVIDENCE_CATALOG, PAIR_EVIDENCE_IDS, EvidenceId
 
 PairSource = Literal["tag", "field"]
 PairView = EvidenceId
@@ -118,13 +113,6 @@ class EvidenceScores:
 
     def valid(self) -> tuple[tuple[EvidenceId, float], ...]:
         return tuple((item.evidence_id, item.score) for item in self.items)
-
-    def __getattr__(self, name: str) -> float | None:
-        # Transitional convenience for legacy Saved-Class code. Serialization stays
-        # generic and does not expose hard-coded evidence fields.
-        if name.startswith("_"):
-            raise AttributeError(name)
-        return self.get(name)
 
 
 # Transitional aliases keep legacy imports working while the underlying structure is
