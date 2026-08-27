@@ -6,6 +6,7 @@ import asyncio
 import logging
 
 from models.mqtt_message import MQTTMessage
+from services.groups_manager import groups_manager
 
 logger = logging.getLogger(__name__)
 
@@ -66,7 +67,9 @@ class ClassRecommendationProcessingService:
             try:
                 message = self._pending.pop(topic, None)
                 if message is not None:
-                    await self.application.observe(message)
+                    changed = await self.application.observe(message)
+                    if changed:
+                        await self._refresh_tag_groups_from_shared_evidence(message.topic)
                     self.processed += 1
             except asyncio.CancelledError:
                 raise
@@ -75,6 +78,16 @@ class ClassRecommendationProcessingService:
                 logger.exception("Recommendation processing failed for topic=%s", topic)
             finally:
                 self._queue.task_done()
+
+    async def _refresh_tag_groups_from_shared_evidence(self, topic: str) -> None:
+        """Reuse tag `value` vectors; grouping never creates its own embeddings."""
+        try:
+            records = await asyncio.to_thread(self.application.pair_store.get_topic, topic)
+            await groups_manager.update_from_pair_evidence(topic, tuple(records))
+        except Exception:
+            # Grouping is exploratory and must not invalidate already-materialized
+            # recommendation evidence or block ingestion-side processing.
+            logger.exception("Tag group refresh failed for topic=%s", topic)
 
     def status(self) -> dict:
         return {
