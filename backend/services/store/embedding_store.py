@@ -1,12 +1,6 @@
 import numpy as np
 from services.database.postgres import postgres_client
-from services.database.vector import (
-    GROUP_COLLECTION,
-    TAG_COLLECTION,
-    TOPIC_COLLECTION,
-    deterministic_vector_identity,
-    vector_store,
-)
+from services.database.vector import GROUP_COLLECTION, TOPIC_COLLECTION, vector_store
 from services.store.canonical_identity_store import canonical_identity_store
 
 # Serializes concurrent group assignment so the nearest-centroid read and the
@@ -80,36 +74,13 @@ class TopicEmbeddingStore:
 
 
 class TagSetStore:
+    """Persist exploratory tag-value centroid groups over shared pair evidence."""
+
     @staticmethod
     def _numeric_id(set_id: str) -> int:
         if not set_id.startswith("set_"):
             raise ValueError(f"Invalid tag group id: {set_id}")
         return int(set_id.removeprefix("set_"))
-
-    def store_tag_embedding(
-        self,
-        topic: str,
-        tag_key: str,
-        tag_value: str,
-        vector: list[float],
-    ):
-        identity = deterministic_vector_identity(
-            TAG_COLLECTION,
-            topic,
-            tag_key,
-            tag_value,
-        )
-        vector_store.upsert(
-            TAG_COLLECTION,
-            identity,
-            vector,
-            {
-                "topic": topic,
-                "key": tag_key,
-                "value": tag_value,
-                "representation": f"{tag_key} {tag_value}",
-            },
-        )
 
     def find_or_create_set(
         self,
