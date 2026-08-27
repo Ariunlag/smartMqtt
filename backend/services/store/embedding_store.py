@@ -1,12 +1,12 @@
 import numpy as np
 from services.database.postgres import postgres_client
-from services.database.qdrant import (
+from services.database.vector import (
     GROUP_COLLECTION,
     TAG_COLLECTION,
     TOPIC_COLLECTION,
-    qdrant_client,
+    deterministic_vector_identity,
+    vector_store,
 )
-from services.database.vector import deterministic_vector_identity
 from services.store.canonical_identity_store import canonical_identity_store
 
 # Serializes concurrent group assignment so the nearest-centroid read and the
@@ -19,7 +19,7 @@ class TopicEmbeddingStore:
         self.identity_store = identity_store
 
     def add(self, item: dict) -> dict:
-        qdrant_client.upsert(
+        vector_store.upsert(
             TOPIC_COLLECTION,
             item["topic"],
             item["embedding"],
@@ -34,11 +34,11 @@ class TopicEmbeddingStore:
                 "embedding": point.vector,
                 "tags": point.payload.get("tags", {}),
             }
-            for point in qdrant_client.all_points(TOPIC_COLLECTION)
+            for point in vector_store.all_points(TOPIC_COLLECTION)
         ]
 
     def get(self, topic: str) -> dict | None:
-        point = qdrant_client.retrieve(TOPIC_COLLECTION, topic)
+        point = vector_store.retrieve(TOPIC_COLLECTION, topic)
         if point is None:
             return None
         return {
@@ -56,7 +56,7 @@ class TopicEmbeddingStore:
         # Bounded over-fetch prevents a dense prefix of inactive aliases from
         # starving the requested active result set. PostgreSQL remains the
         # durable identity authority while pgvector supplies ANN candidates.
-        points = qdrant_client.nearest_many(
+        points = vector_store.nearest_many(
             TOPIC_COLLECTION,
             embedding,
             limit=min(max(limit * 8, 64), 256),
@@ -99,7 +99,7 @@ class TagSetStore:
             tag_key,
             tag_value,
         )
-        qdrant_client.upsert(
+        vector_store.upsert(
             TAG_COLLECTION,
             identity,
             vector,
@@ -125,7 +125,7 @@ class TagSetStore:
             # clobber each other's centroid. Released automatically on commit.
             conn.execute("SELECT pg_advisory_xact_lock(%s)", (GROUP_ASSIGNMENT_LOCK,))
 
-            nearest = qdrant_client.nearest(GROUP_COLLECTION, vector)
+            nearest = vector_store.nearest(GROUP_COLLECTION, vector)
             if nearest and nearest.score >= threshold:
                 set_id = nearest.payload["set_id"]
                 group_id = self._numeric_id(set_id)
@@ -172,7 +172,7 @@ class TagSetStore:
             else:
                 centroid = old_vector.tolist()
 
-            qdrant_client.upsert(
+            vector_store.upsert(
                 GROUP_COLLECTION,
                 set_id,
                 centroid,
