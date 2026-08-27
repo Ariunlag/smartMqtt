@@ -50,20 +50,24 @@ individual topics/measurements, provides a class name, and owns membership. Post
 Recommended Classes are system-derived candidate topic groups. They are not copies of
 Saved Classes and are not automatically inserted into `classes`/`class_topics`.
 
-System discovery uses six independent evidence channels:
+Recommendation evidence is registry-defined. The current pair evidence is:
 
 1. key
 2. value
 3. key + value
 4. schema
-5. numeric key when applicable
-6. whole-stream context
 
-Tags and fields remain independent pair sources. Candidate discovery runs per evidence
-channel and identical member sets discovered by multiple channels are shown as
-consensus reasons. The dashboard shows pair evidence, tag/field evidence, coverage,
-and whole-stream context instead of explaining a recommendation with one fused
-`Overall similarity` number.
+The stream-level evidence is whole-stream context. There is no numeric-key evidence
+channel; numeric remains datatype/telemetry metadata rather than a duplicated semantic
+key signal.
+
+Tags and fields remain independent pair sources. Candidate discovery runs per
+registered evidence channel and identical member sets discovered by multiple channels
+are shown as consensus reasons. The backend returns the evidence catalog with ids,
+labels, and scopes, so the dashboard renders evidence generically instead of
+hard-coding one UI field per channel. The dashboard shows pair evidence, tag/field
+evidence, coverage, and stream evidence instead of explaining a recommendation with
+one fused `Overall similarity` number.
 
 See [architecture](docs/CLASS_RECOMMENDATION_ARCHITECTURE.md) and
 [decisions](docs/CLASS_RECOMMENDATION_DECISIONS.md).

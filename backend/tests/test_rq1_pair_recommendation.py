@@ -36,7 +36,7 @@ def _example(stream_id, topic, key, label, split):
     )
 
 
-def test_rq1_uses_pair_views_stream_context_and_no_open_world_states():
+def test_rq1_uses_registry_pair_evidence_stream_context_and_no_open_world_states():
     examples = (
         _example(
             "tc1",
@@ -67,8 +67,16 @@ def test_rq1_uses_pair_views_stream_context_and_no_open_world_states():
     ).run(dataset)
 
     assert tuple(row["condition"] for row in result.summary_rows) == CONDITIONS
+    assert CONDITIONS == (
+        "key",
+        "value",
+        "key_value",
+        "schema",
+        "stream_context",
+        "equal_mean",
+    )
     assert result.metadata["architecture"] == (
-        "pair-level-five-view-plus-shared-stream-context"
+        "pair-level-four-evidence-plus-shared-stream-context"
     )
     assert result.metadata["embedding_calls"] == len(examples) * 2
     assert (

@@ -8,13 +8,12 @@ from services.class_recommendation.domain import (
     PairIdentity,
     PairRepresentation,
 )
+from services.class_recommendation.evidence import PAIR_EVIDENCE_IDS
 
 
 def _record(topic, source, key, datatype, vector):
     identity = PairIdentity(source, key, datatype)
-    views = ["key", "value", "key_value", "schema"]
-    if datatype == "numeric":
-        views.append("numeric_key")
+    views = PAIR_EVIDENCE_IDS
     representation = PairRepresentation(
         canonical_topic=topic,
         original_topic=topic,
@@ -24,7 +23,6 @@ def _record(topic, source, key, datatype, vector):
         normalized_key=key,
         normalized_value="fixture",
         datatype=datatype,
-        is_numeric=datatype == "numeric",
         representation_version=1,
         texts=tuple((name, f"{key}:{name}") for name in views),
     )
@@ -126,6 +124,13 @@ def test_system_candidates_merge_independent_channel_reasons_and_keep_pair_evide
     result = discovery.discover()
 
     assert result.available_topics == ("a", "b", "c")
+    assert tuple(item.evidence_id for item in result.evidence_catalog) == (
+        "key",
+        "value",
+        "key_value",
+        "schema",
+        "stream_context",
+    )
     assert len(result.candidates) == 1
     candidate = result.candidates[0]
     assert candidate.member_topics == ("a", "b")
@@ -137,11 +142,12 @@ def test_system_candidates_merge_independent_channel_reasons_and_keep_pair_evide
     assert evidence.topic == "b"
     assert evidence.duplicate_pending is True
     assert evidence.coverage.matched_pair_count == 2
-    assert evidence.channel_scores.stream_context == 1.0
+    assert evidence.channel_scores.get("stream_context") == 1.0
     assert {match.candidate.source for match in evidence.matched_pairs} == {
         "tag",
         "field",
     }
+    assert all(match.scores.get("numeric_key") is None for match in evidence.matched_pairs)
     assert any(
         match.candidate.normalized_key == "temp"
         and match.prototype.normalized_key == "temperature"

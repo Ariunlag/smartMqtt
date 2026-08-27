@@ -36,10 +36,14 @@ class TemporalEntryState:
     stable_value: str | None
     candidate_value: str | None
     candidate_streak: int
-    is_numeric: bool
     is_identifier_like: bool
     is_unit_like: bool
     is_timestamp_like: bool
+
+    @property
+    def is_numeric(self) -> bool:
+        """Compatibility view derived from datatype; not recommendation evidence."""
+        return self.current_value_type == "numeric"
 
 
 @dataclass(frozen=True, slots=True)
@@ -176,7 +180,6 @@ class TemporalStreamProfiler:
             stable_value=stable_value,
             candidate_value=candidate_value,
             candidate_streak=candidate_streak,
-            is_numeric=field.is_numeric,
             is_identifier_like=field.is_identifier_like,
             is_unit_like=field.is_unit_like,
             is_timestamp_like=field.is_timestamp_like,
@@ -265,7 +268,6 @@ class TemporalStreamProfiler:
                 stable_value=stable_value,
                 candidate_value=candidate_value,
                 candidate_streak=candidate_streak,
-                is_numeric=field.is_numeric,
                 is_identifier_like=field.is_identifier_like,
                 is_unit_like=field.is_unit_like,
                 is_timestamp_like=field.is_timestamp_like,
@@ -301,7 +303,9 @@ class TemporalStreamProfiler:
 
     @staticmethod
     def _uses_categorical_stability(field: FieldProfile) -> bool:
-        return not (field.source == "field" and field.is_numeric)
+        # Numeric sensor readings are volatile telemetry; the datatype drives this
+        # temporal policy directly instead of a recommendation-specific boolean flag.
+        return not (field.source == "field" and field.value_type == "numeric")
 
     @classmethod
     def _observation_map(

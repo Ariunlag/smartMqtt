@@ -126,7 +126,6 @@ class FieldProfile:
     value_type: ValueType
     normalized_key: str
     normalized_value: str
-    is_numeric: bool
     is_identifier_like: bool
     is_unit_like: bool
     is_timestamp_like: bool
@@ -202,7 +201,6 @@ class StreamProfiler:
             value_type=value_type,
             normalized_key=normalized_key,
             normalized_value=normalize_text(value),
-            is_numeric=value_type == "numeric",
             is_identifier_like=(
                 normalized_key in _IDENTIFIER_KEYS
                 or bool(key_tokens and key_tokens[-1] == "id")

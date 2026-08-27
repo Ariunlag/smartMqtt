@@ -1,4 +1,4 @@
-"""RQ1 evaluation for five pair views and shared stream context."""
+"""RQ1 evaluation for registry-defined pair evidence and shared stream context."""
 
 from __future__ import annotations
 
@@ -12,21 +12,14 @@ from pathlib import Path
 
 from services.class_recommendation.domain import ClassPairPrototype, ClassProfile
 from services.class_recommendation.embedding import PairEmbedder
+from services.class_recommendation.evidence import PAIR_EVIDENCE_IDS
 from services.class_recommendation.matching import PairClassMatcher, centroid
 from services.class_recommendation.profiling import StreamProfiler
 from services.class_recommendation.representations import PairRepresentationBuilder
 
 from .rq1_dataset import RQ1Dataset, RQ1Split
 
-CONDITIONS = (
-    "key",
-    "value",
-    "key_value",
-    "schema",
-    "numeric_key",
-    "stream_context",
-    "equal_mean",
-)
+CONDITIONS = (*PAIR_EVIDENCE_IDS, "stream_context", "equal_mean")
 
 
 @dataclass(frozen=True, slots=True)
@@ -140,7 +133,7 @@ class RQ1BenchmarkRunner:
             )
         elapsed_ms = (time.perf_counter() - started) * 1000
         metadata = {
-            "architecture": "pair-level-five-view-plus-shared-stream-context",
+            "architecture": "pair-level-four-evidence-plus-shared-stream-context",
             "dataset_id": dataset.dataset_id,
             "dataset_version": dataset.version,
             "dataset_sha256": dataset.sha256,
@@ -203,14 +196,14 @@ class RQ1BenchmarkRunner:
             for identity in sorted(grouped):
                 records = grouped[identity]
                 centroids = []
-                for view in ("key", "value", "key_value", "schema", "numeric_key"):
+                for evidence_id in PAIR_EVIDENCE_IDS:
                     vectors = [
                         vector
                         for record in records
-                        if (vector := record.vector_for(view)) is not None
+                        if (vector := record.vector_for(evidence_id)) is not None
                     ]
                     if vectors:
-                        centroids.append((view, centroid(vectors)))
+                        centroids.append((evidence_id, centroid(vectors)))
                 prototypes.append(
                     ClassPairPrototype(
                         class_id=f"rq1-{class_index}",
@@ -236,7 +229,7 @@ class RQ1BenchmarkRunner:
     def _condition_score(recommendation, condition):
         if condition == "equal_mean":
             return recommendation.overall_score
-        value = getattr(recommendation.channel_scores, condition)
+        value = recommendation.channel_scores.get(condition)
         return value if value is not None else -1.0
 
     @staticmethod
