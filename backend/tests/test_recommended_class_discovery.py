@@ -1,3 +1,5 @@
+import pytest
+
 from services.class_recommendation.discovery import (
     RecommendedClassDiscovery,
     RecommendedClassDiscoveryConfig,
@@ -110,20 +112,26 @@ def _labels(channel, matrix):
     return (-1, -1, -1)
 
 
-def test_system_candidates_merge_independent_channel_reasons_and_keep_pair_evidence():
-    discovery = RecommendedClassDiscovery(
+def _discovery(*, aliases=(), pending=(), labels=_labels):
+    return RecommendedClassDiscovery(
         metadata_store=FakeMetadataStore(("a", "b", "c")),
         pair_store=FakePairStore(),
         topic_embedding_store=FakeTopicEmbeddingStore(),
-        identity_store=FakeIdentityStore(),
-        dupe_store=FakeDupeStore(("b",)),
+        identity_store=FakeIdentityStore(aliases),
+        dupe_store=FakeDupeStore(pending),
         config=RecommendedClassDiscoveryConfig(min_cluster_size=2),
-        cluster_labels=_labels,
+        cluster_labels=labels,
     )
 
-    result = discovery.discover()
+
+def test_system_candidates_merge_independent_channel_reasons_and_keep_pair_evidence():
+    result = _discovery(pending=("b",)).discover()
 
     assert result.available_topics == ("a", "b", "c")
+    assert result.strategy.strategy_id == "independent_hdbscan"
+    assert tuple(item.strategy_id for item in result.strategy_catalog) == (
+        "independent_hdbscan",
+    )
     assert tuple(item.evidence_id for item in result.evidence_catalog) == (
         "key",
         "value",
@@ -160,17 +168,12 @@ def test_confirmed_duplicate_alias_is_not_an_independent_candidate_member():
         assert len(matrix) == 2
         return (0, 0) if channel == "key" else (-1, -1)
 
-    discovery = RecommendedClassDiscovery(
-        metadata_store=FakeMetadataStore(("a", "b", "c")),
-        pair_store=FakePairStore(),
-        topic_embedding_store=FakeTopicEmbeddingStore(),
-        identity_store=FakeIdentityStore(("b",)),
-        dupe_store=FakeDupeStore(),
-        config=RecommendedClassDiscoveryConfig(min_cluster_size=2),
-        cluster_labels=two_topic_labels,
-    )
-
-    result = discovery.discover()
+    result = _discovery(aliases=("b",), labels=two_topic_labels).discover()
 
     assert result.available_topics == ("a", "c")
     assert all("b" not in candidate.member_topics for candidate in result.candidates)
+
+
+def test_unknown_strategy_is_rejected_without_touching_evidence_contract():
+    with pytest.raises(ValueError, match="Unknown recommendation strategy"):
+        _discovery().discover("not-a-strategy")
