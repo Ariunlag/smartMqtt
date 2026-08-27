@@ -7,8 +7,7 @@ import uuid
 from dataclasses import asdict
 
 from services.database.postgres import postgres_client
-from services.database.qdrant import qdrant_client
-from services.database.vector import deterministic_vector_identity
+from services.database.vector import deterministic_vector_identity, vector_store
 
 from .domain import (
     REPRESENTATION_CONTRACT_VERSION,
@@ -35,7 +34,7 @@ def _evidence_sort_key(item) -> tuple[int, str]:
 class PairEmbeddingStore:
     """Persist raw pair embedding evidence in PostgreSQL + pgvector."""
 
-    def __init__(self, client=qdrant_client) -> None:
+    def __init__(self, client=vector_store) -> None:
         self.client = client
 
     @staticmethod
@@ -126,7 +125,7 @@ class PairEmbeddingStore:
 class ClassPrototypeStore:
     """Persist compact per-role class centroids in PostgreSQL + pgvector."""
 
-    def __init__(self, client=qdrant_client) -> None:
+    def __init__(self, client=vector_store) -> None:
         self.client = client
 
     def replace_class(
