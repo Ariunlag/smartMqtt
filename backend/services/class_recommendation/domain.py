@@ -5,17 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-PairSource = Literal["tag", "field"]
-PairView = Literal["key", "value", "key_value", "schema", "numeric_key"]
-PAIR_VIEWS: tuple[PairView, ...] = (
-    "key",
-    "value",
-    "key_value",
-    "schema",
-    "numeric_key",
+from .evidence import (
+    EVIDENCE_CATALOG,
+    PAIR_EVIDENCE_IDS,
+    EvidenceId,
+    EvidenceScope,
 )
-ALGORITHM_VERSION = "pair-greedy-equal-mean-v1"
-REPRESENTATION_CONTRACT_VERSION = "pair-five-view-v1"
+
+PairSource = Literal["tag", "field"]
+PairView = EvidenceId
+PAIR_VIEWS: tuple[EvidenceId, ...] = PAIR_EVIDENCE_IDS
+ALGORITHM_VERSION = "pair-greedy-evidence-registry-v2"
+REPRESENTATION_CONTRACT_VERSION = "pair-evidence-registry-v2"
 
 
 @dataclass(frozen=True, slots=True, order=True)
@@ -39,21 +40,20 @@ class PairRepresentation:
     normalized_key: str
     normalized_value: str
     datatype: str
-    is_numeric: bool
     representation_version: int
-    texts: tuple[tuple[PairView, str], ...]
+    texts: tuple[tuple[EvidenceId, str], ...]
 
-    def text_for(self, view: PairView) -> str | None:
-        return dict(self.texts).get(view)
+    def text_for(self, evidence_id: EvidenceId) -> str | None:
+        return dict(self.texts).get(evidence_id)
 
 
 @dataclass(frozen=True, slots=True)
 class PairEmbeddingRecord:
     representation: PairRepresentation
-    vectors: tuple[tuple[PairView, tuple[float, ...]], ...]
+    vectors: tuple[tuple[EvidenceId, tuple[float, ...]], ...]
 
-    def vector_for(self, view: PairView) -> tuple[float, ...] | None:
-        return dict(self.vectors).get(view)
+    def vector_for(self, evidence_id: EvidenceId) -> tuple[float, ...] | None:
+        return dict(self.vectors).get(evidence_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -61,7 +61,7 @@ class ClassPairPrototype:
     class_id: str
     class_name: str
     identity: PairIdentity
-    centroids: tuple[tuple[PairView, tuple[float, ...]], ...]
+    centroids: tuple[tuple[EvidenceId, tuple[float, ...]], ...]
     member_count: int
     prototype_version: int
 
@@ -69,8 +69,8 @@ class ClassPairPrototype:
     def prototype_id(self) -> str:
         return f"{self.class_id}:{self.identity.value}"
 
-    def centroid_for(self, view: PairView) -> tuple[float, ...] | None:
-        return dict(self.centroids).get(view)
+    def centroid_for(self, evidence_id: EvidenceId) -> tuple[float, ...] | None:
+        return dict(self.centroids).get(evidence_id)
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,23 +83,54 @@ class ClassProfile:
 
 
 @dataclass(frozen=True, slots=True)
-class PairViewScores:
-    key: float
-    value: float
-    key_value: float
-    schema: float
-    numeric_key: float | None
+class EvidenceScore:
+    evidence_id: EvidenceId
+    score: float
 
-    def valid(self) -> tuple[tuple[PairView, float], ...]:
-        rows: list[tuple[PairView, float]] = [
-            ("key", self.key),
-            ("value", self.value),
-            ("key_value", self.key_value),
-            ("schema", self.schema),
-        ]
-        if self.numeric_key is not None:
-            rows.append(("numeric_key", self.numeric_key))
-        return tuple(rows)
+
+@dataclass(frozen=True, slots=True)
+class EvidenceScores:
+    """Ordered evidence scores whose shape is defined by the evidence registry."""
+
+    items: tuple[EvidenceScore, ...]
+
+    @classmethod
+    def from_values(cls, values: dict[EvidenceId, float | None]) -> "EvidenceScores":
+        known = {definition.evidence_id for definition in EVIDENCE_CATALOG}
+        unknown = set(values) - known
+        if unknown:
+            raise ValueError(
+                "Unknown recommendation evidence ids: " + ", ".join(sorted(unknown))
+            )
+        return cls(
+            tuple(
+                EvidenceScore(definition.evidence_id, float(values[definition.evidence_id]))
+                for definition in EVIDENCE_CATALOG
+                if values.get(definition.evidence_id) is not None
+            )
+        )
+
+    def get(self, evidence_id: EvidenceId) -> float | None:
+        return next(
+            (item.score for item in self.items if item.evidence_id == evidence_id),
+            None,
+        )
+
+    def valid(self) -> tuple[tuple[EvidenceId, float], ...]:
+        return tuple((item.evidence_id, item.score) for item in self.items)
+
+    def __getattr__(self, name: str) -> float | None:
+        # Transitional convenience for legacy Saved-Class code. Serialization stays
+        # generic and does not expose hard-coded evidence fields.
+        if name.startswith("_"):
+            raise AttributeError(name)
+        return self.get(name)
+
+
+# Transitional aliases keep legacy imports working while the underlying structure is
+# registry-driven rather than one dataclass field per evidence channel.
+PairViewScores = EvidenceScores
+ChannelScores = EvidenceScores
 
 
 @dataclass(frozen=True, slots=True)
@@ -107,7 +138,7 @@ class MatchedPairEvidence:
     candidate: PairIdentity
     prototype: PairIdentity
     prototype_id: str
-    scores: PairViewScores
+    scores: EvidenceScores
     compatibility_score: float
 
 
@@ -121,30 +152,6 @@ class Coverage:
 
 
 @dataclass(frozen=True, slots=True)
-class ChannelScores:
-    key: float | None
-    value: float | None
-    key_value: float | None
-    schema: float | None
-    numeric_key: float | None
-    stream_context: float | None
-
-    def valid(self) -> tuple[tuple[str, float], ...]:
-        return tuple(
-            (name, value)
-            for name, value in (
-                ("key", self.key),
-                ("value", self.value),
-                ("key_value", self.key_value),
-                ("schema", self.schema),
-                ("numeric_key", self.numeric_key),
-                ("stream_context", self.stream_context),
-            )
-            if value is not None
-        )
-
-
-@dataclass(frozen=True, slots=True)
 class ClassRecommendation:
     recommendation_id: str
     canonical_topic: str
@@ -153,7 +160,7 @@ class ClassRecommendation:
     class_name: str
     rank: int
     overall_score: float
-    channel_scores: ChannelScores
+    channel_scores: EvidenceScores
     valid_channels: tuple[str, ...]
     coverage: Coverage
     matched_pairs: tuple[MatchedPairEvidence, ...]
