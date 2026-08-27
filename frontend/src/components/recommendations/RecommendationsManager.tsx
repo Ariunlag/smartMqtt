@@ -3,8 +3,9 @@ import axios from "axios";
 
 import { getRecommendedClassCandidates } from "../../services/classRecommendationApi";
 import type {
+  EvidenceDefinition,
+  EvidenceScores,
   MatchedPairEvidence,
-  RecommendationDiscoveryChannel,
   RecommendedClassCandidate,
   RecommendedClassTopicEvidence,
 } from "../../types/api_models";
@@ -12,14 +13,8 @@ import type {
 const percent = (value: number | null) =>
   value === null ? "N/A" : `${(value * 100).toFixed(1)}%`;
 
-const CHANNEL_LABELS: Record<RecommendationDiscoveryChannel, string> = {
-  key: "Similar keys",
-  value: "Similar values",
-  key_value: "Similar key + value meaning",
-  schema: "Similar structure",
-  numeric_key: "Similar numeric measurement key",
-  stream_context: "Similar whole-stream context",
-};
+const scoreFor = (scores: EvidenceScores, evidenceId: string) =>
+  scores.items.find((item) => item.evidence_id === evidenceId)?.score ?? null;
 
 function errorMessage(error: unknown) {
   if (axios.isAxiosError<{ detail?: string }>(error)) {
@@ -30,6 +25,7 @@ function errorMessage(error: unknown) {
 
 export default function RecommendationsManager() {
   const [candidates, setCandidates] = useState<RecommendedClassCandidate[]>([]);
+  const [evidenceCatalog, setEvidenceCatalog] = useState<EvidenceDefinition[]>([]);
   const [availableTopicCount, setAvailableTopicCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -40,6 +36,7 @@ export default function RecommendationsManager() {
     try {
       const result = await getRecommendedClassCandidates();
       setCandidates(result.candidates);
+      setEvidenceCatalog(result.evidence_catalog);
       setAvailableTopicCount(result.available_topics.length);
     } catch (requestError) {
       setError(errorMessage(requestError));
@@ -76,16 +73,33 @@ export default function RecommendationsManager() {
 
       <div className="recommendations__list">
         {candidates.map((candidate) => (
-          <RecommendedClassCard key={candidate.candidate_id} candidate={candidate} />
+          <RecommendedClassCard
+            key={candidate.candidate_id}
+            candidate={candidate}
+            evidenceCatalog={evidenceCatalog}
+          />
         ))}
       </div>
     </section>
   );
 }
 
-function RecommendedClassCard({ candidate }: { candidate: RecommendedClassCandidate }) {
+function RecommendedClassCard({
+  candidate,
+  evidenceCatalog,
+}: {
+  candidate: RecommendedClassCandidate;
+  evidenceCatalog: EvidenceDefinition[];
+}) {
   const [expanded, setExpanded] = useState(false);
-  const summary = useMemo(() => summarizeEvidence(candidate.evidence), [candidate.evidence]);
+  const definitions = useMemo(
+    () => new Map(evidenceCatalog.map((item) => [item.evidence_id, item])),
+    [evidenceCatalog],
+  );
+  const summary = useMemo(
+    () => summarizeEvidence(candidate.evidence, evidenceCatalog),
+    [candidate.evidence, evidenceCatalog],
+  );
 
   return (
     <article className="recommendation-card">
@@ -104,8 +118,10 @@ function RecommendedClassCard({ candidate }: { candidate: RecommendedClassCandid
       <section aria-label="Recommendation reasons">
         <strong>Recommended because</strong>
         <div className="recommendation-card__channels">
-          {candidate.discovery_channels.map((channel) => (
-            <span key={channel}>{CHANNEL_LABELS[channel]}</span>
+          {candidate.discovery_channels.map((evidenceId) => (
+            <span key={evidenceId}>
+              {definitions.get(evidenceId)?.label ?? evidenceId}
+            </span>
           ))}
         </div>
       </section>
@@ -119,7 +135,12 @@ function RecommendedClassCard({ candidate }: { candidate: RecommendedClassCandid
         <div><dt>Matched pair evidence</dt><dd>{summary.matchedPairCount}</dd></div>
         <div><dt>Tag evidence</dt><dd>{summary.tagEvidenceCount}</dd></div>
         <div><dt>Field evidence</dt><dd>{summary.fieldEvidenceCount}</dd></div>
-        <div><dt>Whole-stream context</dt><dd>{percent(summary.streamContext)}</dd></div>
+        {summary.streamEvidence.map(({ definition, score }) => (
+          <div key={definition.evidence_id}>
+            <dt>{definition.label}</dt>
+            <dd>{percent(score)}</dd>
+          </div>
+        ))}
       </dl>
 
       <button
@@ -134,7 +155,12 @@ function RecommendedClassCard({ candidate }: { candidate: RecommendedClassCandid
       {expanded && (
         <div className="recommendation-card__evidence">
           {candidate.evidence.map((evidence) => (
-            <TopicEvidence key={evidence.topic} evidence={evidence} anchor={candidate.anchor_topic} />
+            <TopicEvidence
+              key={evidence.topic}
+              evidence={evidence}
+              anchor={candidate.anchor_topic}
+              evidenceCatalog={evidenceCatalog}
+            />
           ))}
         </div>
       )}
@@ -145,26 +171,55 @@ function RecommendedClassCard({ candidate }: { candidate: RecommendedClassCandid
 function TopicEvidence({
   evidence,
   anchor,
+  evidenceCatalog,
 }: {
   evidence: RecommendedClassTopicEvidence;
   anchor: string;
+  evidenceCatalog: EvidenceDefinition[];
 }) {
   const tags = evidence.matched_pairs.filter((match) => match.candidate.source === "tag");
   const fields = evidence.matched_pairs.filter((match) => match.candidate.source === "field");
+  const streamEvidence = evidenceCatalog
+    .filter((definition) => definition.scope === "stream")
+    .map((definition) => ({
+      definition,
+      score: scoreFor(evidence.channel_scores, definition.evidence_id),
+    }));
 
   return (
     <section aria-label={`Evidence for ${evidence.topic}`}>
       <h4>{evidence.topic} ↔ {anchor}</h4>
       <p>
-        Matched {evidence.coverage.matched_pair_count} / {evidence.coverage.candidate_pair_count} candidate pairs · whole-stream context {percent(evidence.channel_scores.stream_context)}
+        Matched {evidence.coverage.matched_pair_count} / {evidence.coverage.candidate_pair_count} candidate pairs
+        {streamEvidence.map(({ definition, score }) => (
+          <span key={definition.evidence_id}> · {definition.label} {percent(score)}</span>
+        ))}
       </p>
-      {tags.length > 0 && <PairEvidenceGroup title="Tag evidence" matches={tags} />}
-      {fields.length > 0 && <PairEvidenceGroup title="Field evidence" matches={fields} />}
+      {tags.length > 0 && (
+        <PairEvidenceGroup title="Tag evidence" matches={tags} evidenceCatalog={evidenceCatalog} />
+      )}
+      {fields.length > 0 && (
+        <PairEvidenceGroup title="Field evidence" matches={fields} evidenceCatalog={evidenceCatalog} />
+      )}
     </section>
   );
 }
 
-function PairEvidenceGroup({ title, matches }: { title: string; matches: MatchedPairEvidence[] }) {
+function PairEvidenceGroup({
+  title,
+  matches,
+  evidenceCatalog,
+}: {
+  title: string;
+  matches: MatchedPairEvidence[];
+  evidenceCatalog: EvidenceDefinition[];
+}) {
+  const pairDefinitions = new Map(
+    evidenceCatalog
+      .filter((definition) => definition.scope === "pair")
+      .map((definition) => [definition.evidence_id, definition]),
+  );
+
   return (
     <div>
       <strong>{title}</strong>
@@ -176,7 +231,12 @@ function PairEvidenceGroup({ title, matches }: { title: string; matches: Matched
             {match.candidate.normalized_key}:{match.candidate.datatype} ↔ {match.prototype.normalized_key}:{match.prototype.datatype}
           </strong>
           <small>
-            Key {percent(match.scores.key)} · Value {percent(match.scores.value)} · Key + Value {percent(match.scores.key_value)} · Schema {percent(match.scores.schema)} · Numeric Key {percent(match.scores.numeric_key)}
+            {match.scores.items.map((item, index) => (
+              <span key={item.evidence_id}>
+                {index > 0 ? " · " : ""}
+                {pairDefinitions.get(item.evidence_id)?.label ?? item.evidence_id} {percent(item.score)}
+              </span>
+            ))}
           </small>
         </div>
       ))}
@@ -184,12 +244,14 @@ function PairEvidenceGroup({ title, matches }: { title: string; matches: Matched
   );
 }
 
-function summarizeEvidence(evidence: RecommendedClassTopicEvidence[]) {
+function summarizeEvidence(
+  evidence: RecommendedClassTopicEvidence[],
+  evidenceCatalog: EvidenceDefinition[],
+) {
   let matchedPairCount = 0;
   let tagEvidenceCount = 0;
   let fieldEvidenceCount = 0;
   let pendingDuplicateCount = 0;
-  const streamContexts: number[] = [];
 
   for (const topicEvidence of evidence) {
     matchedPairCount += topicEvidence.matched_pairs.length;
@@ -198,19 +260,25 @@ function summarizeEvidence(evidence: RecommendedClassTopicEvidence[]) {
       if (match.candidate.source === "tag") tagEvidenceCount += 1;
       else fieldEvidenceCount += 1;
     }
-    if (topicEvidence.channel_scores.stream_context !== null) {
-      streamContexts.push(topicEvidence.channel_scores.stream_context);
-    }
   }
+
+  const streamEvidence = evidenceCatalog
+    .filter((definition) => definition.scope === "stream")
+    .map((definition) => {
+      const values = evidence
+        .map((topicEvidence) => scoreFor(topicEvidence.channel_scores, definition.evidence_id))
+        .filter((value): value is number => value !== null);
+      return {
+        definition,
+        score: values.length > 0 ? Math.min(...values) : null,
+      };
+    });
 
   return {
     matchedPairCount,
     tagEvidenceCount,
     fieldEvidenceCount,
     pendingDuplicateCount,
-    streamContext:
-      streamContexts.length > 0
-        ? Math.min(...streamContexts)
-        : null,
+    streamEvidence,
   };
 }
