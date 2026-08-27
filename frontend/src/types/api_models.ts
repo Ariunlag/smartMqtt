@@ -190,6 +190,7 @@ export interface RecommendedClassTopicEvidence {
 
 export interface RecommendedClassCandidate {
   candidate_id: string;
+  candidate_version: number;
   rank: number;
   anchor_topic: string;
   member_topics: string[];
@@ -203,4 +204,24 @@ export interface RecommendedClassCandidateSet {
   strategy: RecommendationStrategyDefinition;
   strategy_catalog: RecommendationStrategyDefinition[];
   evidence_catalog: EvidenceDefinition[];
+}
+
+export type RecommendedClassFeedbackAction =
+  | "KEEP_TOPIC"
+  | "REMOVE_TOPIC"
+  | "ACCEPT_CANDIDATE"
+  | "DISMISS_CANDIDATE";
+
+export interface RecommendedClassFeedbackRequest {
+  action: RecommendedClassFeedbackAction;
+  candidate_version: number;
+  topic?: string;
+}
+
+export interface RecommendedClassFeedbackResult {
+  feedback_id: string;
+  candidate_id: string;
+  candidate_version: number;
+  action_type: RecommendedClassFeedbackAction;
+  topic: string | null;
 }
