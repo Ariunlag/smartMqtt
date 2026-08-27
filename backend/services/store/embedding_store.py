@@ -6,6 +6,7 @@ from services.store.canonical_identity_store import canonical_identity_store
 # Serializes concurrent group assignment so the nearest-centroid read and the
 # subsequent group create/centroid update cannot race (safe across workers).
 GROUP_ASSIGNMENT_LOCK = 91847362
+TAG_GROUP_CONTRACT_VERSION = "shared-tag-value-v1"
 
 
 class TopicEmbeddingStore:
@@ -82,6 +83,10 @@ class TagSetStore:
             raise ValueError(f"Invalid tag group id: {set_id}")
         return int(set_id.removeprefix("set_"))
 
+    @staticmethod
+    def _contract_payload() -> dict[str, str]:
+        return {"contract": TAG_GROUP_CONTRACT_VERSION}
+
     def find_or_create_set(
         self,
         tag_key: str,
@@ -91,12 +96,16 @@ class TagSetStore:
         topic: str,
     ) -> str:
         with postgres_client.transaction() as conn:
-            # Hold a transaction-scoped lock across the read + writes so two
-            # similar tags arriving concurrently cannot each create a group or
-            # clobber each other's centroid. Released automatically on commit.
+            # Old centroid representations are intentionally invisible here. Mixing
+            # a prior key+value centroid with the current value-only evidence would
+            # make cosine comparisons meaningless on existing volumes.
             conn.execute("SELECT pg_advisory_xact_lock(%s)", (GROUP_ASSIGNMENT_LOCK,))
-
-            nearest = vector_store.nearest(GROUP_COLLECTION, vector)
+            nearest = vector_store.nearest(
+                GROUP_COLLECTION,
+                vector,
+                payload_filter=self._contract_payload(),
+                conn=conn,
+            )
             if nearest and nearest.score >= threshold:
                 set_id = nearest.payload["set_id"]
                 group_id = self._numeric_id(set_id)
@@ -147,11 +156,28 @@ class TagSetStore:
                 GROUP_COLLECTION,
                 set_id,
                 centroid,
-                {"set_id": set_id},
+                {
+                    "set_id": set_id,
+                    "contract": TAG_GROUP_CONTRACT_VERSION,
+                    "evidence_id": "value",
+                    "source": "tag",
+                },
+                conn=conn,
             )
         return set_id
 
+    def _active_set_ids(self) -> set[str]:
+        return {
+            point.payload["set_id"]
+            for point in vector_store.all_points(GROUP_COLLECTION)
+            if point.payload.get("contract") == TAG_GROUP_CONTRACT_VERSION
+            and point.payload.get("set_id")
+        }
+
     def get_all(self) -> list[dict]:
+        active_set_ids = self._active_set_ids()
+        if not active_set_ids:
+            return []
         rows = postgres_client.fetch_all(
             """
             SELECT g.id,
@@ -173,9 +199,12 @@ class TagSetStore:
                 "topic_count": row["topic_count"],
             }
             for row in rows
+            if f"set_{row['id']}" in active_set_ids
         ]
 
     def get_topics(self, set_id: str) -> list[str]:
+        if set_id not in self._active_set_ids():
+            return []
         rows = postgres_client.fetch_all(
             """
             SELECT DISTINCT COALESCE(identity.canonical_topic, membership.topic) AS topic
