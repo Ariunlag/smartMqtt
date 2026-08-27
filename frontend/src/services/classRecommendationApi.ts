@@ -26,7 +26,9 @@ export async function applyClassAction(
   return response.data;
 }
 
-export async function getRecommendedClassCandidates() {
-  const response = await api.get<RecommendedClassCandidateSet>("/recommended-classes");
+export async function getRecommendedClassCandidates(strategy?: string) {
+  const response = await api.get<RecommendedClassCandidateSet>("/recommended-classes", {
+    params: strategy ? { strategy } : undefined,
+  });
   return response.data;
 }
