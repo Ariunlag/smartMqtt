@@ -60,11 +60,36 @@ The dashboard uses one Recommended Classes surface. Strategy selection belongs i
 that surface. Side-by-side algorithm comparison belongs in a research/evaluation view,
 not separate end-user recommendation tabs.
 
-## Human actions become supervised evidence
+## Candidate identity and evidence history are persistent
 
-Future keep/add/remove/reject/dismiss actions should persist the strategy id,
-representation/candidate version, evidence scores, and coverage that produced the
-recommendation. This creates a dataset for calibrated weighting or ranking models.
+A system candidate has a deterministic id for an exact strategy/member set. The id is
+independent of representation versions. When the evidence snapshot changes for the
+same candidate id, a monotonic `candidate_version` is created.
+
+A changed member set is intentionally a new candidate identity for now. We do not use
+an arbitrary overlap threshold to pretend two changing groups are the same entity.
+Candidate lineage across membership changes can be added later with explicit evidence
+and evaluation.
+
+## Human actions are supervised evidence, not immediate model mutations
+
+The current feedback contract records:
+
+- `KEEP_TOPIC` as a positive membership label;
+- `REMOVE_TOPIC` as a negative membership label;
+- `ACCEPT_CANDIDATE` as a positive candidate-usefulness label;
+- `DISMISS_CANDIDATE` as a negative candidate-usefulness label.
+
+Every event references an exact `(candidate_id, candidate_version)` and copies the
+immutable candidate evidence snapshot. The API does not accept client-supplied scores.
+
+A feedback click does not immediately change pair embeddings, retrain the embedding
+model, update a centroid, or mutate Saved Classes. Those events become the dataset for
+later calibrated weighting/ranking experiments. This keeps the learning target
+observable and reproducible.
+
+Repeated/corrective events remain factual history; a later dataset builder must define
+how to select the effective label for training rather than destroying prior events.
 
 Feedback on a system candidate must not silently modify a Saved Class.
 
@@ -79,3 +104,7 @@ Recommended Classes.
 Runtime dense-vector persistence uses PostgreSQL + pgvector. Application code imports
 the PostgreSQL vector adapter directly; there is no compatibility client or separate
 runtime vector service.
+
+Persistent candidate versions and feedback are relational PostgreSQL records. They
+reference the same recommendation evidence contract rather than creating another
+vector store.
