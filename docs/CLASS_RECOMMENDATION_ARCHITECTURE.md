@@ -24,7 +24,7 @@ MQTT message
   └─ bounded pair-evidence sidecar
        ├─ deterministic tag/field profiling
        ├─ one independent record per key:value pair
-       ├─ five pair embedding views
+       ├─ registry-defined pair evidence
        └─ versioned evidence persistence
 
 Active canonical topics
@@ -32,10 +32,9 @@ Active canonical topics
   ├─ value evidence
   ├─ key + value evidence
   ├─ schema evidence
-  ├─ numeric-key evidence when applicable
   └─ shared whole-stream context evidence
        ↓
-independent per-channel candidate discovery
+independent per-evidence candidate discovery
        ↓
 merge identical member sets as multi-channel consensus
        ↓
@@ -48,21 +47,48 @@ Pending duplicate topics stay eligible and carry a pending-review flag.
 ## Evidence contract
 
 Every tag and field remains an independent pair identified by canonical topic,
-original topic, source (`tag` or `field`), normalized key, datatype, numeric state,
-and representation version.
+original topic, source (`tag` or `field`), normalized key, datatype, and
+representation version.
 
-The five pair views are `key`, `value`, `key_value`, `schema`, and `numeric_key` for
-numeric pairs only. The sixth channel is `stream_context`, reusing the authoritative
-flat topic vector already produced for duplicate detection.
+The pair evidence registry currently defines four embeddings:
+
+- `key`
+- `value`
+- `key_value`
+- `schema`
+
+The stream evidence registry currently defines `stream_context`, reusing the
+authoritative flat topic vector already produced for duplicate detection.
+
+There is no `numeric_key` recommendation channel. Numeric remains a datatype that can
+participate in structural profiling and temporal handling, but it is not a separate
+semantic evidence source and therefore cannot double-count the same key signal.
 
 `tag` and `field` are pair sources, not extra embedding channels. The UI groups pair
 evidence by source so tag evidence and field evidence remain understandable.
 
+## Evidence registry extension point
+
+Evidence definitions live in `services/class_recommendation/evidence.py`. A pair
+evidence definition owns its stable id, user-facing label, scope, and deterministic
+text renderer. Matching, prototype construction, discovery, persistence ordering, RQ1
+evaluation, and API explanations iterate the registry instead of maintaining their own
+copies of evidence ids.
+
+`GET /api/recommended-classes` also returns the evidence catalog. The frontend renders
+labels and detailed scores from that catalog rather than a hard-coded TypeScript union.
+Adding another registered pair or stream evidence source therefore does not require a
+new field in every score dataclass or a new React label branch.
+
+Changing the registry changes the representation contract. Existing material is
+versioned and must be rematerialized rather than silently mixing evidence shapes.
+
 ## Discovery and ranking
 
-Candidate discovery runs independently for each of the six evidence channels. The
-baseline uses HDBSCAN over a precomputed cosine-distance matrix for each channel.
-There is no hand-tuned weighted fusion and no global user-facing average similarity.
+Candidate discovery currently runs independently for each registered evidence
+channel. The baseline uses HDBSCAN over a precomputed cosine-distance matrix for each
+channel. There is no hand-tuned weighted fusion and no global user-facing average
+similarity.
 
 If the exact same topic membership is independently discovered by multiple channels,
 those channels are attached to one candidate as consensus reasons. Candidate ordering
@@ -72,17 +98,21 @@ topic ordering.
 A scalar compatibility is allowed internally only to make pair-to-pair one-to-one
 assignment deterministic. It is not presented as recommendation confidence.
 
+This HDBSCAN discovery remains a baseline. The planned persistent Recommended Class
+candidate/prototype model is a separate follow-up architecture change and should not
+be mixed into evidence-contract refactors.
+
 ## User-facing explanation
 
 The Recommendations UI shows:
 
-- which channels independently discovered the group,
+- which registered evidence channels independently discovered the group,
 - suggested member topics,
 - matched pair coverage,
 - tag pair evidence,
 - field pair evidence,
-- individual key/value/key+value/schema/numeric-key cosine scores,
-- whole-stream context similarity,
+- registered pair-level cosine scores,
+- registered stream-level evidence,
 - pending duplicate-review state.
 
 The UI does not reduce those facts to one `Overall similarity` number.
