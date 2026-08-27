@@ -11,17 +11,25 @@ from services.database.qdrant import qdrant_client
 from services.database.vector import deterministic_vector_identity
 
 from .domain import (
-    PAIR_VIEWS,
     REPRESENTATION_CONTRACT_VERSION,
     ClassPairPrototype,
     PairEmbeddingRecord,
     PairIdentity,
     PairRepresentation,
 )
+from .evidence import PAIR_EVIDENCE_IDS
 
 PAIR_EMBEDDING_COLLECTION = "class_pair_embeddings"
 PAIR_PROTOTYPE_COLLECTION = "class_pair_prototypes"
 STREAM_CONTEXT_PROTOTYPE_COLLECTION = "class_stream_context_prototypes"
+_PAIR_EVIDENCE_ORDER = {
+    evidence_id: index for index, evidence_id in enumerate(PAIR_EVIDENCE_IDS)
+}
+
+
+def _evidence_sort_key(item) -> tuple[int, str]:
+    evidence_id = item[0]
+    return (_PAIR_EVIDENCE_ORDER.get(evidence_id, len(_PAIR_EVIDENCE_ORDER)), evidence_id)
 
 
 class PairEmbeddingStore:
@@ -61,7 +69,6 @@ class PairEmbeddingStore:
                         "normalized_key": representation.normalized_key,
                         "normalized_value": representation.normalized_value,
                         "datatype": representation.datatype,
-                        "is_numeric": representation.is_numeric,
                         "representation_version": representation.representation_version,
                         "representation_view": view,
                         "representation_text": representation.text_for(view),
@@ -92,9 +99,7 @@ class PairEmbeddingStore:
         for identity in sorted(grouped):
             row = grouped[identity]
             payload = row["payload"]
-            texts = tuple(
-                sorted(row["texts"], key=lambda item: PAIR_VIEWS.index(item[0]))
-            )
+            texts = tuple(sorted(row["texts"], key=_evidence_sort_key))
             records.append(
                 PairEmbeddingRecord(
                     PairRepresentation(
@@ -106,15 +111,10 @@ class PairEmbeddingStore:
                         normalized_key=identity.normalized_key,
                         normalized_value=payload.get("normalized_value", ""),
                         datatype=identity.datatype,
-                        is_numeric=bool(payload.get("is_numeric")),
                         representation_version=int(payload["representation_version"]),
                         texts=texts,
                     ),
-                    tuple(
-                        sorted(
-                            row["vectors"], key=lambda item: PAIR_VIEWS.index(item[0])
-                        )
-                    ),
+                    tuple(sorted(row["vectors"], key=_evidence_sort_key)),
                 )
             )
         return tuple(records)
