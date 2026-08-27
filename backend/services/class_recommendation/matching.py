@@ -8,16 +8,16 @@ from collections.abc import Iterable
 
 from .domain import (
     ALGORITHM_VERSION,
-    ChannelScores,
     ClassPairPrototype,
     ClassProfile,
     ClassRecommendation,
     Coverage,
+    EvidenceScores,
     MatchedPairEvidence,
     PairEmbeddingRecord,
     PairIdentity,
-    PairViewScores,
 )
+from .evidence import PAIR_EVIDENCE_IDS
 
 
 def cosine(left: Iterable[float], right: Iterable[float]) -> float:
@@ -165,45 +165,31 @@ class PairClassMatcher:
     @staticmethod
     def _scores(
         pair: PairEmbeddingRecord, prototype: ClassPairPrototype
-    ) -> PairViewScores:
-        def score(name):
-            pair_vector = pair.vector_for(name)
-            prototype_vector = prototype.centroid_for(name)
+    ) -> EvidenceScores:
+        values = {}
+        for evidence_id in PAIR_EVIDENCE_IDS:
+            pair_vector = pair.vector_for(evidence_id)
+            prototype_vector = prototype.centroid_for(evidence_id)
             if pair_vector is None or prototype_vector is None:
-                return None
-            return cosine(pair_vector, prototype_vector)
-
-        required = {
-            name: score(name) for name in ("key", "value", "key_value", "schema")
-        }
-        if any(value is None for value in required.values()):
-            raise ValueError("Pair and prototype are missing a required embedding view")
-        return PairViewScores(
-            key=required["key"],
-            value=required["value"],
-            key_value=required["key_value"],
-            schema=required["schema"],
-            numeric_key=score("numeric_key"),
-        )
+                raise ValueError(
+                    f"Pair and prototype are missing required evidence '{evidence_id}'"
+                )
+            values[evidence_id] = cosine(pair_vector, prototype_vector)
+        return EvidenceScores.from_values(values)
 
     @staticmethod
-    def _channel_scores(matches, stream_context, profile) -> ChannelScores:
-        def mean(name: str) -> float | None:
+    def _channel_scores(matches, stream_context, profile) -> EvidenceScores:
+        def mean(evidence_id: str) -> float | None:
             values = [
                 value
                 for match in matches
-                if (value := getattr(match.scores, name)) is not None
+                if (value := match.scores.get(evidence_id)) is not None
             ]
             return sum(values) / len(values) if values else None
 
+        values = {evidence_id: mean(evidence_id) for evidence_id in PAIR_EVIDENCE_IDS}
         context_score = None
         if stream_context is not None and profile.stream_context_centroid is not None:
             context_score = cosine(stream_context, profile.stream_context_centroid)
-        return ChannelScores(
-            key=mean("key"),
-            value=mean("value"),
-            key_value=mean("key_value"),
-            schema=mean("schema"),
-            numeric_key=mean("numeric_key"),
-            stream_context=context_score,
-        )
+        values["stream_context"] = context_score
+        return EvidenceScores.from_values(values)
