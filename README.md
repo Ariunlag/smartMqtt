@@ -1,8 +1,8 @@
 # InfluxAI Realtime IoT Hub
 
 InfluxAI is a real-time IoT platform for MQTT telemetry ingestion, time-series
-visualization, duplicate detection, tag grouping, user-defined Saved Classes, and
-system-derived recommended class candidates.
+visualization, duplicate detection, evidence-based grouping, user-defined Saved
+Classes, and system-derived Recommended Classes.
 
 Runtime persistence is split by responsibility:
 
@@ -32,59 +32,77 @@ FastAPI ingestion pipeline
         React + Zustand dashboard
 ```
 
-A bounded recommendation sidecar creates pair-level embedding evidence without
-blocking primary MQTT/Influx ingestion.
+A bounded evidence sidecar creates pair-level embeddings without blocking primary
+MQTT/Influx ingestion.
+
+## One evidence pipeline
+
+Every tag and field is preserved as an independent key:value pair. For every pair the
+same registry-defined evidence is materialized independently:
+
+1. `key`
+2. `value`
+3. `key_value`
+4. `schema`
+
+Each stream also has one `stream_context` vector. Pair vectors are never fused during
+representation generation. A stream with three tag pairs therefore has three
+independent pair records, each with four vectors, plus the stream-context vector.
+
+`tag` and `field` are pair sources, not extra evidence channels. Numeric is datatype
+metadata, not a separate recommendation signal.
+
+Exploratory tag grouping reuses the tag pair's existing `value` vector for centroid
+assignment. It does not create a second tag-specific embedding pipeline.
+
+## Recommendation strategies
+
+Recommended Classes consume the same stored evidence through a strategy boundary.
+The current production strategy is `independent_hdbscan`: each evidence type is
+clustered independently and identical topic memberships are merged as consensus.
+There is no cross-evidence weighting in this strategy.
+
+The representation layer is intentionally strategy-agnostic. Future centroid,
+weighted, evidence-subset, and learned-ranking strategies can consume the same raw
+pair evidence, stream vectors, per-evidence similarities, and coverage without
+regenerating embeddings.
+
+`GET /api/recommended-classes` returns both the evidence catalog and the active
+strategy metadata. The optional `strategy` query parameter selects a registered
+strategy. The dashboard keeps one Recommended Classes view; when multiple strategies
+are registered, the same view exposes a method selector rather than duplicating the
+feature into separate top-level tabs.
 
 ## Class concepts
 
-SmartMQTT intentionally keeps two class concepts separate.
-
 ### Saved Classes
 
-Saved Classes are created manually by the user through Class Builder. The user selects
-individual topics/measurements, provides a class name, and owns membership. PostgreSQL
-`classes` and `class_topics` are the source of truth.
+Saved Classes are created manually by the user through Class Builder. PostgreSQL
+`classes` and `class_topics` are their source of truth.
 
 ### Recommended Classes
 
 Recommended Classes are system-derived candidate topic groups. They are not copies of
 Saved Classes and are not automatically inserted into `classes`/`class_topics`.
 
-Recommendation evidence is registry-defined. The current pair evidence is:
-
-1. key
-2. value
-3. key + value
-4. schema
-
-The stream-level evidence is whole-stream context. There is no numeric-key evidence
-channel; numeric remains datatype/telemetry metadata rather than a duplicated semantic
-key signal.
-
-Tags and fields remain independent pair sources. Candidate discovery runs per
-registered evidence channel and identical member sets discovered by multiple channels
-are shown as consensus reasons. The backend returns the evidence catalog with ids,
-labels, and scopes, so the dashboard renders evidence generically instead of
-hard-coding one UI field per channel. The dashboard shows pair evidence, tag/field
-evidence, coverage, and stream evidence instead of explaining a recommendation with
-one fused `Overall similarity` number.
+The dashboard shows candidate members, discovery evidence, matched pair coverage,
+tag/field evidence, pair-level scores, and stream context. It does not present one
+fused `Overall similarity` as the explanation.
 
 See [architecture](docs/CLASS_RECOMMENDATION_ARCHITECTURE.md) and
 [decisions](docs/CLASS_RECOMMENDATION_DECISIONS.md).
 
 ## Duplicate lifecycle
 
-Duplicate detection remains separate from class discovery.
+Duplicate detection is an identity workflow separate from class recommendation.
 
-- `PENDING`: both topics remain active and independently eligible; the recommendation
-  UI only marks pending review.
+- `PENDING`: both topics remain active and independently eligible.
 - `KEEP_BOTH` / `NOT_DUPLICATE`: both remain independent.
 - confirmed duplicate: the losing topic becomes an alias and stops independent
-  ingestion/recommendation contribution; canonical relationships are reconciled.
+  ingestion/recommendation contribution.
 
-Topic ANN search uses the shared pgvector `topic_embeddings` table and cosine HNSW
-index. Temporal evidence is combined by the duplicate service where enough aligned
-points exist.
+Duplicate ANN search uses the shared `topic_embeddings` pgvector table and cosine HNSW
+index. Temporal evidence is combined where enough aligned points exist.
 
 ## Services
 
@@ -116,8 +134,7 @@ docker compose ps
 ```
 
 The one-off migration container runs `alembic upgrade head` before backend startup.
-The PostgreSQL service uses `pgvector/pgvector:pg16` and migration
-`0005_pgvector_embeddings` enables the vector extension and creates HNSW indexes.
+The PostgreSQL service uses `pgvector/pgvector:pg16`.
 
 Check backend logs:
 
@@ -163,21 +180,17 @@ Messages must contain `fields`, `tags`, and an ISO-8601 timestamp:
 
 ## PostgreSQL + pgvector persistence
 
-Vector tables are created by Alembic and currently enforce 384-dimensional vectors:
+Active vector material includes:
 
 - `topic_embeddings`
-- `tag_key_value_embeddings`
 - `tag_group_centroids`
 - `class_pair_embeddings`
-- `class_pair_prototypes` (legacy Saved-Class compatibility material)
-- `class_stream_context_prototypes` (legacy Saved-Class compatibility material)
+- `class_pair_prototypes` (legacy Saved-Class recommendation compatibility)
+- `class_stream_context_prototypes` (legacy Saved-Class recommendation compatibility)
 
-Each vector table has a cosine HNSW index plus a JSONB payload index. Duplicate ANN
-queries use pgvector's `<=>` cosine-distance operator.
-
-Relational source-of-truth state includes streams, user Saved Classes, duplicate
-identity/decisions, tag-group relationships, topic representation versions, and audit
-records.
+Vector tables use cosine HNSW indexes and JSONB payload indexes where applicable.
+The current vector dimension is 384. Changing embedding dimensionality requires an
+explicit Alembic migration.
 
 See [Persistence Architecture](docs/PERSISTENCE.md).
 
@@ -198,10 +211,10 @@ All REST routes use `/api`.
 | POST | `/api/duplicate-confirm` | Resolve duplicate identity |
 | GET/POST | `/api/classes/` | List/create user Saved Classes |
 | PUT/DELETE | `/api/classes/{name}` | Update/delete a Saved Class |
-| GET | `/api/recommended-classes` | System-derived class candidates with evidence |
-| GET | `/api/class-recommendations/status` | Recommendation sidecar diagnostics |
-| GET | `/api/groups` | Exploratory tag groups |
-| GET | `/api/groups/{id}/topics` | Topics in a tag group |
+| GET | `/api/recommended-classes` | System candidates; optional `strategy` query |
+| GET | `/api/class-recommendations/status` | Evidence sidecar diagnostics |
+| GET | `/api/groups` | Exploratory groups derived from shared tag-value evidence |
+| GET | `/api/groups/{id}/topics` | Topics in an exploratory group |
 | WebSocket | `/ws` | Live MQTT/dashboard events |
 
 Older Saved-Class matching endpoints remain temporarily for compatibility but are not
@@ -235,9 +248,6 @@ SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE=2
 SYSTEM_RECOMMENDATION_MIN_SAMPLES=1
 ```
 
-The current pgvector schema is `vector(384)`. Changing embedding dimensionality
-requires an explicit Alembic migration.
-
 ## Local development
 
 ### Backend
@@ -252,9 +262,6 @@ pytest
 python main.py
 ```
 
-PostgreSQL must have pgvector available. InfluxDB and MQTT must also be reachable for
-the complete runtime.
-
 ### Frontend
 
 ```bash
@@ -264,13 +271,6 @@ npm test -- --run
 npm run build
 npm run dev
 ```
-
-## Existing Qdrant deployments
-
-The pgvector migration creates PostgreSQL vector tables; it does not copy historical
-Qdrant bytes. Vector state is derived and active MQTT observations rematerialize
-current topic/pair evidence. Export any historical vector-only artifacts that must be
-retained before decommissioning an old Qdrant volume/service.
 
 ## Project structure
 
@@ -284,7 +284,7 @@ backend/
     embedding/               Sentence-transformer integration
     influx/                  InfluxDB client
     mqtt/                    MQTT client and handler pipeline
-    class_recommendation/    Pair evidence and system candidate discovery
+    class_recommendation/    Evidence, matching, and strategy layer
     store/                   Persistence repositories
 
 frontend/
