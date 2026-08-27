@@ -100,29 +100,29 @@ export interface PairIdentity {
   datatype: string;
 }
 
-export interface PairViewScores {
-  key: number;
-  value: number;
-  key_value: number;
-  schema: number;
-  numeric_key: number | null;
+export type EvidenceScope = "pair" | "stream";
+
+export interface EvidenceDefinition {
+  evidence_id: string;
+  label: string;
+  scope: EvidenceScope;
+}
+
+export interface EvidenceScore {
+  evidence_id: string;
+  score: number;
+}
+
+export interface EvidenceScores {
+  items: EvidenceScore[];
 }
 
 export interface MatchedPairEvidence {
   candidate: PairIdentity;
   prototype: PairIdentity;
   prototype_id: string;
-  scores: PairViewScores;
+  scores: EvidenceScores;
   compatibility_score: number;
-}
-
-export interface ChannelScores {
-  key: number | null;
-  value: number | null;
-  key_value: number | null;
-  schema: number | null;
-  numeric_key: number | null;
-  stream_context: number | null;
 }
 
 export interface PairCoverage {
@@ -141,7 +141,7 @@ export interface ClassRecommendation {
   class_name: string;
   rank: number;
   overall_score: number;
-  channel_scores: ChannelScores;
+  channel_scores: EvidenceScores;
   valid_channels: string[];
   coverage: PairCoverage;
   matched_pairs: MatchedPairEvidence[];
@@ -174,17 +174,9 @@ export interface ClassActionResult {
 // System-derived Recommended Classes
 // ---------------------------
 
-export type RecommendationDiscoveryChannel =
-  | "key"
-  | "value"
-  | "key_value"
-  | "schema"
-  | "numeric_key"
-  | "stream_context";
-
 export interface RecommendedClassTopicEvidence {
   topic: string;
-  channel_scores: ChannelScores;
+  channel_scores: EvidenceScores;
   coverage: PairCoverage;
   matched_pairs: MatchedPairEvidence[];
   duplicate_pending: boolean;
@@ -195,13 +187,14 @@ export interface RecommendedClassCandidate {
   rank: number;
   anchor_topic: string;
   member_topics: string[];
-  discovery_channels: RecommendationDiscoveryChannel[];
+  discovery_channels: string[];
   evidence: RecommendedClassTopicEvidence[];
 }
 
 export interface RecommendedClassCandidateSet {
   candidates: RecommendedClassCandidate[];
   available_topics: string[];
+  evidence_catalog: EvidenceDefinition[];
 }
 
 // ---------------------------
