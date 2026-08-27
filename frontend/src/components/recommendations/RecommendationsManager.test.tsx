@@ -9,8 +9,17 @@ vi.mock("../../services/classRecommendationApi", () => ({
   getRecommendedClassCandidates: vi.fn(),
 }));
 
+const strategy = {
+  strategy_id: "independent_hdbscan",
+  label: "Independent evidence",
+  description:
+    "Runs HDBSCAN separately for each evidence type and merges identical topic groups as consensus. No cross-evidence weighting is applied.",
+};
+
 const candidateSet: RecommendedClassCandidateSet = {
   available_topics: ["building/a", "building/b", "building/c"],
+  strategy,
+  strategy_catalog: [strategy],
   evidence_catalog: [
     { evidence_id: "key", label: "Similar keys", scope: "pair" },
     { evidence_id: "value", label: "Similar values", scope: "pair" },
@@ -96,6 +105,7 @@ it("keeps Saved Classes out of system recommendations and explains independent e
   expect(
     await screen.findByRole("heading", { name: "Recommended class #1" }),
   ).toBeInTheDocument();
+  expect(screen.getByText(/Method: Independent evidence/)).toBeInTheDocument();
   expect(screen.getByText("Similar keys")).toBeInTheDocument();
   expect(screen.getByText("Similar structure")).toBeInTheDocument();
   expect(screen.getAllByText("Similar whole-stream context").length).toBeGreaterThan(0);
