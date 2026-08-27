@@ -1,10 +1,10 @@
 """System-derived recommended-class candidates with evidence-first explanations.
 
-Saved Classes are deliberately not consulted here.  This module discovers candidate
+Saved Classes are deliberately not consulted here. This module discovers candidate
 topic groups from current pair-level evidence and the shared stream-context vector.
-Each evidence channel is clustered independently; exact candidate memberships that
-appear in multiple channels are merged as consensus evidence without averaging the
-channels into one user-facing score.
+Each registered evidence channel is clustered independently; exact candidate
+memberships that appear in multiple channels are merged as consensus evidence
+without averaging the channels into one user-facing score.
 """
 
 from __future__ import annotations
@@ -19,22 +19,21 @@ from sklearn.cluster import HDBSCAN
 
 from .domain import (
     REPRESENTATION_CONTRACT_VERSION,
-    ChannelScores,
     Coverage,
+    EvidenceScores,
     MatchedPairEvidence,
     PairEmbeddingRecord,
-    PairViewScores,
+)
+from .evidence import (
+    DISCOVERY_EVIDENCE_IDS,
+    EVIDENCE_CATALOG,
+    PAIR_EVIDENCE_IDS,
+    EvidenceDefinition,
 )
 from .matching import cosine
 
-DISCOVERY_CHANNELS: tuple[str, ...] = (
-    "key",
-    "value",
-    "key_value",
-    "schema",
-    "numeric_key",
-    "stream_context",
-)
+# Compatibility name for callers/tests while the source of truth is the registry.
+DISCOVERY_CHANNELS: tuple[str, ...] = DISCOVERY_EVIDENCE_IDS
 
 ClusterLabels = Callable[[str, tuple[tuple[float, ...], ...]], Sequence[int]]
 
@@ -55,7 +54,7 @@ class RecommendedClassDiscoveryConfig:
 @dataclass(frozen=True, slots=True)
 class TopicComparisonEvidence:
     topic: str
-    channel_scores: ChannelScores
+    channel_scores: EvidenceScores
     coverage: Coverage
     matched_pairs: tuple[MatchedPairEvidence, ...]
     duplicate_pending: bool
@@ -75,13 +74,14 @@ class RecommendedClassCandidate:
 class RecommendedClassCandidateSet:
     candidates: tuple[RecommendedClassCandidate, ...]
     available_topics: tuple[str, ...]
+    evidence_catalog: tuple[EvidenceDefinition, ...] = EVIDENCE_CATALOG
 
 
 class TopicEvidenceMatcher:
-    """Compare two topics without collapsing the six evidence channels.
+    """Compare two topics without collapsing registered evidence channels.
 
-    Pair identity stays intact.  Candidate pairs only compete against reference
-    pairs with the same source and datatype.  A scalar compatibility is used only
+    Pair identity stays intact. Candidate pairs only compete against reference
+    pairs with the same source and datatype. A scalar compatibility is used only
     to make the one-to-one assignment deterministic; it is not returned as a class
     recommendation score.
     """
@@ -166,48 +166,34 @@ class TopicEvidenceMatcher:
     @staticmethod
     def _scores(
         pair: PairEmbeddingRecord, reference: PairEmbeddingRecord
-    ) -> PairViewScores:
-        def score(name: str):
-            left = pair.vector_for(name)
-            right = reference.vector_for(name)
+    ) -> EvidenceScores:
+        values = {}
+        for evidence_id in PAIR_EVIDENCE_IDS:
+            left = pair.vector_for(evidence_id)
+            right = reference.vector_for(evidence_id)
             if left is None or right is None:
-                return None
-            return cosine(left, right)
-
-        required = {
-            name: score(name) for name in ("key", "value", "key_value", "schema")
-        }
-        if any(value is None for value in required.values()):
-            raise ValueError("Pair evidence is missing a required embedding view")
-        return PairViewScores(
-            key=required["key"],
-            value=required["value"],
-            key_value=required["key_value"],
-            schema=required["schema"],
-            numeric_key=score("numeric_key"),
-        )
+                raise ValueError(
+                    f"Pair evidence is missing required view '{evidence_id}'"
+                )
+            values[evidence_id] = cosine(left, right)
+        return EvidenceScores.from_values(values)
 
     @staticmethod
-    def _channel_scores(matches, candidate_stream, reference_stream) -> ChannelScores:
-        def mean(name: str) -> float | None:
+    def _channel_scores(matches, candidate_stream, reference_stream) -> EvidenceScores:
+        def mean(evidence_id: str) -> float | None:
             values = [
                 value
                 for match in matches
-                if (value := getattr(match.scores, name)) is not None
+                if (value := match.scores.get(evidence_id)) is not None
             ]
             return sum(values) / len(values) if values else None
 
+        values = {evidence_id: mean(evidence_id) for evidence_id in PAIR_EVIDENCE_IDS}
         context = None
         if candidate_stream is not None and reference_stream is not None:
             context = cosine(candidate_stream, reference_stream)
-        return ChannelScores(
-            key=mean("key"),
-            value=mean("value"),
-            key_value=mean("key_value"),
-            schema=mean("schema"),
-            numeric_key=mean("numeric_key"),
-            stream_context=context,
-        )
+        values["stream_context"] = context
+        return EvidenceScores.from_values(values)
 
 
 class RecommendedClassDiscovery:
@@ -266,7 +252,7 @@ class RecommendedClassDiscovery:
                 )
 
         memberships: dict[tuple[str, ...], set[str]] = {}
-        for channel in DISCOVERY_CHANNELS:
+        for channel in DISCOVERY_EVIDENCE_IDS:
             matrix = self._distance_matrix(topics, symmetric_scores, channel)
             labels = tuple(int(value) for value in self._cluster_labels(channel, matrix))
             if len(labels) != len(topics):
@@ -285,7 +271,8 @@ class RecommendedClassDiscovery:
         for members, channels in memberships.items():
             anchor = members[0]
             evidence = tuple(
-                comparisons[(topic, anchor)] if (topic, anchor) in comparisons
+                comparisons[(topic, anchor)]
+                if (topic, anchor) in comparisons
                 else comparisons[(anchor, topic)]
                 for topic in members
                 if topic != anchor
@@ -298,7 +285,9 @@ class RecommendedClassDiscovery:
                     anchor_topic=anchor,
                     member_topics=members,
                     discovery_channels=tuple(
-                        channel for channel in DISCOVERY_CHANNELS if channel in channels
+                        channel
+                        for channel in DISCOVERY_EVIDENCE_IDS
+                        if channel in channels
                     ),
                     evidence=evidence,
                 )
@@ -363,12 +352,12 @@ class RecommendedClassDiscovery:
 
     @staticmethod
     def _symmetric_channels(
-        left: ChannelScores, right: ChannelScores
+        left: EvidenceScores, right: EvidenceScores
     ) -> dict[str, float | None]:
         result = {}
-        for channel in DISCOVERY_CHANNELS:
-            left_value = getattr(left, channel)
-            right_value = getattr(right, channel)
+        for channel in DISCOVERY_EVIDENCE_IDS:
+            left_value = left.get(channel)
+            right_value = right.get(channel)
             result[channel] = (
                 min(left_value, right_value)
                 if left_value is not None and right_value is not None
