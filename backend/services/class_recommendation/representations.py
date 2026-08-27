@@ -17,16 +17,21 @@ class PairRepresentationBuilder:
     def fingerprint(profile: StreamProfile) -> str:
         """Fingerprint recommendation-relevant structure and categorical values.
 
-        Fast-changing numeric readings remain excluded from the fingerprint so
+        Fast-changing numeric field readings remain excluded from the fingerprint so
         telemetry variation does not rematerialize pair embeddings on every sample.
-        Numeric datatype remains structural metadata; it is not an evidence channel.
+        Numeric is inferred from datatype only; it is not a separate evidence channel
+        or duplicated boolean property.
         """
         rows = [
             (
                 entry.source,
                 entry.normalized_key,
                 entry.value_type,
-                None if entry.is_numeric else entry.normalized_value,
+                (
+                    None
+                    if entry.source == "field" and entry.value_type == "numeric"
+                    else entry.normalized_value
+                ),
             )
             for entry in profile.entries
         ]
