@@ -1,10 +1,10 @@
-"""System-derived recommended-class candidates with evidence-first explanations.
+"""System-derived recommended-class candidates over independent evidence.
 
-Saved Classes are deliberately not consulted here. This module discovers candidate
-topic groups from current pair-level evidence and the shared stream-context vector.
-Each registered evidence channel is clustered independently; exact candidate
-memberships that appear in multiple channels are merged as consensus evidence
-without averaging the channels into one user-facing score.
+Saved Classes are deliberately not consulted here. The discovery service prepares one
+immutable evidence snapshot, then delegates candidate formation to a registered
+strategy. Embedding generation and persistence remain independent of that strategy so
+HDBSCAN, centroid/prototype, weighted, and learned approaches can be evaluated over
+the same evidence without rematerializing vectors.
 """
 
 from __future__ import annotations
@@ -13,9 +13,6 @@ import hashlib
 import json
 import uuid
 from dataclasses import dataclass
-from typing import Callable, Sequence
-
-from sklearn.cluster import HDBSCAN
 
 from .domain import (
     REPRESENTATION_CONTRACT_VERSION,
@@ -31,24 +28,20 @@ from .evidence import (
     EvidenceDefinition,
 )
 from .matching import cosine
+from .strategies import (
+    DEFAULT_STRATEGY_ID,
+    STRATEGY_DEFINITIONS,
+    ClusterLabels,
+    HdbscanStrategyConfig,
+    RecommendationStrategyDefinition,
+    RecommendationStrategyInput,
+    build_strategy,
+)
 
-# Compatibility name for callers/tests while the source of truth is the registry.
+# Compatibility names retained for callers/tests while the source of truth lives in
+# the evidence and strategy registries.
 DISCOVERY_CHANNELS: tuple[str, ...] = DISCOVERY_EVIDENCE_IDS
-
-ClusterLabels = Callable[[str, tuple[tuple[float, ...], ...]], Sequence[int]]
-
-
-@dataclass(frozen=True, slots=True)
-class RecommendedClassDiscoveryConfig:
-    min_cluster_size: int = 2
-    min_samples: int | None = 1
-    allow_single_cluster: bool = False
-
-    def __post_init__(self) -> None:
-        if self.min_cluster_size < 2:
-            raise ValueError("min_cluster_size must be at least 2")
-        if self.min_samples is not None and self.min_samples < 1:
-            raise ValueError("min_samples must be at least 1")
+RecommendedClassDiscoveryConfig = HdbscanStrategyConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,16 +67,18 @@ class RecommendedClassCandidate:
 class RecommendedClassCandidateSet:
     candidates: tuple[RecommendedClassCandidate, ...]
     available_topics: tuple[str, ...]
+    strategy: RecommendationStrategyDefinition
+    strategy_catalog: tuple[RecommendationStrategyDefinition, ...] = STRATEGY_DEFINITIONS
     evidence_catalog: tuple[EvidenceDefinition, ...] = EVIDENCE_CATALOG
 
 
 class TopicEvidenceMatcher:
     """Compare two topics without collapsing registered evidence channels.
 
-    Pair identity stays intact. Candidate pairs only compete against reference
-    pairs with the same source and datatype. A scalar compatibility is used only
-    to make the one-to-one assignment deterministic; it is not returned as a class
-    recommendation score.
+    Pair identity stays intact. Candidate pairs only compete against reference pairs
+    with the same source and datatype. A scalar compatibility is used only to make the
+    one-to-one assignment deterministic; it is not returned as a recommendation
+    confidence score.
     """
 
     @classmethod
@@ -197,7 +192,7 @@ class TopicEvidenceMatcher:
 
 
 class RecommendedClassDiscovery:
-    """Discover system candidates independently of user-created Saved Classes."""
+    """Prepare evidence once and delegate candidate formation to a strategy."""
 
     def __init__(
         self,
@@ -209,6 +204,7 @@ class RecommendedClassDiscovery:
         dupe_store,
         config: RecommendedClassDiscoveryConfig | None = None,
         cluster_labels: ClusterLabels | None = None,
+        strategy_id: str = DEFAULT_STRATEGY_ID,
     ) -> None:
         self.metadata_store = metadata_store
         self.pair_store = pair_store
@@ -216,12 +212,24 @@ class RecommendedClassDiscovery:
         self.identity_store = identity_store
         self.dupe_store = dupe_store
         self.config = config or RecommendedClassDiscoveryConfig()
-        self._cluster_labels = cluster_labels or self._default_cluster_labels
+        self.cluster_labels = cluster_labels
+        self.strategy_id = strategy_id
 
-    def discover(self) -> RecommendedClassCandidateSet:
+    def discover(self, strategy_id: str | None = None) -> RecommendedClassCandidateSet:
+        selected_strategy_id = strategy_id or self.strategy_id
+        strategy = build_strategy(
+            selected_strategy_id,
+            hdbscan_config=self.config,
+            cluster_labels=self.cluster_labels,
+        )
+
         topics, versions, pairs_by_topic, streams = self._active_material()
         if len(topics) < self.config.min_cluster_size:
-            return RecommendedClassCandidateSet((), topics)
+            return RecommendedClassCandidateSet(
+                candidates=(),
+                available_topics=topics,
+                strategy=strategy.definition,
+            )
 
         comparisons: dict[tuple[str, str], TopicComparisonEvidence] = {}
         symmetric_scores: dict[tuple[str, str], dict[str, float | None]] = {}
@@ -251,24 +259,18 @@ class RecommendedClassDiscovery:
                     forward.channel_scores, reverse.channel_scores
                 )
 
-        memberships: dict[tuple[str, ...], set[str]] = {}
-        for channel in DISCOVERY_EVIDENCE_IDS:
-            matrix = self._distance_matrix(topics, symmetric_scores, channel)
-            labels = tuple(int(value) for value in self._cluster_labels(channel, matrix))
-            if len(labels) != len(topics):
-                raise ValueError("Discovery label count must match topic count")
-            by_label: dict[int, list[str]] = {}
-            for topic, label in zip(topics, labels, strict=True):
-                if label < 0:
-                    continue
-                by_label.setdefault(label, []).append(topic)
-            for members in by_label.values():
-                canonical_members = tuple(sorted(members))
-                if len(canonical_members) >= self.config.min_cluster_size:
-                    memberships.setdefault(canonical_members, set()).add(channel)
+        strategy_input = RecommendationStrategyInput(
+            topics=topics,
+            versions=versions,
+            pairs_by_topic=pairs_by_topic,
+            stream_vectors=streams,
+            symmetric_scores=symmetric_scores,
+        )
+        groups = strategy.discover(strategy_input)
 
         candidates = []
-        for members, channels in memberships.items():
+        for group in groups:
+            members = group.members
             anchor = members[0]
             evidence = tuple(
                 comparisons[(topic, anchor)]
@@ -277,18 +279,18 @@ class RecommendedClassDiscovery:
                 for topic in members
                 if topic != anchor
             )
-            candidate_id = self._candidate_id(members, versions)
+            candidate_id = self._candidate_id(
+                members,
+                versions,
+                strategy.definition.strategy_id,
+            )
             candidates.append(
                 RecommendedClassCandidate(
                     candidate_id=candidate_id,
                     rank=0,
                     anchor_topic=anchor,
                     member_topics=members,
-                    discovery_channels=tuple(
-                        channel
-                        for channel in DISCOVERY_EVIDENCE_IDS
-                        if channel in channels
-                    ),
+                    discovery_channels=group.evidence_ids,
                     evidence=evidence,
                 )
             )
@@ -311,7 +313,11 @@ class RecommendedClassDiscovery:
             )
             for index, item in enumerate(candidates, 1)
         )
-        return RecommendedClassCandidateSet(ranked, topics)
+        return RecommendedClassCandidateSet(
+            candidates=ranked,
+            available_topics=topics,
+            strategy=strategy.definition,
+        )
 
     def _active_material(self):
         topics = []
@@ -355,10 +361,10 @@ class RecommendedClassDiscovery:
         left: EvidenceScores, right: EvidenceScores
     ) -> dict[str, float | None]:
         result = {}
-        for channel in DISCOVERY_EVIDENCE_IDS:
-            left_value = left.get(channel)
-            right_value = right.get(channel)
-            result[channel] = (
+        for evidence_id in DISCOVERY_EVIDENCE_IDS:
+            left_value = left.get(evidence_id)
+            right_value = right.get(evidence_id)
+            result[evidence_id] = (
                 min(left_value, right_value)
                 if left_value is not None and right_value is not None
                 else None
@@ -366,47 +372,14 @@ class RecommendedClassDiscovery:
         return result
 
     @staticmethod
-    def _distance_matrix(
-        topics: tuple[str, ...],
-        scores: dict[tuple[str, str], dict[str, float | None]],
-        channel: str,
-    ) -> tuple[tuple[float, ...], ...]:
-        rows = []
-        for left in topics:
-            row = []
-            for right in topics:
-                if left == right:
-                    row.append(0.0)
-                    continue
-                key = tuple(sorted((left, right)))
-                value = scores[key].get(channel)
-                if value is None:
-                    row.append(2.0)
-                else:
-                    similarity = max(-1.0, min(1.0, float(value)))
-                    row.append(1.0 - similarity)
-            rows.append(tuple(row))
-        return tuple(rows)
-
-    def _default_cluster_labels(
-        self, channel: str, matrix: tuple[tuple[float, ...], ...]
-    ) -> Sequence[int]:
-        del channel
-        if len(matrix) < self.config.min_cluster_size:
-            return tuple(-1 for _ in matrix)
-        return HDBSCAN(
-            min_cluster_size=self.config.min_cluster_size,
-            min_samples=self.config.min_samples,
-            metric="precomputed",
-            allow_single_cluster=self.config.allow_single_cluster,
-        ).fit_predict(matrix)
-
-    @staticmethod
     def _candidate_id(
-        members: tuple[str, ...], versions: dict[str, int]
+        members: tuple[str, ...],
+        versions: dict[str, int],
+        strategy_id: str,
     ) -> str:
         payload = {
             "contract": REPRESENTATION_CONTRACT_VERSION,
+            "strategy": strategy_id,
             "members": [(topic, versions[topic]) for topic in members],
         }
         fingerprint = hashlib.sha256(
