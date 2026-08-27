@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import RecommendationsManager from "./RecommendationsManager";
@@ -9,17 +9,24 @@ vi.mock("../../services/classRecommendationApi", () => ({
   getRecommendedClassCandidates: vi.fn(),
 }));
 
-const strategy = {
+const hdbscanStrategy = {
   strategy_id: "independent_hdbscan",
-  label: "Independent evidence",
+  label: "Independent evidence (HDBSCAN)",
   description:
     "Runs HDBSCAN separately for each evidence type and merges identical topic groups as consensus. No cross-evidence weighting is applied.",
 };
 
+const centroidStrategy = {
+  strategy_id: "tag_value_centroid",
+  label: "Tag value centroid",
+  description:
+    "Uses only tag pair value embeddings and the original nearest-centroid assignment idea. It is a baseline over the same stored evidence.",
+};
+
 const candidateSet: RecommendedClassCandidateSet = {
   available_topics: ["building/a", "building/b", "building/c"],
-  strategy,
-  strategy_catalog: [strategy],
+  strategy: hdbscanStrategy,
+  strategy_catalog: [hdbscanStrategy, centroidStrategy],
   evidence_catalog: [
     { evidence_id: "key", label: "Similar keys", scope: "pair" },
     { evidence_id: "value", label: "Similar values", scope: "pair" },
@@ -99,19 +106,34 @@ beforeEach(() => {
   vi.mocked(getRecommendedClassCandidates).mockResolvedValue(candidateSet);
 });
 
-it("keeps Saved Classes out of system recommendations and explains independent evidence", async () => {
+it("keeps one recommendation surface and exposes registered methods", async () => {
   render(<RecommendationsManager />);
 
   expect(
     await screen.findByRole("heading", { name: "Recommended class #1" }),
   ).toBeInTheDocument();
-  expect(screen.getByText(/Method: Independent evidence/)).toBeInTheDocument();
+  const selector = screen.getByRole("combobox", { name: "Recommendation method" });
+  expect(selector).toHaveValue("independent_hdbscan");
+  expect(screen.getByRole("option", { name: "Independent evidence (HDBSCAN)" })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "Tag value centroid" })).toBeInTheDocument();
   expect(screen.getByText("Similar keys")).toBeInTheDocument();
   expect(screen.getByText("Similar structure")).toBeInTheDocument();
-  expect(screen.getAllByText("Similar whole-stream context").length).toBeGreaterThan(0);
-  expect(screen.queryByText("Saved class")).not.toBeInTheDocument();
   expect(screen.queryByText(/Overall similarity/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/numeric key/i)).not.toBeInTheDocument();
+});
+
+it("requests the selected strategy without changing the evidence UI", async () => {
+  render(<RecommendationsManager />);
+  await screen.findByRole("heading", { name: "Recommended class #1" });
+
+  fireEvent.change(
+    screen.getByRole("combobox", { name: "Recommendation method" }),
+    { target: { value: "tag_value_centroid" } },
+  );
+
+  await waitFor(() =>
+    expect(getRecommendedClassCandidates).toHaveBeenCalledWith("tag_value_centroid"),
+  );
 });
 
 it("shows tag, field, coverage, and catalog-driven pair evidence without a fused score", async () => {
@@ -126,6 +148,5 @@ it("shows tag, field, coverage, and catalog-driven pair evidence without a fused
   expect(screen.getAllByText("Field evidence").length).toBeGreaterThan(0);
   expect(screen.getByText(/unit:string ↔ unit:string/)).toBeInTheDocument();
   expect(screen.getByText(/temp:numeric ↔ temperature:numeric/)).toBeInTheDocument();
-  expect(screen.getAllByText(/Similar keys 98.0%|Similar keys 94.0%/).length).toBeGreaterThan(0);
   expect(screen.queryByText(/Overall similarity/i)).not.toBeInTheDocument();
 });

@@ -50,8 +50,8 @@ class EmbeddingManager:
         """Materialize stream context and trigger duplicate detection for a new topic.
 
         Tag/field pair embeddings are produced once by the recommendation evidence
-        sidecar. Exploratory tag grouping consumes the shared tag `value` evidence
-        instead of creating a second tag-specific embedding pipeline here.
+        sidecar. Recommendation strategies consume those stored pair vectors directly;
+        this manager does not create a second tag-specific embedding pipeline.
         """
         logger.debug("Processing new topic=%s, tags=%s", topic, tags)
         flat_vec = await self.embed_flattened_topic(topic, tags)

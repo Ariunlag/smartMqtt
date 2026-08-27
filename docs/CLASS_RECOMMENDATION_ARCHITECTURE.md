@@ -39,70 +39,80 @@ MQTT message
   └─ bounded evidence sidecar
        ├─ tag/field pair profiling
        ├─ key/value/key_value/schema embeddings per pair
-       ├─ pgvector persistence
-       └─ exploratory tag grouping from existing tag `value` vectors
+       └─ pgvector persistence
+
+stored evidence snapshot
+  ├─ pair vectors
+  ├─ stream vectors
+  └─ per-evidence topic similarities
+       ↓
+registered recommendation strategy
+       ↓
+Recommended Class candidates
 ```
 
-The old tag-group feature no longer creates a second tag embedding. Its centroid
-assignment consumes the same `value` vector already produced for each tag pair.
+There is one pair-evidence pipeline. Recommendation algorithms do not create their own
+copies of tag or field embeddings.
 
 ## Strategy boundary
 
-Embedding generation is intentionally independent from recommendation policy.
-`RecommendationStrategyInput` provides a strategy with the same immutable evidence
+`RecommendationStrategyInput` provides every strategy with the same immutable evidence
 snapshot:
 
 - active canonical topics,
 - representation versions,
-- pair embedding records,
+- independent pair embedding records,
 - stream vectors,
 - per-evidence symmetric topic similarities.
 
-A recommendation strategy decides how to turn that evidence into candidate groups.
-Changing strategy does not require rematerializing embeddings.
+A strategy decides how to turn that evidence into candidate groups. Changing strategy
+does not require rematerializing embeddings.
 
-The current registered strategy is `independent_hdbscan`:
+Two baseline strategies are currently registered.
 
-1. match pairs one-to-one only when source and datatype are compatible;
-2. preserve individual key/value/key_value/schema cosine scores and coverage;
-3. compute topic-pair similarity separately for every evidence id;
-4. run HDBSCAN independently for each evidence id;
-5. merge exact identical memberships as multi-evidence consensus.
+### Independent evidence (HDBSCAN)
+
+`independent_hdbscan`:
+
+1. matches pairs one-to-one only when source and datatype are compatible;
+2. preserves individual `key`, `value`, `key_value`, `schema` scores and coverage;
+3. computes topic-pair similarity separately for every registered evidence id;
+4. runs HDBSCAN independently for each evidence id;
+5. merges exact identical memberships as multi-evidence consensus.
 
 There is no cross-evidence weighting in this strategy.
 
-Future strategies can be added without changing the evidence contract, including:
+### Tag value centroid
 
-- value-only or other evidence subsets,
-- weighted evidence combinations,
-- persistent candidate centroid/prototype matching,
-- hybrid discovery + prototype matching,
+`tag_value_centroid` is the original centroid baseline expressed over the same current
+evidence store:
+
+1. iterate every pair independently;
+2. keep only pairs whose source is `tag`;
+3. read that pair's already-materialized `value` vector;
+4. compare it with current centroids using cosine similarity;
+5. assign it to the nearest centroid when the configured threshold is reached,
+   otherwise start a new centroid;
+6. recompute the centroid from its assigned raw tag-value vectors;
+7. emit topic groups meeting the configured minimum topic count.
+
+It creates no extra embeddings and owns no separate persistence/UI workflow.
+
+## Future experiments
+
+The same evidence contract supports future strategies such as:
+
+- value-only, key-only, or other evidence subsets;
+- weighted evidence combinations;
+- persistent candidate centroid/prototype matching;
+- hybrid discovery + prototype matching;
 - ranking learned from user actions.
 
-Those strategies should consume the same stored raw evidence rather than create new
-embedding pipelines.
+Centroids and weights belong in the decision layer. Raw pair vectors remain independent
+so experiments can be compared over the same evidence.
 
-## Centroids and prototypes
-
-Centroids are a decision-layer representation, not a replacement for raw pair
-vectors. A future Recommended Class prototype may maintain separate centroids for each
-pair role and each evidence type:
-
-```text
-candidate pair role
-  ├─ key centroid
-  ├─ value centroid
-  ├─ key_value centroid
-  └─ schema centroid
-
-candidate stream
-  └─ stream_context centroid
-```
-
-Different pair roles must not be flattened into one global centroid.
-
-The exploratory tag-group centroid is the narrow original form of this idea: it uses
-the shared tag `value` vector and does not own separate embeddings.
+A future Recommended Class prototype may maintain separate centroids for each semantic
+pair role and evidence type rather than flattening all pairs into one global centroid.
 
 ## User feedback and learning
 
@@ -130,8 +140,9 @@ The canonical root remains active.
 ## Persistence
 
 PostgreSQL is the relational and dense-vector persistence boundary through pgvector.
-InfluxDB stores telemetry time series. The active recommendation evidence lives in the
+InfluxDB stores telemetry time series. Active system-recommendation evidence lives in
 pair-vector and topic-vector tables and is versioned by the representation contract.
+Algorithm selection does not change those stored representations.
 
 ## API and UI
 
@@ -144,11 +155,10 @@ returns:
 - registered strategy catalog,
 - evidence catalog.
 
-The dashboard keeps one Recommended Classes surface. With one strategy it shows the
-active method. When multiple strategies are registered, the same surface presents a
-method selector. A separate research/evaluation screen may later compare strategies
-side-by-side, but end users should not receive duplicate top-level recommendation
-features for each algorithm.
+The dashboard keeps one Recommended Classes surface. With multiple strategies the same
+surface presents a method selector. A separate research/evaluation screen may later
+compare strategies side-by-side, but end users should not receive duplicate top-level
+recommendation features for each algorithm.
 
 Saved Class CRUD remains under `/api/classes`. Older Saved-Class recommendation
 endpoints remain compatibility-only and are not the dashboard Recommended Classes

@@ -23,9 +23,6 @@ vi.mock("./components/classes/ClassBuilder", () => ({
 vi.mock("./components/savedClasses/SavedClasses", () => ({
   default: () => <section data-testid="saved-classes" />,
 }));
-vi.mock("./components/groups/GroupManager", () => ({
-  default: () => <section data-testid="group-manager" />,
-}));
 vi.mock("./components/recommendations/RecommendationsManager", () => ({
   default: () => <section data-testid="recommendations-manager" />,
 }));
@@ -35,15 +32,15 @@ const managerTestIds = [
   "duplicate-manager",
   "class-builder",
   "saved-classes",
-  "group-manager",
   "recommendations-manager",
 ];
 
-it("preserves every dashboard manager and adds recommendations", () => {
+it("renders the core dashboard managers with one recommendations surface", () => {
   render(<App />);
 
   for (const testId of managerTestIds) {
     expect(screen.getByTestId(testId)).toBeInTheDocument();
   }
   expect(screen.getByRole("tab", { name: /Recommendations/i })).toBeInTheDocument();
+  expect(screen.queryByRole("tab", { name: /Tag Groups/i })).not.toBeInTheDocument();
 });

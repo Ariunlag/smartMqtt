@@ -24,28 +24,32 @@ centroids/prototypes, hybrid methods, or learned ranking.
 Adding or changing a decision strategy must not require regenerating embeddings unless
 the representation contract itself changes.
 
-## Tag grouping reuses shared value evidence
+## Original tag-value centroid is a recommendation strategy
 
-The original tag-value centroid behavior is not a separate embedding system. The
-exploratory tag-group feature consumes the existing tag pair `value` vector and updates
-its centroid from that shared evidence.
+The original centroid behavior is retained as `tag_value_centroid`. It processes each
+tag pair separately and uses only that pair's already-materialized `value` vector for
+nearest-centroid assignment.
 
-There is no second tag-specific embedding pipeline.
+It is not a separate tag embedding pipeline, persistence owner, API family, or
+top-level dashboard feature.
 
-## Current baseline strategy
+## Registered baseline strategies
 
-The current production strategy is `independent_hdbscan`. It runs HDBSCAN separately
-for each registered evidence id and merges exact identical memberships as consensus.
-It does not fuse or weight evidence channels.
+`independent_hdbscan` runs HDBSCAN separately for each registered evidence id and
+merges exact identical memberships as consensus. It does not fuse or weight evidence
+channels.
 
-This is a baseline strategy, not a permanent statement that HDBSCAN is the only valid
-recommendation method.
+`tag_value_centroid` applies deterministic nearest-centroid assignment to individual
+tag `value` vectors. It gives us a direct baseline for the original design on the same
+stored evidence used by HDBSCAN.
+
+Neither baseline is a permanent statement about the final production ranking method.
 
 ## Centroids belong in the strategy layer
 
-A centroid/prototype strategy should preserve pair roles and evidence ids. Separate
-centroids may exist for `key`, `value`, `key_value`, `schema`, and stream context.
-Different semantic pair roles must not be collapsed into one global centroid.
+A broader centroid/prototype strategy should preserve pair roles and evidence ids.
+Separate centroids may exist for `key`, `value`, `key_value`, `schema`, and stream
+context. Different semantic pair roles must not be collapsed into one global centroid.
 
 ## User-facing explanations remain evidence-first
 
@@ -53,9 +57,8 @@ The default UI should show candidate members, evidence reasons, pair matches, co
 and stream evidence. A single fused overall similarity is not the primary explanation.
 
 The dashboard uses one Recommended Classes surface. Strategy selection belongs inside
-that surface when more than one strategy is available. Side-by-side algorithm
-comparison belongs in a research/evaluation view, not separate end-user recommendation
-tabs.
+that surface. Side-by-side algorithm comparison belongs in a research/evaluation view,
+not separate end-user recommendation tabs.
 
 ## Human actions become supervised evidence
 

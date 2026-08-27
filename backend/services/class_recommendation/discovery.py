@@ -35,6 +35,7 @@ from .strategies import (
     HdbscanStrategyConfig,
     RecommendationStrategyDefinition,
     RecommendationStrategyInput,
+    TagValueCentroidStrategyConfig,
     build_strategy,
 )
 
@@ -203,6 +204,7 @@ class RecommendedClassDiscovery:
         identity_store,
         dupe_store,
         config: RecommendedClassDiscoveryConfig | None = None,
+        centroid_config: TagValueCentroidStrategyConfig | None = None,
         cluster_labels: ClusterLabels | None = None,
         strategy_id: str = DEFAULT_STRATEGY_ID,
     ) -> None:
@@ -212,6 +214,7 @@ class RecommendedClassDiscovery:
         self.identity_store = identity_store
         self.dupe_store = dupe_store
         self.config = config or RecommendedClassDiscoveryConfig()
+        self.centroid_config = centroid_config or TagValueCentroidStrategyConfig()
         self.cluster_labels = cluster_labels
         self.strategy_id = strategy_id
 
@@ -220,11 +223,12 @@ class RecommendedClassDiscovery:
         strategy = build_strategy(
             selected_strategy_id,
             hdbscan_config=self.config,
+            centroid_config=self.centroid_config,
             cluster_labels=self.cluster_labels,
         )
 
         topics, versions, pairs_by_topic, streams = self._active_material()
-        if len(topics) < self.config.min_cluster_size:
+        if len(topics) < 2:
             return RecommendedClassCandidateSet(
                 candidates=(),
                 available_topics=topics,

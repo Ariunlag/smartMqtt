@@ -14,7 +14,10 @@ from services.class_recommendation.discovery import (
     RecommendedClassDiscovery,
     RecommendedClassDiscoveryConfig,
 )
-from services.class_recommendation.strategies import DEFAULT_STRATEGY_ID
+from services.class_recommendation.strategies import (
+    DEFAULT_STRATEGY_ID,
+    TagValueCentroidStrategyConfig,
+)
 
 router = APIRouter(tags=["Class Recommendations"])
 
@@ -43,6 +46,10 @@ async def recommended_class_candidates(
             min_cluster_size=config.SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE,
             min_samples=config.SYSTEM_RECOMMENDATION_MIN_SAMPLES,
             allow_single_cluster=config.SYSTEM_RECOMMENDATION_ALLOW_SINGLE_CLUSTER,
+        ),
+        centroid_config=TagValueCentroidStrategyConfig(
+            threshold=config.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_THRESHOLD,
+            min_topic_count=config.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS,
         ),
         strategy_id=strategy,
     )

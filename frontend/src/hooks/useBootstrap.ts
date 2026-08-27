@@ -3,7 +3,6 @@ import axios from "axios";
 import { useDuplicateStore } from "../store/useDuplicateStore";
 import { useMqttStore } from "../store/useMqttStore";
 import { useInfluxStore } from "../store/useInfluxStore";
-import { useGroupStore } from "../store/useGroupStore";
 
 export function useBootstrap() {
   const [ready, setReady] = useState(false);
@@ -13,10 +12,8 @@ export function useBootstrap() {
   const getDuplicates = useDuplicateStore((s) => s.getDuplicates);
   const getTopics = useMqttStore((s) => s.getTopics);
   const getClasses = useInfluxStore((s) => s.getClasses);
-  const getGroups = useGroupStore((s) => s.fetchGroups);
   const getMeasurements = useInfluxStore((s) => s.getMeasurements);
 
-  // === Step 1: Backend health check (retry with backoff, no page reload) ===
   useEffect(() => {
     let cancelled = false;
     let attempts = 0;
@@ -58,9 +55,7 @@ export function useBootstrap() {
     };
   }, []);
 
-  // === Step 2: Run initial data fetch once after everything is ready ===
   useEffect(() => {
-    // wait for Influx store to finish hydration before calling its actions
     const influxPersist = (
       useInfluxStore as unknown as {
         persist?: { hasHydrated?: () => boolean };
@@ -78,7 +73,6 @@ export function useBootstrap() {
           getDuplicates(),
           getTopics(),
           getClasses(),
-          getGroups(),
           getMeasurements(),
         ]);
         console.log("[Bootstrap] All initial data loaded ✅");

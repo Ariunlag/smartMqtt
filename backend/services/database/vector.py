@@ -11,11 +11,9 @@ from config import config
 from services.database.postgres import postgres_client
 
 TOPIC_COLLECTION = "topic_embeddings"
-GROUP_COLLECTION = "tag_group_centroids"
 
 _COLLECTION_TABLES = {
     TOPIC_COLLECTION: "topic_embeddings",
-    GROUP_COLLECTION: "tag_group_centroids",
     "class_pair_embeddings": "class_pair_embeddings",
     "class_pair_prototypes": "class_pair_prototypes",
     "class_stream_context_prototypes": "class_stream_context_prototypes",

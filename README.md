@@ -1,8 +1,8 @@
 # InfluxAI Realtime IoT Hub
 
 InfluxAI is a real-time IoT platform for MQTT telemetry ingestion, time-series
-visualization, duplicate detection, evidence-based grouping, user-defined Saved
-Classes, and system-derived Recommended Classes.
+visualization, duplicate detection, user-defined Saved Classes, and system-derived
+Recommended Classes.
 
 Runtime persistence is split by responsibility:
 
@@ -52,26 +52,31 @@ independent pair records, each with four vectors, plus the stream-context vector
 `tag` and `field` are pair sources, not extra evidence channels. Numeric is datatype
 metadata, not a separate recommendation signal.
 
-Exploratory tag grouping reuses the tag pair's existing `value` vector for centroid
-assignment. It does not create a second tag-specific embedding pipeline.
-
 ## Recommendation strategies
 
 Recommended Classes consume the same stored evidence through a strategy boundary.
-The current production strategy is `independent_hdbscan`: each evidence type is
-clustered independently and identical topic memberships are merged as consensus.
-There is no cross-evidence weighting in this strategy.
+Two baseline strategies are registered today:
 
-The representation layer is intentionally strategy-agnostic. Future centroid,
-weighted, evidence-subset, and learned-ranking strategies can consume the same raw
-pair evidence, stream vectors, per-evidence similarities, and coverage without
+- `independent_hdbscan`: computes topic similarity separately for every registered
+  evidence type, runs HDBSCAN independently per evidence type, and merges identical
+  memberships as multi-evidence consensus. No cross-evidence weighting is applied.
+- `tag_value_centroid`: reproduces the original tag-value centroid idea using the
+  already-materialized `value` vector of every tag pair independently. Each vector is
+  assigned to the nearest current centroid when its cosine similarity reaches the
+  configured threshold; otherwise it starts a new centroid.
+
+Both strategies read the same pair evidence store. The centroid baseline does not own
+another tag embedding pipeline or another recommendation feature.
+
+The representation layer is intentionally strategy-agnostic. Future weighted,
+evidence-subset, prototype, hybrid, and learned-ranking strategies can consume the same
+raw pair vectors, stream vectors, per-evidence similarities, and coverage without
 regenerating embeddings.
 
-`GET /api/recommended-classes` returns both the evidence catalog and the active
-strategy metadata. The optional `strategy` query parameter selects a registered
-strategy. The dashboard keeps one Recommended Classes view; when multiple strategies
-are registered, the same view exposes a method selector rather than duplicating the
-feature into separate top-level tabs.
+`GET /api/recommended-classes` returns both the evidence catalog and the strategy
+catalog. The optional `strategy` query parameter selects a registered strategy. The
+dashboard has one Recommended Classes view with a method selector rather than one tab
+per algorithm.
 
 ## Class concepts
 
@@ -183,14 +188,14 @@ Messages must contain `fields`, `tags`, and an ISO-8601 timestamp:
 Active vector material includes:
 
 - `topic_embeddings`
-- `tag_group_centroids`
 - `class_pair_embeddings`
 - `class_pair_prototypes` (legacy Saved-Class recommendation compatibility)
 - `class_stream_context_prototypes` (legacy Saved-Class recommendation compatibility)
 
 Vector tables use cosine HNSW indexes and JSONB payload indexes where applicable.
 The current vector dimension is 384. Changing embedding dimensionality requires an
-explicit Alembic migration.
+explicit Alembic migration. Historical migrations may still contain retired derived
+vector/group tables; current runtime code does not read or write them.
 
 See [Persistence Architecture](docs/PERSISTENCE.md).
 
@@ -213,8 +218,6 @@ All REST routes use `/api`.
 | PUT/DELETE | `/api/classes/{name}` | Update/delete a Saved Class |
 | GET | `/api/recommended-classes` | System candidates; optional `strategy` query |
 | GET | `/api/class-recommendations/status` | Evidence sidecar diagnostics |
-| GET | `/api/groups` | Exploratory groups derived from shared tag-value evidence |
-| GET | `/api/groups/{id}/topics` | Topics in an exploratory group |
 | WebSocket | `/ws` | Live MQTT/dashboard events |
 
 Older Saved-Class matching endpoints remain temporarily for compatibility but are not
@@ -242,10 +245,11 @@ EMBEDDING_DIMENSION=384
 ID_THRESH=0.90
 MIN_POINTS=10
 DUPE_CHECK_DELAY=60
-GROUP_TAG_THRESH=0.85
 CLASS_RECOMMENDATION_QUEUE_MAXSIZE=1000
 SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE=2
 SYSTEM_RECOMMENDATION_MIN_SAMPLES=1
+SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_THRESHOLD=0.85
+SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS=2
 ```
 
 ## Local development

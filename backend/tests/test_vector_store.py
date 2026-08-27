@@ -64,21 +64,21 @@ def test_pgvector_store_upserts_and_uses_cosine_ann_query():
     assert "ORDER BY embedding <=>" in sql
 
 
-def test_pgvector_ann_can_filter_by_payload_contract():
+def test_pgvector_ann_can_filter_by_payload():
     database = FakeDatabase()
     store = PostgresVectorStore(database)
     database.rows = []
 
     store.nearest_many(
-        "tag_group_centroids",
+        "class_pair_embeddings",
         _vector(0.5),
         limit=3,
-        payload_filter={"contract": "shared-tag-value-v1"},
+        payload_filter={"canonical_topic": "topic/a"},
     )
 
     sql, params = database.executed[-1]
     assert "WHERE payload @> %s::jsonb" in sql
-    assert json.loads(params[1]) == {"contract": "shared-tag-value-v1"}
+    assert json.loads(params[1]) == {"canonical_topic": "topic/a"}
     assert params[-1] == 3
 
 

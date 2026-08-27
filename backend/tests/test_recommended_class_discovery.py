@@ -131,6 +131,7 @@ def test_system_candidates_merge_independent_channel_reasons_and_keep_pair_evide
     assert result.strategy.strategy_id == "independent_hdbscan"
     assert tuple(item.strategy_id for item in result.strategy_catalog) == (
         "independent_hdbscan",
+        "tag_value_centroid",
     )
     assert tuple(item.evidence_id for item in result.evidence_catalog) == (
         "key",
@@ -161,6 +162,16 @@ def test_system_candidates_merge_independent_channel_reasons_and_keep_pair_evide
         and match.prototype.normalized_key == "temperature"
         for match in evidence.matched_pairs
     )
+
+
+def test_tag_value_centroid_reuses_individual_tag_value_vectors():
+    result = _discovery().discover("tag_value_centroid")
+
+    assert result.strategy.strategy_id == "tag_value_centroid"
+    assert len(result.candidates) == 1
+    candidate = result.candidates[0]
+    assert candidate.member_topics == ("a", "b")
+    assert candidate.discovery_channels == ("value",)
 
 
 def test_confirmed_duplicate_alias_is_not_an_independent_candidate_member():

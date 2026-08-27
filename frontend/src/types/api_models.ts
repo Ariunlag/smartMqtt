@@ -204,21 +204,3 @@ export interface RecommendedClassCandidateSet {
   strategy_catalog: RecommendationStrategyDefinition[];
   evidence_catalog: EvidenceDefinition[];
 }
-
-// ---------------------------
-// Groups (tag-based)
-// ---------------------------
-
-export type TagSetRecord = {
-  id: string;
-  tags: string[];
-};
-
-export type GroupListResponse = {
-  sets: TagSetRecord[];
-};
-
-export type GroupTopicsResponse = {
-  id: string;
-  topics: string[];
-};

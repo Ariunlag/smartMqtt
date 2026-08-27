@@ -32,19 +32,23 @@ four separately embedded views:
 `tag` and `field` are sources, not evidence channels. Numeric is datatype metadata.
 There is no numeric-specific recommendation vector.
 
-Exploratory tag grouping reuses each tag pair's existing `value` vector for centroid
-assignment. It does not own a second embedding pipeline.
-
 ## Recommended Class strategies
 
-The evidence layer is strategy-agnostic. The current `independent_hdbscan` strategy
-matches compatible pairs, preserves per-evidence scores and coverage, builds one
-topic-distance matrix per evidence type, and clusters those matrices independently.
-Exact identical memberships are merged as consensus.
+The evidence layer is strategy-agnostic. Two baselines are registered over the same
+stored vectors:
 
-Future centroid/prototype, weighted, hybrid, or learned-ranking strategies use the
-same stored evidence. Strategy changes therefore do not require embedding
-rematerialization.
+- `independent_hdbscan` matches compatible pairs, preserves per-evidence scores and
+  coverage, builds one topic-distance matrix per evidence type, runs HDBSCAN on each
+  matrix independently, and merges identical memberships as consensus.
+- `tag_value_centroid` processes every tag pair independently using only its stored
+  `value` vector and assigns that vector to the nearest current centroid when the
+  configured cosine threshold is met.
+
+The centroid method is the original tag-value idea expressed as a recommendation
+strategy, not a second embedding pipeline or a separate top-level feature.
+
+Future prototype, weighted, hybrid, or learned-ranking strategies use the same stored
+evidence. Strategy changes therefore do not require embedding rematerialization.
 
 Saved Classes remain user-owned and separate from system candidates. Older
 Saved-Class recommendation endpoints/prototypes are compatibility code and are not the
@@ -53,16 +57,16 @@ dashboard Recommended Classes workflow.
 ## Storage ownership
 
 - PostgreSQL + pgvector: relational metadata, human decisions, canonical identity,
-  pair evidence, stream vectors, centroids/prototypes, versions, and audit data.
+  pair evidence, stream vectors, compatibility prototypes, versions, and audit data.
 - InfluxDB: telemetry values and history.
 - Frontend state: transient presentation state only.
 
 ## User interface
 
 The dashboard has one Recommended Classes surface. It renders backend-provided evidence
-and strategy metadata. When more than one strategy is registered, a method selector
-appears in the same surface. Side-by-side algorithm comparison belongs in a separate
-research/evaluation view rather than separate end-user recommendation tabs.
+and strategy metadata and exposes a method selector when multiple strategies are
+registered. Side-by-side algorithm comparison belongs in a separate research/evaluation
+view rather than separate end-user recommendation tabs.
 
 See [CLASS_RECOMMENDATION_ARCHITECTURE.md](CLASS_RECOMMENDATION_ARCHITECTURE.md),
 [PERSISTENCE.md](PERSISTENCE.md), and [REAL_STACK_ACCEPTANCE.md](REAL_STACK_ACCEPTANCE.md)
