@@ -76,8 +76,8 @@ def test_pair_embedder_batches_once_without_collapsing_pair_or_view_identity():
     assert len(embedded[1].vectors) == 4
 
 
-def test_qdrant_pair_store_round_trip_preserves_views_and_text():
-    class FakeQdrant:
+def test_vector_pair_store_round_trip_preserves_views_and_text():
+    class FakeVectorStore:
         def __init__(self):
             self.points = []
 
@@ -103,7 +103,7 @@ def test_qdrant_pair_store_round_trip_preserves_views_and_text():
         representation_version=3,
     )
     embedded = PairEmbedder(model).embed(representations)
-    store = PairEmbeddingStore(FakeQdrant())
+    store = PairEmbeddingStore(FakeVectorStore())
 
     store.replace_topic("topic", embedded)
     restored = store.get_topic("topic")
