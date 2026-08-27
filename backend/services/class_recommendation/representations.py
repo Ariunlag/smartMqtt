@@ -1,4 +1,4 @@
-"""Build five independent embedding views for every stream key/value pair."""
+"""Build registry-defined embedding evidence for every stream key/value pair."""
 
 from __future__ import annotations
 
@@ -6,20 +6,20 @@ import hashlib
 import json
 
 from .domain import PairIdentity, PairRepresentation
+from .evidence import render_pair_evidence
 from .profiling import StreamProfile
 
 
 class PairRepresentationBuilder:
-    """Preserve pair identity while rendering deterministic view texts."""
+    """Preserve pair identity while rendering deterministic evidence texts."""
 
     @staticmethod
     def fingerprint(profile: StreamProfile) -> str:
         """Fingerprint recommendation-relevant structure and categorical values.
 
-        Numeric readings are deliberately represented by datatype rather than
-        their rapidly changing value. The numeric value channel is sampled when
-        the representation is created; numeric-key and schema remain the stable
-        measurement evidence.
+        Fast-changing numeric readings remain excluded from the fingerprint so
+        telemetry variation does not rematerialize pair embeddings on every sample.
+        Numeric datatype remains structural metadata; it is not an evidence channel.
         """
         rows = [
             (
@@ -54,14 +54,6 @@ class PairRepresentationBuilder:
                     f"Duplicate normalized pair identity: {identity.value}"
                 )
             seen.add(identity)
-            texts = [
-                ("key", entry.normalized_key),
-                ("value", entry.normalized_value),
-                ("key_value", f"{entry.normalized_key}: {entry.normalized_value}"),
-                ("schema", f"{entry.normalized_key}: {entry.value_type}"),
-            ]
-            if entry.is_numeric:
-                texts.append(("numeric_key", entry.normalized_key))
             records.append(
                 PairRepresentation(
                     canonical_topic=canonical_topic,
@@ -72,9 +64,8 @@ class PairRepresentationBuilder:
                     normalized_key=entry.normalized_key,
                     normalized_value=entry.normalized_value,
                     datatype=entry.value_type,
-                    is_numeric=entry.is_numeric,
                     representation_version=representation_version,
-                    texts=tuple(texts),
+                    texts=render_pair_evidence(entry),
                 )
             )
         return tuple(records)
