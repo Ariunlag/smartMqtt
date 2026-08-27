@@ -37,17 +37,10 @@ class Config:
                 "EMBEDDING_DIMENSION must remain 384 until the pgvector schema is migrated"
             )
 
-        # Thresholds for duplicate detection
+        # Duplicate detection
         self.ID_THRESH = self._ratio("ID_THRESH", 0.90)
         self.MIN_POINTS = int(os.getenv("MIN_POINTS", "10"))
-
-        # Duplicate check delay (in seconds)
-        self.DUPE_CHECK_DELAY = int(
-            os.getenv("DUPE_CHECK_DELAY", "60")
-        )  # default 1 minute
-
-        # threshold for group tags similarity (between 0 and 1)
-        self.GROUP_TAG_THRESH = self._ratio("GROUP_TAG_THRESH", 0.85)
+        self.DUPE_CHECK_DELAY = int(os.getenv("DUPE_CHECK_DELAY", "60"))
 
         # Dependency health / recovery
         self.HEALTH_CHECK_TIMEOUT = float(os.getenv("HEALTH_CHECK_TIMEOUT", "2.0"))
@@ -71,8 +64,8 @@ class Config:
             os.getenv("CLASS_RECOMMENDATION_QUEUE_MAXSIZE", "1000")
         )
 
-        # System-derived recommended-class discovery. These are clustering
-        # controls, not semantic-similarity thresholds or hand-tuned weights.
+        # HDBSCAN recommendation baseline. These are clustering controls, not
+        # semantic-similarity thresholds or cross-evidence weights.
         self.SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE = int(
             os.getenv("SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE", "2")
         )
@@ -86,6 +79,19 @@ class Config:
             raise ValueError("SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE must be at least 2")
         if self.SYSTEM_RECOMMENDATION_MIN_SAMPLES < 1:
             raise ValueError("SYSTEM_RECOMMENDATION_MIN_SAMPLES must be at least 1")
+
+        # Original tag-value centroid baseline, now exposed as a recommendation
+        # strategy over the same stored pair evidence.
+        self.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_THRESHOLD = self._ratio(
+            "SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_THRESHOLD", 0.85
+        )
+        self.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS = int(
+            os.getenv("SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS", "2")
+        )
+        if self.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS < 2:
+            raise ValueError(
+                "SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS must be at least 2"
+            )
 
     @staticmethod
     def _ratio(name: str, default: float) -> float:

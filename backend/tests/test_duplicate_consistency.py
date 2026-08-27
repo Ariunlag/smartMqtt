@@ -125,13 +125,13 @@ def test_class_writes_canonicalize_and_deduplicate_aliases():
     ]
 
 
-def test_qdrant_duplicate_candidates_exclude_aliases(monkeypatch):
+def test_vector_store_duplicate_candidates_exclude_aliases(monkeypatch):
     points = [
         SimpleNamespace(payload={"topic": f"alias/{index}"}, vector=[1.0])
         for index in range(20)
     ] + [SimpleNamespace(payload={"topic": "active"}, vector=[0.9])]
     monkeypatch.setattr(
-        "services.store.embedding_store.qdrant_client.nearest_many",
+        "services.store.embedding_store.vector_store.nearest_many",
         lambda collection, vector, limit: points,
     )
 

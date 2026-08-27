@@ -6,6 +6,7 @@ import type {
   EvidenceDefinition,
   EvidenceScores,
   MatchedPairEvidence,
+  RecommendationStrategyDefinition,
   RecommendedClassCandidate,
   RecommendedClassTopicEvidence,
 } from "../../types/api_models";
@@ -26,17 +27,23 @@ function errorMessage(error: unknown) {
 export default function RecommendationsManager() {
   const [candidates, setCandidates] = useState<RecommendedClassCandidate[]>([]);
   const [evidenceCatalog, setEvidenceCatalog] = useState<EvidenceDefinition[]>([]);
+  const [strategyCatalog, setStrategyCatalog] = useState<RecommendationStrategyDefinition[]>([]);
+  const [activeStrategy, setActiveStrategy] = useState<RecommendationStrategyDefinition | null>(null);
   const [availableTopicCount, setAvailableTopicCount] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const refresh = async () => {
+  const refresh = async (strategyId?: string) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await getRecommendedClassCandidates();
+      const result = await getRecommendedClassCandidates(
+        strategyId ?? activeStrategy?.strategy_id,
+      );
       setCandidates(result.candidates);
       setEvidenceCatalog(result.evidence_catalog);
+      setStrategyCatalog(result.strategy_catalog);
+      setActiveStrategy(result.strategy);
       setAvailableTopicCount(result.available_topics.length);
     } catch (requestError) {
       setError(errorMessage(requestError));
@@ -62,6 +69,29 @@ export default function RecommendationsManager() {
           {loading ? "Refreshing…" : "Refresh"}
         </button>
       </header>
+
+      {activeStrategy && strategyCatalog.length <= 1 && (
+        <p className="empty-note">
+          Method: {activeStrategy.label}. {activeStrategy.description}
+        </p>
+      )}
+      {activeStrategy && strategyCatalog.length > 1 && (
+        <label className="empty-note">
+          Recommendation method{" "}
+          <select
+            aria-label="Recommendation method"
+            value={activeStrategy.strategy_id}
+            disabled={loading}
+            onChange={(event) => void refresh(event.target.value)}
+          >
+            {strategyCatalog.map((strategy) => (
+              <option key={strategy.strategy_id} value={strategy.strategy_id}>
+                {strategy.label}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <p className="empty-note">
         Discovery evidence available for {availableTopicCount} active topics.

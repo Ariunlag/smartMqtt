@@ -1,165 +1,165 @@
-# System recommended-class architecture
+# System Recommended Class architecture
 
-SmartMQTT has two deliberately separate class concepts.
+SmartMQTT has two class concepts:
 
-1. **Saved Classes** are created and edited by the user. PostgreSQL `classes` and
-   `class_topics` remain their source of truth. The Class Builder and Saved Classes
-   UI own this workflow.
-2. **Recommended Classes** are system-derived candidate topic groups. They are
-   discovery output, not Saved Classes, and are never inserted into `classes` or
-   `class_topics` merely because the system found them.
+1. **Saved Classes** are user-owned. `classes` and `class_topics` are their source of
+   truth.
+2. **Recommended Classes** are system-derived candidate topic groups. Discovery never
+   inserts them into Saved Classes automatically.
 
-The dashboard recommendation path must not present an existing Saved Class as a
-system recommendation. Manual Saved Classes may later be used as supervised evidence
-for learning, but that is a separate feedback policy.
+## Core invariant: preserve evidence before deciding how to use it
 
-## Processing flow
+Every tag and field is an independent key:value pair. Pair identity includes source
+(`tag` or `field`), normalized key, datatype, topic, and representation version.
 
-```text
-MQTT message
-  ├─ canonical duplicate-identity guard
-  ├─ authoritative flat stream embedding
-  ├─ InfluxDB persistence
-  ├─ WebSocket broadcast
-  └─ bounded pair-evidence sidecar
-       ├─ deterministic tag/field profiling
-       ├─ one independent record per key:value pair
-       ├─ registry-defined pair evidence
-       └─ versioned evidence persistence
-
-Active canonical topics
-  ├─ key evidence
-  ├─ value evidence
-  ├─ key + value evidence
-  ├─ schema evidence
-  └─ shared whole-stream context evidence
-       ↓
-independent per-evidence candidate discovery
-       ↓
-merge identical member sets as multi-channel consensus
-       ↓
-Recommended Class candidates
-```
-
-Confirmed duplicate aliases never contribute as independent candidate members.
-Pending duplicate topics stay eligible and carry a pending-review flag.
-
-## Evidence contract
-
-Every tag and field remains an independent pair identified by canonical topic,
-original topic, source (`tag` or `field`), normalized key, datatype, and
-representation version.
-
-The pair evidence registry currently defines four embeddings:
+Each pair materializes the same independent evidence vectors:
 
 - `key`
 - `value`
 - `key_value`
 - `schema`
 
-The stream evidence registry currently defines `stream_context`, reusing the
-authoritative flat topic vector already produced for duplicate detection.
+Each stream also has one `stream_context` vector.
 
-There is no `numeric_key` recommendation channel. Numeric remains a datatype that can
-participate in structural profiling and temporal handling, but it is not a separate
-semantic evidence source and therefore cannot double-count the same key signal.
+No representation step fuses pair records or evidence channels. If one stream has
+three tag pairs and two field pairs, five independent pair records are stored and each
+record has four pair-evidence vectors.
 
-`tag` and `field` are pair sources, not extra embedding channels. The UI groups pair
-evidence by source so tag evidence and field evidence remain understandable.
+`tag` and `field` are pair sources, not evidence channels. Numeric is datatype
+metadata, not an additional semantic signal.
 
-## Evidence registry extension point
+## Runtime flow
 
-Evidence definitions live in `services/class_recommendation/evidence.py`. A pair
-evidence definition owns its stable id, user-facing label, scope, and deterministic
-text renderer. Matching, prototype construction, discovery, persistence ordering, RQ1
-evaluation, and API explanations iterate the registry instead of maintaining their own
-copies of evidence ids.
+```text
+MQTT message
+  ├─ canonical duplicate-identity guard
+  ├─ stream_context materialization
+  ├─ InfluxDB persistence
+  ├─ WebSocket broadcast
+  └─ bounded evidence sidecar
+       ├─ tag/field pair profiling
+       ├─ key/value/key_value/schema embeddings per pair
+       └─ pgvector persistence
 
-`GET /api/recommended-classes` also returns the evidence catalog. The frontend renders
-labels and detailed scores from that catalog rather than a hard-coded TypeScript union.
-Adding another registered pair or stream evidence source therefore does not require a
-new field in every score dataclass or a new React label branch.
+stored evidence snapshot
+  ├─ pair vectors
+  ├─ stream vectors
+  └─ per-evidence topic similarities
+       ↓
+registered recommendation strategy
+       ↓
+Recommended Class candidates
+```
 
-Changing the registry changes the representation contract. Existing material is
-versioned and must be rematerialized rather than silently mixing evidence shapes.
+There is one pair-evidence pipeline. Recommendation algorithms do not create their own
+copies of tag or field embeddings.
 
-## Discovery and ranking
+## Strategy boundary
 
-Candidate discovery currently runs independently for each registered evidence
-channel. The baseline uses HDBSCAN over a precomputed cosine-distance matrix for each
-channel. There is no hand-tuned weighted fusion and no global user-facing average
-similarity.
+`RecommendationStrategyInput` provides every strategy with the same immutable evidence
+snapshot:
 
-If the exact same topic membership is independently discovered by multiple channels,
-those channels are attached to one candidate as consensus reasons. Candidate ordering
-is deterministic: more supporting channels first, then larger membership, then stable
-topic ordering.
+- active canonical topics,
+- representation versions,
+- independent pair embedding records,
+- stream vectors,
+- per-evidence symmetric topic similarities.
 
-A scalar compatibility is allowed internally only to make pair-to-pair one-to-one
-assignment deterministic. It is not presented as recommendation confidence.
+A strategy decides how to turn that evidence into candidate groups. Changing strategy
+does not require rematerializing embeddings.
 
-This HDBSCAN discovery remains a baseline. The planned persistent Recommended Class
-candidate/prototype model is a separate follow-up architecture change and should not
-be mixed into evidence-contract refactors.
+Two baseline strategies are currently registered.
 
-## User-facing explanation
+### Independent evidence (HDBSCAN)
 
-The Recommendations UI shows:
+`independent_hdbscan`:
 
-- which registered evidence channels independently discovered the group,
-- suggested member topics,
-- matched pair coverage,
-- tag pair evidence,
-- field pair evidence,
-- registered pair-level cosine scores,
-- registered stream-level evidence,
-- pending duplicate-review state.
+1. matches pairs one-to-one only when source and datatype are compatible;
+2. preserves individual `key`, `value`, `key_value`, `schema` scores and coverage;
+3. computes topic-pair similarity separately for every registered evidence id;
+4. runs HDBSCAN independently for each evidence id;
+5. merges exact identical memberships as multi-evidence consensus.
 
-The UI does not reduce those facts to one `Overall similarity` number.
+There is no cross-evidence weighting in this strategy.
 
-## Human feedback boundary
+### Tag value centroid
 
-Candidate review remains separate from Saved Class membership. A later feedback layer
-will persist keep/add/remove/reject decisions as supervised candidate evidence. An
-accepted candidate may optionally be saved into a user-owned class, but it is not a
-Saved Class before that explicit action.
+`tag_value_centroid` is the original centroid baseline expressed over the same current
+evidence store:
+
+1. iterate every pair independently;
+2. keep only pairs whose source is `tag`;
+3. read that pair's already-materialized `value` vector;
+4. compare it with current centroids using cosine similarity;
+5. assign it to the nearest centroid when the configured threshold is reached,
+   otherwise start a new centroid;
+6. recompute the centroid from its assigned raw tag-value vectors;
+7. emit topic groups meeting the configured minimum topic count.
+
+It creates no extra embeddings and owns no separate persistence/UI workflow.
+
+## Future experiments
+
+The same evidence contract supports future strategies such as:
+
+- value-only, key-only, or other evidence subsets;
+- weighted evidence combinations;
+- persistent candidate centroid/prototype matching;
+- hybrid discovery + prototype matching;
+- ranking learned from user actions.
+
+Centroids and weights belong in the decision layer. Raw pair vectors remain independent
+so experiments can be compared over the same evidence.
+
+A future Recommended Class prototype may maintain separate centroids for each semantic
+pair role and evidence type rather than flattening all pairs into one global centroid.
+
+## User feedback and learning
+
+Future candidate actions should be persisted as versioned factual feedback. Useful
+signals include keep, add, remove, reject, dismiss, and explicit Save as Class.
+
+For learning/evaluation, preserve the evidence snapshot that produced each action:
+individual evidence scores, coverage, strategy id, candidate version, and action. This
+allows later experiments with calibrated weights or ranking models without changing
+raw embeddings.
+
+Human feedback on Recommended Classes must not silently mutate Saved Classes. Only an
+explicit Save as Class or manual Saved-Class action may do that.
 
 ## Duplicate boundary
 
-Duplicate detection is an identity workflow, not a class workflow.
+Duplicate detection remains an identity workflow.
 
-- `PENDING`: both topics remain independently active; recommendation only displays a
-  pending flag.
+- `PENDING`: both topics remain independently eligible.
 - `NOT_DUPLICATE`: both remain independent.
-- confirmed duplicate: the alias stops independent processing and candidate
-  contribution; the canonical root remains active.
+- confirmed duplicate: the alias stops independent recommendation contribution.
+
+The canonical root remains active.
 
 ## Persistence
 
-PostgreSQL is now both the relational source of truth and the dense-vector store via
-pgvector. HNSW cosine indexes back topic ANN search, pair evidence, tag evidence, and
-prototype material. InfluxDB remains the telemetry time-series store.
+PostgreSQL is the relational and dense-vector persistence boundary through pgvector.
+InfluxDB stores telemetry time series. Active system-recommendation evidence lives in
+pair-vector and topic-vector tables and is versioned by the representation contract.
+Algorithm selection does not change those stored representations.
 
-The vector schema currently enforces 384 dimensions. A model-dimensionality change
-requires an explicit migration rather than silently mixing vector shapes.
+## API and UI
 
-The compatibility module `services.database.qdrant` temporarily re-exports the
-PostgreSQL vector adapter so older store imports do not require a flag-day rewrite; it
-does not connect to Qdrant.
+`GET /api/recommended-classes` accepts an optional `strategy` query parameter and
+returns:
 
-## APIs
+- candidates,
+- available topics,
+- active strategy metadata,
+- registered strategy catalog,
+- evidence catalog.
 
-User-owned Saved Classes remain under:
+The dashboard keeps one Recommended Classes surface. With multiple strategies the same
+surface presents a method selector. A separate research/evaluation screen may later
+compare strategies side-by-side, but end users should not receive duplicate top-level
+recommendation features for each algorithm.
 
-- `GET /api/classes/`
-- `POST /api/classes/`
-- `PUT /api/classes/{name}`
-- `DELETE /api/classes/{name}`
-
-System discovery is exposed through:
-
-- `GET /api/recommended-classes`
-- `GET /api/class-recommendations/status`
-
-Older Saved-Class matching endpoints are retained temporarily for compatibility but
-are not the dashboard Recommended Classes workflow.
+Saved Class CRUD remains under `/api/classes`. Older Saved-Class recommendation
+endpoints remain compatibility-only and are not the dashboard Recommended Classes
+workflow.

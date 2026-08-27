@@ -76,7 +76,7 @@ class ConfirmDupeRequest(BaseModel):
 
 
 # ---------------------------
-# Classes (user groups)
+# Classes (user-owned Saved Classes)
 # ---------------------------
 
 
@@ -112,22 +112,3 @@ class ClassRecommendationActionRequest(BaseModel):
     topic_representation_version: int | None = None
     class_profile_version: int | None = None
     recommendation_id: str | None = None
-
-
-# ---------------------------
-# Groups (tag-based)
-# ---------------------------
-
-
-class TagSetRecord(BaseModel):
-    id: str
-    tags: list[str]
-
-
-class GroupListResponse(BaseModel):
-    sets: list[TagSetRecord]
-
-
-class GroupTopicResponse(BaseModel):
-    id: str
-    topics: list[str]

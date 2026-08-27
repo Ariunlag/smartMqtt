@@ -61,20 +61,14 @@ shutdown, acceptance, or recovery.
 The dependency monitor keeps liveness available during broker or database outages.
 Readiness becomes unavailable until recovery. MQTT recovery reconnects the existing
 client network loop and restores stored subscriptions. Relational metadata, human
-decisions, and dense vectors now recover from PostgreSQL; there is no separate vector
-service to coordinate.
+decisions, and dense vectors recover from PostgreSQL; there is no separate runtime
+vector service to coordinate.
 
-## Existing deployments moving from Qdrant
+## Production cutover
 
-The pgvector migration creates new PostgreSQL vector tables but does not copy bytes
-from an external Qdrant volume. Those vectors are derived state. Active MQTT
-observations rematerialize current topic/pair evidence into PostgreSQL. Export any
-historical vector-only artifacts that must be retained before retiring an old Qdrant
-service.
-
-For production cutover, take a database backup, deploy PostgreSQL with the pgvector
-extension available, run `alembic upgrade head`, then start the backend and verify
-current topics rematerialize before decommissioning the old vector service.
+Take a PostgreSQL backup, ensure the pgvector extension is available, run
+`alembic upgrade head`, then start the backend and verify health/readiness plus current
+vector materialization before directing production traffic to the deployment.
 
 ## Real-stack acceptance
 
@@ -86,8 +80,8 @@ python -m scripts.run_real_stack_acceptance --run-id local-001
 ```
 
 The workflow uses real MQTT publication and configured data services. It verifies
-restart recovery, broker recovery, recommendation evidence, canonical duplicate
-reconciliation, and bounded queue behavior. It does not delete volumes.
+restart recovery, recommendation evidence, canonical duplicate reconciliation, and
+vector persistence. It does not delete volumes.
 
 ## External deployment hardening
 

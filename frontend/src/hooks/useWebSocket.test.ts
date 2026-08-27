@@ -4,7 +4,6 @@ import { useWebSocket } from "./useWebSocket";
 import { useConnectionStore } from "../store/useConnectionStore";
 import { useMqttStore } from "../store/useMqttStore";
 import { useDuplicateStore } from "../store/useDuplicateStore";
-import { useGroupStore } from "../store/useGroupStore";
 import { useInfluxStore } from "../store/useInfluxStore";
 
 class MockWebSocket {
@@ -55,10 +54,8 @@ beforeEach(() => {
   MockWebSocket.instances = [];
   useConnectionStore.setState({ status: "connecting", lastConnectedAt: null });
 
-  // Neutralize REST fetchers so resync doesn't hit the network.
   vi.spyOn(useMqttStore.getState(), "getTopics").mockResolvedValue();
   vi.spyOn(useDuplicateStore.getState(), "getDuplicates").mockResolvedValue();
-  vi.spyOn(useGroupStore.getState(), "fetchGroups").mockResolvedValue();
   vi.spyOn(useInfluxStore.getState(), "getMeasurements").mockResolvedValue();
   vi.spyOn(useInfluxStore.getState(), "getClasses").mockResolvedValue();
 });
@@ -79,19 +76,18 @@ describe("useWebSocket", () => {
   it("reconnects after the socket closes and resyncs REST baseline", () => {
     renderHook(() => useWebSocket(true));
     act(() => latest().open());
-    expect(useMqttStore.getState().getTopics).not.toHaveBeenCalled(); // no resync on first connect
+    expect(useMqttStore.getState().getTopics).not.toHaveBeenCalled();
 
     const before = MockWebSocket.instances.length;
     act(() => latest().close());
     expect(useConnectionStore.getState().status).toBe("reconnecting");
 
-    // advance past the (capped) backoff so a new socket is created
     act(() => vi.advanceTimersByTime(30_000));
     expect(MockWebSocket.instances.length).toBe(before + 1);
 
     act(() => latest().open());
     expect(useConnectionStore.getState().status).toBe("connected");
-    expect(useMqttStore.getState().getTopics).toHaveBeenCalledTimes(1); // resync after reconnect
+    expect(useMqttStore.getState().getTopics).toHaveBeenCalledTimes(1);
   });
 
   it("goes offline after repeated failed reconnects", () => {
@@ -114,7 +110,7 @@ describe("useWebSocket", () => {
     const evt = envelope("duplicate", { topics: ["a", "b"], score: 0.9, status: "PENDING" }, "dup-1");
     act(() => {
       latest().emit(evt);
-      latest().emit(evt); // same event_id -> ignored
+      latest().emit(evt);
     });
     expect(addDuplicate).toHaveBeenCalledTimes(1);
   });

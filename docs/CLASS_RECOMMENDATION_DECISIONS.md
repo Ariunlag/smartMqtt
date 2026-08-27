@@ -1,82 +1,81 @@
-# Recommended-class decisions
+# Recommended Class decisions
 
-## Saved Classes and Recommended Classes are separate
+## Saved Classes and Recommended Classes remain separate
 
-**Decision:** `classes` and `class_topics` describe only user-owned Saved Classes.
-System-derived recommendation candidates are a separate workflow and must not be
-presented as existing Saved Classes.
+`classes` and `class_topics` describe user-owned Saved Classes only. System candidates
+are hypotheses produced from evidence and must not become Saved Classes without an
+explicit user action.
 
-**Reason:** Manual classes are explicit user organization. A system candidate is a
-hypothesis/evidence that the user may edit or reject. Mixing them makes provenance
-ambiguous and prevents clean feedback learning.
+## Pair identity is never flattened during representation
 
-## Pair identity precedes aggregation
+Every tag and field remains an independent pair. Each pair has independent `key`,
+`value`, `key_value`, and `schema` vectors. `stream_context` is stream-scoped evidence.
 
-Tags and fields remain independent key:value units. Evidence is matched pair-to-pair
-before any channel summary is calculated. A shared tag does not automatically make
-whole streams equivalent.
+A stream with multiple pairs therefore produces multiple independent pair records;
+those records are not averaged into one representation vector.
 
-## Evidence is registry-defined, not numeric-special-cased
+## Generate evidence first; choose algorithms later
 
-The current pair evidence registry contains `key`, `value`, `key_value`, and `schema`.
-`stream_context` is the stream-scoped evidence and reuses the existing flat topic
-embedding. `tag` and `field` remain pair sources, not extra views.
+The representation layer must not decide which evidence is most important. All
+registered evidence is stored independently. Recommendation strategies consume the
+same evidence snapshot and may experiment with subsets, weighting, clustering,
+centroids/prototypes, hybrid methods, or learned ranking.
 
-There is no `numeric_key` evidence channel. Numeric remains a datatype/temporal
-property where needed for telemetry handling, but it is not a separate semantic signal.
-This avoids counting the same key evidence twice.
+Adding or changing a decision strategy must not require regenerating embeddings unless
+the representation contract itself changes.
 
-Evidence ids, labels, scopes, and pair renderers have one backend registry. Matching,
-discovery, prototype construction, evaluation, persistence ordering, and the
-Recommendations UI consume that registry/catalog rather than each hard-coding their
-own list. A registry change bumps the representation contract and requires
-rematerialization of derived evidence.
+## Original tag-value centroid is a recommendation strategy
 
-## Do not explain recommendations with one average
+The original centroid behavior is retained as `tag_value_centroid`. It processes each
+tag pair separately and uses only that pair's already-materialized `value` vector for
+nearest-centroid assignment.
 
-**Decision:** Do not use a fused overall similarity as the user-facing explanation.
-Preserve independent channel evidence, pair-level scores, and coverage.
+It is not a separate tag embedding pipeline, persistence owner, API family, or
+top-level dashboard feature.
 
-A scalar may still be used internally for deterministic one-to-one pair assignment.
-Candidate ordering may use deterministic non-weighted rules, but neither is a claim
-that one averaged number represents recommendation confidence.
+## Registered baseline strategies
 
-## Discover candidates independently by channel
+`independent_hdbscan` runs HDBSCAN separately for each registered evidence id and
+merges exact identical memberships as consensus. It does not fuse or weight evidence
+channels.
 
-**Decision:** Run discovery independently for each registered evidence channel. The
-current baseline uses HDBSCAN with a precomputed cosine-distance matrix. If multiple
-channels discover the same exact member set, merge the evidence into one candidate and
-report all supporting channels.
+`tag_value_centroid` applies deterministic nearest-centroid assignment to individual
+tag `value` vectors. It gives us a direct baseline for the original design on the same
+stored evidence used by HDBSCAN.
 
-This preserves disagreement between representations instead of hiding it inside a
-weighted score. HDBSCAN remains a baseline; a persistent system-owned candidate/profile
-model is a separate follow-up architecture change.
+Neither baseline is a permanent statement about the final production ranking method.
 
-## Human edits are future learning evidence
+## Centroids belong in the strategy layer
 
-Candidate membership review should preserve kept topics as positive evidence,
-user-added topics as positive evidence, removed topics as correction evidence, and
-reject/dismiss as explicit candidate-level decisions.
+A broader centroid/prototype strategy should preserve pair roles and evidence ids.
+Separate centroids may exist for `key`, `value`, `key_value`, `schema`, and stream
+context. Different semantic pair roles must not be collapsed into one global centroid.
 
-Those decisions are separate from Saved Class membership. Manually created Saved
-Classes can later be used as additional supervised examples, but that learning policy
-must be explicit and versioned.
+## User-facing explanations remain evidence-first
+
+The default UI should show candidate members, evidence reasons, pair matches, coverage,
+and stream evidence. A single fused overall similarity is not the primary explanation.
+
+The dashboard uses one Recommended Classes surface. Strategy selection belongs inside
+that surface. Side-by-side algorithm comparison belongs in a research/evaluation view,
+not separate end-user recommendation tabs.
+
+## Human actions become supervised evidence
+
+Future keep/add/remove/reject/dismiss actions should persist the strategy id,
+representation/candidate version, evidence scores, and coverage that produced the
+recommendation. This creates a dataset for calibrated weighting or ranking models.
+
+Feedback on a system candidate must not silently modify a Saved Class.
 
 ## Duplicate identity remains independent
 
 Pending and keep-both topics remain independently eligible. Confirmed aliases stop
-independent candidate contribution. Duplicate decisions do not automatically create,
-merge, or name recommended classes.
+independent candidate contribution. Duplicate decisions do not create or merge
+Recommended Classes.
 
 ## PostgreSQL + pgvector is the vector persistence boundary
 
-**Decision:** Dense embedding persistence and ANN search live in PostgreSQL using
-pgvector HNSW cosine indexes. InfluxDB remains the telemetry store.
-
-This removes the separate Qdrant runtime dependency, permits SQL-side payload deletes
-instead of application collection scans, and puts vector material in the same database
-as version/membership/audit metadata. The current vector dimension is explicitly 384;
-a model-dimension change requires a schema migration.
-
-The storage layer must not change the semantic separation between Saved Classes and
-Recommended Classes or collapse the registered evidence channels.
+Runtime dense-vector persistence uses PostgreSQL + pgvector. Application code imports
+the PostgreSQL vector adapter directly; there is no compatibility client or separate
+runtime vector service.

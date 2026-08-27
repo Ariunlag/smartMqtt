@@ -12,7 +12,6 @@ from api import (
     classes,
     data,
     duplicates,
-    groups,
     health,
     recommendations,
     socket,
@@ -97,7 +96,6 @@ def create_app(
     application.include_router(data.router, prefix="/api")
     application.include_router(duplicates.router, prefix="/api")
     application.include_router(classes.router, prefix="/api")
-    application.include_router(groups.router, prefix="/api")
     application.include_router(recommendations.router, prefix="/api")
     application.include_router(socket.router)
     return application

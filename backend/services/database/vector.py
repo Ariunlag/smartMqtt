@@ -1,4 +1,4 @@
-"""PostgreSQL + pgvector storage for all dense embedding collections."""
+"""PostgreSQL + pgvector storage for active dense embedding collections."""
 
 from __future__ import annotations
 
@@ -11,14 +11,9 @@ from config import config
 from services.database.postgres import postgres_client
 
 TOPIC_COLLECTION = "topic_embeddings"
-TAG_COLLECTION = "tag_key_value_embeddings"
-GROUP_COLLECTION = "tag_group_centroids"
-REPRESENTATION_COLLECTION = "stream_representation_embeddings"  # legacy name only
 
 _COLLECTION_TABLES = {
     TOPIC_COLLECTION: "topic_embeddings",
-    TAG_COLLECTION: "tag_key_value_embeddings",
-    GROUP_COLLECTION: "tag_group_centroids",
     "class_pair_embeddings": "class_pair_embeddings",
     "class_pair_prototypes": "class_pair_prototypes",
     "class_stream_context_prototypes": "class_stream_context_prototypes",
@@ -44,11 +39,7 @@ class VectorPoint:
 
 
 class PostgresVectorStore:
-    """Small collection-style adapter backed by pgvector tables.
-
-    Keeping the collection interface localizes the storage migration while all
-    vector search, payload filtering, and deletes execute inside PostgreSQL.
-    """
+    """Small collection-style adapter backed by pgvector tables."""
 
     def __init__(self, database=postgres_client) -> None:
         self.database = database
@@ -111,8 +102,21 @@ class PostgresVectorStore:
             conn=conn,
         )
 
-    def nearest(self, collection: str, vector: list[float], *, conn=None):
-        rows = self.nearest_many(collection, vector, limit=1, conn=conn)
+    def nearest(
+        self,
+        collection: str,
+        vector: list[float],
+        *,
+        payload_filter: dict[str, Any] | None = None,
+        conn=None,
+    ):
+        rows = self.nearest_many(
+            collection,
+            vector,
+            limit=1,
+            payload_filter=payload_filter,
+            conn=conn,
+        )
         return rows[0] if rows else None
 
     def nearest_many(
@@ -121,21 +125,29 @@ class PostgresVectorStore:
         vector: list[float],
         limit: int = 10,
         *,
+        payload_filter: dict[str, Any] | None = None,
         conn=None,
     ) -> list[VectorPoint]:
         if limit <= 0:
             return []
         table = self._table(collection)
         literal = self._vector_literal(vector)
+        where = ""
+        params: list[Any] = [literal]
+        if payload_filter:
+            where = "WHERE payload @> %s::jsonb"
+            params.append(json.dumps(payload_filter))
+        params.extend((literal, int(limit)))
         rows = self._fetch_all(
             f"""
             SELECT identity, payload, embedding::text AS embedding,
                    1 - (embedding <=> %s::vector) AS score
             FROM {table}
+            {where}
             ORDER BY embedding <=> %s::vector
             LIMIT %s
             """,
-            (literal, literal, int(limit)),
+            tuple(params),
             conn=conn,
         )
         return [

@@ -2,21 +2,18 @@ import { useEffect, useRef } from "react";
 import { useInfluxStore } from "../store/useInfluxStore";
 import { useDuplicateStore } from "../store/useDuplicateStore";
 import { useMqttStore } from "../store/useMqttStore";
-import { useGroupStore } from "../store/useGroupStore";
 import { useConnectionStore } from "../store/useConnectionStore";
 import { backoffDelay, parseEnvelope, EventDeduper } from "../services/wsProtocol";
 import type { MqttMessage } from "../types/mqtt";
 
 const FLUSH_INTERVAL_MS = 200;
 const HEARTBEAT_MS = 15_000;
-const STALE_MS = 40_000; // no pong within this window -> assume dead, reconnect
+const STALE_MS = 40_000;
 const OFFLINE_AFTER_ATTEMPTS = 4;
 
-/** Refetch the REST baseline so state missed while disconnected is recovered. */
 function resyncBaseline() {
   void useMqttStore.getState().getTopics();
   void useDuplicateStore.getState().getDuplicates();
-  void useGroupStore.getState().fetchGroups();
   void useInfluxStore.getState().getMeasurements();
   void useInfluxStore.getState().getClasses();
 }
@@ -51,7 +48,6 @@ export const useWebSocket = (enabled: boolean) => {
       heartbeatTimer = window.setInterval(() => {
         if (!ws || ws.readyState !== WebSocket.OPEN) return;
         if (Date.now() - lastPong > STALE_MS) {
-          // Connection is stale — force a close so onclose triggers reconnect.
           ws.close();
           return;
         }
@@ -60,7 +56,6 @@ export const useWebSocket = (enabled: boolean) => {
     };
 
     const dispatch = (raw: string) => {
-      // Heartbeat replies are not envelopes.
       if (raw.includes('"pong"')) {
         try {
           if (JSON.parse(raw)?.type === "pong") {
@@ -77,7 +72,7 @@ export const useWebSocket = (enabled: boolean) => {
         console.warn("[WebSocket] Ignoring malformed message");
         return;
       }
-      if (!deduper.isNew(env.event_id)) return; // idempotent
+      if (!deduper.isNew(env.event_id)) return;
 
       switch (env.event_type) {
         case "mqtt_message":
@@ -94,17 +89,12 @@ export const useWebSocket = (enabled: boolean) => {
         case "duplicate":
           useDuplicateStore.getState().addDuplicate(env.data as never);
           break;
-        case "group":
-          useGroupStore.getState().setGroups((env.data as { sets: never[] }).sets);
-          break;
         default:
           console.warn("[WebSocket] Unknown event:", env.event_type);
       }
     };
 
     const connect = () => {
-      // Keep "offline" sticky across repeated failed attempts instead of
-      // flickering back to "reconnecting" each try.
       setStatus(
         !hasConnectedOnce
           ? "connecting"
@@ -119,7 +109,7 @@ export const useWebSocket = (enabled: boolean) => {
         attempts = 0;
         setStatus("connected");
         startHeartbeat();
-        if (hasConnectedOnce) resyncBaseline(); // recover missed state
+        if (hasConnectedOnce) resyncBaseline();
         hasConnectedOnce = true;
         console.log("[WebSocket] Connected");
       };
@@ -141,7 +131,6 @@ export const useWebSocket = (enabled: boolean) => {
 
     connect();
 
-    // Batch buffered mqtt messages into a single store update per interval.
     const flushTimer = window.setInterval(() => {
       if (bufferRef.current.length === 0) return;
       const batch = bufferRef.current;
