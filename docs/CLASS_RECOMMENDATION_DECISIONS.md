@@ -16,11 +16,21 @@ Tags and fields remain independent key:value units. Evidence is matched pair-to-
 before any channel summary is calculated. A shared tag does not automatically make
 whole streams equivalent.
 
-## Six evidence channels stay visible
+## Evidence is registry-defined, not numeric-special-cased
 
-The five pair views are `key`, `value`, `key_value`, `schema`, and `numeric_key` when
-numeric. `stream_context` is the sixth channel and reuses the existing flat topic
-embedding. `tag` and `field` remain evidence sources, not extra views.
+The current pair evidence registry contains `key`, `value`, `key_value`, and `schema`.
+`stream_context` is the stream-scoped evidence and reuses the existing flat topic
+embedding. `tag` and `field` remain pair sources, not extra views.
+
+There is no `numeric_key` evidence channel. Numeric remains a datatype/temporal
+property where needed for telemetry handling, but it is not a separate semantic signal.
+This avoids counting the same key evidence twice.
+
+Evidence ids, labels, scopes, and pair renderers have one backend registry. Matching,
+discovery, prototype construction, evaluation, persistence ordering, and the
+Recommendations UI consume that registry/catalog rather than each hard-coding their
+own list. A registry change bumps the representation contract and requires
+rematerialization of derived evidence.
 
 ## Do not explain recommendations with one average
 
@@ -33,13 +43,14 @@ that one averaged number represents recommendation confidence.
 
 ## Discover candidates independently by channel
 
-**Decision:** Run discovery independently for each evidence channel. The baseline uses
-HDBSCAN with a precomputed cosine-distance matrix. If multiple channels discover the
-same exact member set, merge the evidence into one candidate and report all supporting
-channels.
+**Decision:** Run discovery independently for each registered evidence channel. The
+current baseline uses HDBSCAN with a precomputed cosine-distance matrix. If multiple
+channels discover the same exact member set, merge the evidence into one candidate and
+report all supporting channels.
 
 This preserves disagreement between representations instead of hiding it inside a
-weighted score.
+weighted score. HDBSCAN remains a baseline; a persistent system-owned candidate/profile
+model is a separate follow-up architecture change.
 
 ## Human edits are future learning evidence
 
@@ -59,7 +70,7 @@ merge, or name recommended classes.
 
 ## PostgreSQL + pgvector is the vector persistence boundary
 
-**Decision:** Dense embedding persistence and ANN search move into PostgreSQL using
+**Decision:** Dense embedding persistence and ANN search live in PostgreSQL using
 pgvector HNSW cosine indexes. InfluxDB remains the telemetry store.
 
 This removes the separate Qdrant runtime dependency, permits SQL-side payload deletes
@@ -67,5 +78,5 @@ instead of application collection scans, and puts vector material in the same da
 as version/membership/audit metadata. The current vector dimension is explicitly 384;
 a model-dimension change requires a schema migration.
 
-The storage migration must not change the semantic separation between Saved Classes
-and Recommended Classes or collapse the six evidence channels.
+The storage layer must not change the semantic separation between Saved Classes and
+Recommended Classes or collapse the registered evidence channels.
