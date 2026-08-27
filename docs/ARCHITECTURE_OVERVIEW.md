@@ -1,74 +1,69 @@
 # SmartMQTT Architecture Overview
 
-SmartMQTT ingests schema-flexible MQTT telemetry, stores time-series values,
-detects possible duplicate topics, groups tags, and lets operators maintain
-named Saved Classes. Saved Classes are the only production class ontology.
+SmartMQTT ingests schema-flexible MQTT telemetry, stores time-series values, detects
+possible duplicate topics, preserves independent semantic evidence for every tag and
+field pair, and supports both user-owned Saved Classes and system-derived Recommended
+Classes.
 
 ## Runtime flow
 
 1. MQTT subscription and parsing validate each message.
-2. The ingestion pipeline persists telemetry to InfluxDB and emits WebSocket
-   updates.
-3. The existing topic embedding supports duplicate detection.
-4. Pair-level recommendation processing profiles each tag and field without
-   changing ingestion success or Saved Class membership.
-5. Operators inspect deterministic evidence and explicitly accept, reject,
-   dismiss, add, or remove a class member.
+2. Canonical duplicate identity is resolved before downstream processing.
+3. Telemetry is persisted to InfluxDB and emitted over WebSocket.
+4. One authoritative `stream_context` vector supports duplicate ANN search and
+   stream-level recommendation evidence.
+5. A bounded sidecar materializes independent pair evidence for every tag and field.
+6. Recommendation strategies consume the stored evidence without changing how vectors
+   are generated.
 
-Recommendation processing is a sidecar. Queue pressure or recommendation
-failure cannot change the primary MQTT/InfluxDB outcome.
+Queue pressure or recommendation failure does not change the primary MQTT/InfluxDB
+outcome.
 
-## Class recommendation model
+## Pair evidence
 
-Each `(source, key, datatype)` identity remains an independent unit. A topic
-with three key/value pairs therefore has three pair identities. Each identity
-may provide five separately embedded views:
+Each `(source, normalized_key, datatype)` identity remains independent. Every pair has
+four separately embedded views:
 
 - `key`
 - `value`
 - `key_value`
 - `schema`
-- `numeric_key` for numeric fields
 
-The existing duplicate topic vector is reused as the optional sixth
-`stream_context` channel. No second flattened topic vector is generated.
+`tag` and `field` are sources, not evidence channels. Numeric is datatype metadata.
+There is no numeric-specific recommendation vector.
 
-Saved Class members contribute compact per-identity, per-view centroids.
-Candidates are matched to prototypes using deterministic greedy one-to-one
-matching. The score is the equal mean of valid channels and is accompanied by
-pair matches, unmatched identities, and coverage. There is no lexical fallback
-and no automatic class creation.
+Exploratory tag grouping reuses each tag pair's existing `value` vector for centroid
+assignment. It does not own a second embedding pipeline.
 
-See [CLASS_RECOMMENDATION_ARCHITECTURE.md](CLASS_RECOMMENDATION_ARCHITECTURE.md)
-for the exact data contracts, persistence classification, APIs, versioning,
-duplicate reconciliation, and action behavior.
+## Recommended Class strategies
+
+The evidence layer is strategy-agnostic. The current `independent_hdbscan` strategy
+matches compatible pairs, preserves per-evidence scores and coverage, builds one
+topic-distance matrix per evidence type, and clusters those matrices independently.
+Exact identical memberships are merged as consensus.
+
+Future centroid/prototype, weighted, hybrid, or learned-ranking strategies use the
+same stored evidence. Strategy changes therefore do not require embedding
+rematerialization.
+
+Saved Classes remain user-owned and separate from system candidates. Older
+Saved-Class recommendation endpoints/prototypes are compatibility code and are not the
+dashboard Recommended Classes workflow.
 
 ## Storage ownership
 
-- PostgreSQL: subscriptions, Saved Classes, class membership, duplicate state,
-  canonical topic identity, versions, recommendation constraints/dismissals,
-  and append-only action audit.
-- InfluxDB: telemetry values.
-- Qdrant: authoritative duplicate/tag vectors, pair embeddings, and derived
-  compact class prototypes.
+- PostgreSQL + pgvector: relational metadata, human decisions, canonical identity,
+  pair evidence, stream vectors, centroids/prototypes, versions, and audit data.
+- InfluxDB: telemetry values and history.
 - Frontend state: transient presentation state only.
-
-The legacy `semantic_application_state` table remains only because migration
-history is non-destructive. No production code reads it.
 
 ## User interface
 
-The existing redesigned dashboard, graphs, topic controls, duplicate workflow,
-tag groups, and Saved Classes remain. The retired review/operations experience
-is replaced by an additional Recommendations view that exposes real pair,
-prototype, channel, coverage, version, and duplicate-pending evidence without
-exposing vectors or model internals.
+The dashboard has one Recommended Classes surface. It renders backend-provided evidence
+and strategy metadata. When more than one strategy is registered, a method selector
+appears in the same surface. Side-by-side algorithm comparison belongs in a separate
+research/evaluation view rather than separate end-user recommendation tabs.
 
-## Evaluation and operations
-
-- Pair-level RQ1 evaluation is documented in
-  [research/RQ1_PAIR_RECOMMENDATION.md](research/RQ1_PAIR_RECOMMENDATION.md).
-- Non-destructive full-stack acceptance is documented in
-  [REAL_STACK_ACCEPTANCE.md](REAL_STACK_ACCEPTANCE.md).
-- Deployment and persistence details are in [deployment.md](deployment.md) and
-  [PERSISTENCE.md](PERSISTENCE.md).
+See [CLASS_RECOMMENDATION_ARCHITECTURE.md](CLASS_RECOMMENDATION_ARCHITECTURE.md),
+[PERSISTENCE.md](PERSISTENCE.md), and [REAL_STACK_ACCEPTANCE.md](REAL_STACK_ACCEPTANCE.md)
+for detailed contracts and validation.
