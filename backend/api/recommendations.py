@@ -2,18 +2,19 @@
 
 The legacy Saved-Class recommendation endpoints remain available through
 ``api/classes.py`` for compatibility, but this router exposes the system-derived
-recommended-class candidate workflow used by the dashboard.
+recommended-class workflow used by the dashboard.
 """
 
 import asyncio
 from dataclasses import asdict
 
 from config import config
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from services.class_recommendation.discovery import (
     RecommendedClassDiscovery,
     RecommendedClassDiscoveryConfig,
 )
+from services.class_recommendation.strategies import DEFAULT_STRATEGY_ID
 
 router = APIRouter(tags=["Class Recommendations"])
 
@@ -26,8 +27,11 @@ async def topic_class_recommendations(topic: str, request: Request):
 
 
 @router.get("/recommended-classes")
-async def recommended_class_candidates(request: Request):
-    """Return system-derived candidate classes without exposing Saved Classes."""
+async def recommended_class_candidates(
+    request: Request,
+    strategy: str = DEFAULT_STRATEGY_ID,
+):
+    """Return system candidates generated from the selected strategy."""
     application = request.app.state.class_recommendation
     discovery = RecommendedClassDiscovery(
         metadata_store=application.metadata_store,
@@ -40,8 +44,14 @@ async def recommended_class_candidates(request: Request):
             min_samples=config.SYSTEM_RECOMMENDATION_MIN_SAMPLES,
             allow_single_cluster=config.SYSTEM_RECOMMENDATION_ALLOW_SINGLE_CLUSTER,
         ),
+        strategy_id=strategy,
     )
-    result = await asyncio.to_thread(discovery.discover)
+    try:
+        result = await asyncio.to_thread(discovery.discover)
+    except ValueError as exc:
+        if "Unknown recommendation strategy" in str(exc):
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
+        raise
     return asdict(result)
 
 
