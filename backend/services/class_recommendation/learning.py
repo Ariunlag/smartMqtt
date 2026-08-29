@@ -23,6 +23,10 @@ from services.database.postgres import postgres_client
 
 Objective = Literal["membership", "candidate_quality"]
 EVIDENCE_IDS = ("key", "value", "key_value", "schema", "stream_context")
+FEATURE_CONTRACT_VERSION = {
+    "membership": "membership-evidence-v1",
+    "candidate_quality": "candidate-quality-evidence-v1",
+}
 
 MEMBERSHIP_FEATURES = tuple(
     [f"{evidence_id}_score" for evidence_id in EVIDENCE_IDS]
@@ -169,7 +173,9 @@ class RecommendationFeedbackDatasetBuilder:
 
         scores = cls._score_map(topic_evidence)
         values = [float(scores.get(evidence_id, 0.0)) for evidence_id in EVIDENCE_IDS]
-        values.extend(1.0 if evidence_id in scores else 0.0 for evidence_id in EVIDENCE_IDS)
+        values.extend(
+            1.0 if evidence_id in scores else 0.0 for evidence_id in EVIDENCE_IDS
+        )
         coverage = topic_evidence.get("coverage") or {}
         values.extend(
             (
@@ -183,7 +189,11 @@ class RecommendationFeedbackDatasetBuilder:
                 feedback_id=str(row["feedback_id"]),
                 candidate_id=str(row["candidate_id"]),
                 candidate_version=int(row["candidate_version"]),
-                strategy_id=str(snapshot.get("strategy_id") or candidate.get("strategy_id") or "unknown"),
+                strategy_id=str(
+                    snapshot.get("strategy_id")
+                    or candidate.get("strategy_id")
+                    or "unknown"
+                ),
                 objective="membership",
                 target=str(topic),
                 label=1 if action == "KEEP_TOPIC" else 0,
@@ -203,10 +213,18 @@ class RecommendationFeedbackDatasetBuilder:
         values: list[float] = []
         score_maps = [cls._score_map(item) for item in topic_evidence]
         for evidence_id in EVIDENCE_IDS:
-            present = [scores[evidence_id] for scores in score_maps if evidence_id in scores]
+            present = [
+                scores[evidence_id]
+                for scores in score_maps
+                if evidence_id in scores
+            ]
             values.append(float(mean(present)) if present else 0.0)
         for evidence_id in EVIDENCE_IDS:
-            present = [scores[evidence_id] for scores in score_maps if evidence_id in scores]
+            present = [
+                scores[evidence_id]
+                for scores in score_maps
+                if evidence_id in scores
+            ]
             values.append(float(min(present)) if present else 0.0)
         for evidence_id in EVIDENCE_IDS:
             present_count = sum(evidence_id in scores for scores in score_maps)
@@ -221,7 +239,11 @@ class RecommendationFeedbackDatasetBuilder:
             for item in topic_evidence
         ]
         members = candidate.get("member_topics") or snapshot.get("member_topics") or ()
-        discovery = candidate.get("discovery_evidence") or snapshot.get("discovery_evidence") or ()
+        discovery = (
+            candidate.get("discovery_evidence")
+            or snapshot.get("discovery_evidence")
+            or ()
+        )
         values.extend(
             (
                 float(mean(candidate_coverages)),
@@ -238,7 +260,11 @@ class RecommendationFeedbackDatasetBuilder:
                 feedback_id=str(row["feedback_id"]),
                 candidate_id=str(row["candidate_id"]),
                 candidate_version=int(row["candidate_version"]),
-                strategy_id=str(snapshot.get("strategy_id") or candidate.get("strategy_id") or "unknown"),
+                strategy_id=str(
+                    snapshot.get("strategy_id")
+                    or candidate.get("strategy_id")
+                    or "unknown"
+                ),
                 objective="candidate_quality",
                 target=str(row["candidate_id"]),
                 label=1 if action == "ACCEPT_CANDIDATE" else 0,
@@ -277,6 +303,7 @@ def train_offline_report(dataset: TrainingDataset) -> dict:
     strategy_counts = Counter(example.strategy_id for example in dataset.examples)
     base = {
         "objective": dataset.objective,
+        "feature_contract_version": FEATURE_CONTRACT_VERSION[dataset.objective],
         "feature_contract": list(dataset.feature_names),
         "sample_count": len(dataset.examples),
         "positive_count": label_counts.get(1, 0),
@@ -284,6 +311,7 @@ def train_offline_report(dataset: TrainingDataset) -> dict:
         "unique_candidate_count": len(set(dataset.groups)),
         "strategy_counts": dict(sorted(strategy_counts.items())),
         "skipped_by_reason": dataset.skipped_by_reason,
+        "promotion": "none",
     }
     if len(label_counts) < 2:
         return {
@@ -299,14 +327,20 @@ def train_offline_report(dataset: TrainingDataset) -> dict:
     estimator: LogisticRegression = model.named_steps["logistic_regression"]
     coefficients = {
         feature: float(value)
-        for feature, value in zip(dataset.feature_names, estimator.coef_[0], strict=True)
+        for feature, value in zip(
+            dataset.feature_names, estimator.coef_[0], strict=True
+        )
     }
     ordered_coefficients = dict(
         sorted(coefficients.items(), key=lambda item: (-abs(item[1]), item[0]))
     )
 
     groups_by_label = {
-        label: {group for group, y in zip(dataset.groups, dataset.labels, strict=True) if y == label}
+        label: {
+            group
+            for group, y in zip(dataset.groups, dataset.labels, strict=True)
+            if y == label
+        }
         for label in (0, 1)
     }
     split_count = min(
@@ -322,7 +356,9 @@ def train_offline_report(dataset: TrainingDataset) -> dict:
             "reason": "each label must occur across at least two candidate groups",
         }
     else:
-        cv = StratifiedGroupKFold(n_splits=split_count, shuffle=True, random_state=42)
+        cv = StratifiedGroupKFold(
+            n_splits=split_count, shuffle=True, random_state=42
+        )
         try:
             probabilities = cross_val_predict(
                 _model(),
@@ -341,7 +377,9 @@ def train_offline_report(dataset: TrainingDataset) -> dict:
                     balanced_accuracy_score(dataset.labels, predictions)
                 ),
                 "roc_auc": float(roc_auc_score(dataset.labels, probabilities)),
-                "log_loss": float(log_loss(dataset.labels, probabilities, labels=[0, 1])),
+                "log_loss": float(
+                    log_loss(dataset.labels, probabilities, labels=[0, 1])
+                ),
             }
         except ValueError as exc:
             cv_report = {
@@ -356,7 +394,6 @@ def train_offline_report(dataset: TrainingDataset) -> dict:
         "intercept": float(estimator.intercept_[0]),
         "standardized_coefficients": ordered_coefficients,
         "cross_validation": cv_report,
-        "promotion": "none",
     }
 
 
