@@ -34,6 +34,8 @@ export default function RecommendationsManager() {
   const [strategyCatalog, setStrategyCatalog] = useState<RecommendationStrategyDefinition[]>([]);
   const [activeStrategy, setActiveStrategy] = useState<RecommendationStrategyDefinition | null>(null);
   const [availableTopicCount, setAvailableTopicCount] = useState(0);
+  const [shadowRunId, setShadowRunId] = useState<string | null>(null);
+  const [liveRunId, setLiveRunId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,6 +51,16 @@ export default function RecommendationsManager() {
       setStrategyCatalog(result.strategy_catalog);
       setActiveStrategy(result.strategy);
       setAvailableTopicCount(result.available_topics.length);
+      setShadowRunId(
+        result.shadow_evaluation?.persistence?.status === "stored"
+          ? result.shadow_evaluation.shadow_run_id ?? null
+          : null,
+      );
+      setLiveRunId(
+        result.live_ranking?.persistence?.status === "stored"
+          ? result.live_ranking.live_run_id ?? null
+          : null,
+      );
     } catch (requestError) {
       setError(errorMessage(requestError));
     } finally {
@@ -111,6 +123,8 @@ export default function RecommendationsManager() {
             key={candidate.candidate_id}
             candidate={candidate}
             evidenceCatalog={evidenceCatalog}
+            shadowRunId={shadowRunId}
+            liveRunId={liveRunId}
           />
         ))}
       </div>
@@ -121,9 +135,13 @@ export default function RecommendationsManager() {
 function RecommendedClassCard({
   candidate,
   evidenceCatalog,
+  shadowRunId,
+  liveRunId,
 }: {
   candidate: RecommendedClassCandidate;
   evidenceCatalog: EvidenceDefinition[];
+  shadowRunId: string | null;
+  liveRunId: string | null;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [feedbackKey, setFeedbackKey] = useState<string | null>(null);
@@ -151,6 +169,8 @@ function RecommendedClassCard({
         action,
         candidate_version: candidate.candidate_version,
         ...(topic ? { topic } : {}),
+        ...(shadowRunId ? { shadow_run_id: shadowRunId } : {}),
+        ...(liveRunId ? { live_run_id: liveRunId } : {}),
       });
       setFeedbackMessage(
         topic
