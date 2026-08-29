@@ -1,4 +1,4 @@
-"""persist shadow recommendation scores and feedback exposure provenance
+"""persist shadow deployments, scores, and feedback exposure provenance
 
 Revision ID: 0009_recommendation_shadow
 Revises: 0008_recommendation_models
@@ -18,6 +18,34 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.execute(
         """
+        CREATE TABLE recommendation_shadow_deployments (
+            objective TEXT PRIMARY KEY CHECK (
+                objective IN ('membership', 'candidate_quality')
+            ),
+            model_id UUID NOT NULL REFERENCES recommendation_model_versions(model_id),
+            activation_reason TEXT NOT NULL,
+            activated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+
+        CREATE UNIQUE INDEX uq_recommendation_shadow_deployment_model
+            ON recommendation_shadow_deployments(model_id);
+
+        CREATE TABLE recommendation_shadow_deployment_events (
+            event_id UUID PRIMARY KEY,
+            objective TEXT NOT NULL CHECK (
+                objective IN ('membership', 'candidate_quality')
+            ),
+            model_id UUID NOT NULL REFERENCES recommendation_model_versions(model_id),
+            event_type TEXT NOT NULL CHECK (
+                event_type IN ('ACTIVATED', 'DEACTIVATED')
+            ),
+            reason TEXT NOT NULL,
+            occurred_at TIMESTAMPTZ NOT NULL DEFAULT now()
+        );
+
+        CREATE INDEX idx_recommendation_shadow_deployment_events
+            ON recommendation_shadow_deployment_events(objective, occurred_at DESC);
+
         CREATE TABLE recommendation_shadow_observations (
             observation_id UUID PRIMARY KEY,
             shadow_run_id UUID NOT NULL,
@@ -73,5 +101,7 @@ def downgrade() -> None:
         DROP INDEX idx_recommended_feedback_shadow_observation;
         ALTER TABLE recommended_class_feedback DROP COLUMN shadow_observation_id;
         DROP TABLE recommendation_shadow_observations;
+        DROP TABLE recommendation_shadow_deployment_events;
+        DROP TABLE recommendation_shadow_deployments;
         """
     )
