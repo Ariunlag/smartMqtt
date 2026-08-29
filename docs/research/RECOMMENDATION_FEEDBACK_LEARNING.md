@@ -74,13 +74,17 @@ runtime ranking by this command.
 
 ## Evaluation and leakage control
 
-Randomly splitting topics from the same candidate across train/test would overstate
-performance because those rows share candidate context. Cross-validation therefore
-groups by `candidate_id` using `StratifiedGroupKFold`.
+Randomly splitting related candidate rows across train/test would overstate performance.
+This is especially important because HDBSCAN and centroid can produce different
+`candidate_id` values for the same underlying member set. Cross-validation therefore
+uses a strategy-independent fingerprint of the sorted member topics as the evaluation
+group and applies `StratifiedGroupKFold`.
 
-Grouped cross-validation is reported only when each label occurs across at least two
-candidate groups. Otherwise the model can still be fit as an exploratory baseline, but
-CV metrics are reported as unavailable rather than fabricating a validation score.
+That keeps all versions and strategy variants of the same underlying topic group on one
+side of a fold. Grouped cross-validation is reported only when each label occurs across
+at least two distinct member-set groups. Otherwise the model can still be fit as an
+exploratory baseline, but CV metrics are reported as unavailable rather than fabricating
+a validation score.
 
 When available, the report includes:
 
@@ -89,6 +93,10 @@ When available, the report includes:
 - ROC AUC;
 - log loss;
 - standardized coefficients.
+
+Each report also includes a feature-contract version. Changing the fixed-length feature
+extractor requires a new contract version so results from different feature schemas are
+not compared as if they were identical.
 
 ## Run
 
