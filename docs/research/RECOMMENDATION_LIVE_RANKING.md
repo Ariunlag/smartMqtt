@@ -49,7 +49,10 @@ prototype policy requires:
 - ROC AUC >= 0.60;
 - at least 10 positive-vs-negative pairwise comparisons;
 - learned pairwise ordering must be no worse than baseline (`delta >= 0.0`);
-- fixture feedback remains excluded.
+- fixture feedback remains excluded;
+- the shadow report must use explicit feedback only;
+- unshown candidates must not be treated as negatives;
+- rank counterfactuals must use the same-shadow-run comparison policy.
 
 These values are explicit prototype deployment policy, not a claim that 20 labels are
 scientifically sufficient for every deployment.
@@ -118,7 +121,7 @@ The API exposes `live_ranking` metadata so the caller can distinguish `baseline`
 
 Every successfully live-ranked response persists an observation per candidate with:
 
-- `live_run_id`;
+- one request-level `live_run_id`;
 - candidate id/version;
 - strategy id;
 - baseline rank;
@@ -126,9 +129,21 @@ Every successfully live-ranked response persists an observation per candidate wi
 - exact model id;
 - candidate-quality score.
 
-Later feedback stores a nullable `live_observation_id`. Feedback remains valid even if no
-live observation exists or provenance lookup fails; the immutable candidate evidence
-snapshot is still the source of truth for learning.
+The UI keeps the run id from the same response that produced the displayed cards and
+returns it with later feedback. The backend resolves exactly
+`(live_run_id, candidate_id, candidate_version)` before storing the nullable
+`live_observation_id`. It does not look up the latest candidate observation, because a
+background or manual refresh could have created a newer exposure after the one the user
+actually judged.
+
+Shadow attribution follows the same pattern with `shadow_run_id`. If a legacy client
+omits a run id, or an exact observation can no longer be resolved, the user feedback is
+still stored and the observational link remains `NULL`; provenance must never block the
+label itself. The immutable candidate evidence snapshot remains the learning source of
+truth.
+
+Both shadow and live observation foreign keys use `ON DELETE SET NULL`, allowing
+observational history cleanup without deleting feedback labels.
 
 ## Live post-evaluation
 
