@@ -18,6 +18,14 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.execute(
         """
+        ALTER TABLE recommended_class_feedback
+            DROP CONSTRAINT IF EXISTS recommended_class_feedback_shadow_observation_id_fkey;
+        ALTER TABLE recommended_class_feedback
+            ADD CONSTRAINT recommended_class_feedback_shadow_observation_id_fkey
+            FOREIGN KEY (shadow_observation_id)
+            REFERENCES recommendation_shadow_observations(observation_id)
+            ON DELETE SET NULL;
+
         CREATE TABLE recommendation_live_deployments (
             objective TEXT PRIMARY KEY CHECK (objective = 'candidate_quality'),
             model_id UUID NOT NULL REFERENCES recommendation_model_versions(model_id),
@@ -93,5 +101,12 @@ def downgrade() -> None:
         DROP TABLE recommendation_live_observations;
         DROP TABLE recommendation_live_deployment_events;
         DROP TABLE recommendation_live_deployments;
+
+        ALTER TABLE recommended_class_feedback
+            DROP CONSTRAINT IF EXISTS recommended_class_feedback_shadow_observation_id_fkey;
+        ALTER TABLE recommended_class_feedback
+            ADD CONSTRAINT recommended_class_feedback_shadow_observation_id_fkey
+            FOREIGN KEY (shadow_observation_id)
+            REFERENCES recommendation_shadow_observations(observation_id);
         """
     )
