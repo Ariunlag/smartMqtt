@@ -21,6 +21,7 @@ def _row(
         "candidate_version": 1,
         "action_type": action,
         "topic": topic,
+        "evidence_snapshot": {},
         "shadow_observation_id": f"obs-{feedback_id}" if linked else None,
         "strategy_id": "independent_hdbscan" if linked else None,
         "baseline_rank": baseline_rank if linked else None,
@@ -69,6 +70,7 @@ def test_shadow_evaluation_uses_latest_explicit_membership_label_per_target():
     report = evaluate_shadow_rows(rows)
 
     assert report["source"]["total_feedback_events"] == 4
+    assert report["source"]["eligible_feedback_events"] == 4
     assert report["source"]["linked_shadow_events"] == 3
     assert report["source"]["unshown_candidates_as_negative"] is False
     assert report["membership"]["effective_sample_count"] == 2
@@ -133,3 +135,40 @@ def test_shadow_evaluation_does_not_invent_anchor_membership_scores():
 
     assert report["membership"]["effective_sample_count"] == 0
     assert report["skipped_by_reason"]["membership_score_missing"] == 1
+
+
+def test_shadow_evaluation_excludes_acceptance_fixture_feedback_by_default():
+    fixture = _row(
+        "fixture",
+        "ACCEPT_CANDIDATE",
+        candidate_id="fixture-candidate",
+        quality_score=0.99,
+    )
+    fixture["evidence_snapshot"] = {
+        "candidate_evidence": {
+            "member_topics": [
+                "acceptance/shadow-run/temperature/a",
+                "acceptance/shadow-run/temperature/b",
+            ]
+        }
+    }
+    real = _row(
+        "real",
+        "DISMISS_CANDIDATE",
+        candidate_id="real-candidate",
+        quality_score=0.1,
+    )
+
+    report = evaluate_shadow_rows([fixture, real])
+    smoke = evaluate_shadow_rows(
+        [fixture, real],
+        include_fixture_feedback=True,
+    )
+
+    assert report["source"]["total_feedback_events"] == 2
+    assert report["source"]["eligible_feedback_events"] == 1
+    assert report["source"]["source_policy"]["fixture_feedback"] == "excluded_by_default"
+    assert report["skipped_by_reason"]["fixture_namespace_excluded"] == 1
+    assert report["candidate_quality"]["effective_sample_count"] == 1
+    assert smoke["source"]["eligible_feedback_events"] == 2
+    assert smoke["source"]["source_policy"]["fixture_feedback"] == "included_by_explicit_request"
