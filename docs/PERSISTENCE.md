@@ -30,8 +30,8 @@ HNSW indexes where nearest-neighbor search is required. JSONB payload indexes su
 metadata filtering/deletion.
 
 Relational source-of-truth tables include streams, Saved Classes and memberships,
-duplicate identity/decisions, topic representation versions, and recommendation
-candidate/feedback records.
+duplicate identity/decisions, topic representation versions, recommendation
+candidate/feedback records, and versioned offline-learning model artifacts.
 
 ### Recommended candidate persistence
 
@@ -52,6 +52,27 @@ set is a new candidate identity.
 Feedback rows copy the candidate evidence snapshot used for the action. The feedback
 API never accepts user-supplied similarity scores. This keeps later training/evaluation
 data tied to the evidence the user actually saw.
+
+### Recommendation model registry
+
+Offline learned models use three additional relational tables:
+
+- `recommendation_model_versions`: immutable model identity, monotonic per-objective
+  version, semantic dataset fingerprint, portable JSON artifact, and training report;
+- `recommendation_model_evaluations`: immutable evaluation-gate reports keyed by a
+  fingerprint of the explicit gate policy;
+- `recommendation_model_events`: auditable registration, evaluation, offline approval,
+  and retirement transitions.
+
+Artifacts store StandardScaler statistics and Logistic Regression parameters as JSON,
+not Python pickle blobs. The effective training dataset is fingerprinted independently
+from the evaluation thresholds, so the same artifact can be evaluated later under a
+new explicit policy without inventing another model version.
+
+`OFFLINE_APPROVED` is registry state only. Current Recommended Classes runtime code does
+not read the model registry, so registering or approving a model cannot change live
+candidate generation or ranking. A later shadow/live integration must use a separate
+explicit runtime-promotion contract.
 
 ## ANN search
 
