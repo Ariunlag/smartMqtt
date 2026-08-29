@@ -198,12 +198,38 @@ export interface RecommendedClassCandidate {
   evidence: RecommendedClassTopicEvidence[];
 }
 
+export interface RecommendationShadowEvaluation {
+  mode: "shadow";
+  status: string;
+  shadow_run_id?: string;
+  ranking_effect: string;
+  baseline_order_preserved: boolean;
+  persistence?: {
+    status: string;
+    count: number;
+  };
+}
+
+export interface RecommendationLiveRanking {
+  mode: "live";
+  status: string;
+  live_run_id?: string;
+  ranking_effect: string;
+  membership_effect: string;
+  persistence?: {
+    status: string;
+    count: number;
+  };
+}
+
 export interface RecommendedClassCandidateSet {
   candidates: RecommendedClassCandidate[];
   available_topics: string[];
   strategy: RecommendationStrategyDefinition;
   strategy_catalog: RecommendationStrategyDefinition[];
   evidence_catalog: EvidenceDefinition[];
+  shadow_evaluation?: RecommendationShadowEvaluation;
+  live_ranking?: RecommendationLiveRanking;
 }
 
 export type RecommendedClassFeedbackAction =
@@ -216,6 +242,8 @@ export interface RecommendedClassFeedbackRequest {
   action: RecommendedClassFeedbackAction;
   candidate_version: number;
   topic?: string;
+  shadow_run_id?: string;
+  live_run_id?: string;
 }
 
 export interface RecommendedClassFeedbackResult {
@@ -224,4 +252,8 @@ export interface RecommendedClassFeedbackResult {
   candidate_version: number;
   action_type: RecommendedClassFeedbackAction;
   topic: string | null;
+  shadow_run_id?: string | null;
+  shadow_observation_id?: string | null;
+  live_run_id?: string | null;
+  live_observation_id?: string | null;
 }
