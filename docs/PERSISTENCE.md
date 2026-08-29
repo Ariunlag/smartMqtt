@@ -31,8 +31,8 @@ metadata filtering/deletion.
 
 Relational source-of-truth tables include streams, Saved Classes and memberships,
 duplicate identity/decisions, topic representation versions, recommendation
-candidate/feedback records, versioned offline-learning model artifacts, and audited
-shadow deployments/observations.
+candidate/feedback records, versioned offline-learning model artifacts, audited shadow
+observations, and explicit live-ranking deployment history.
 
 ### Recommended candidate persistence
 
@@ -96,7 +96,40 @@ up later.
 
 Shadow evaluation uses only feedback attached to an observed exposure. Unshown
 candidates are not synthesized as negatives. Repeated feedback is deduplicated with a
-latest-explicit-label policy per model/candidate-version/target.
+latest-explicit-label policy per model/candidate-version/target. Rank-order comparisons
+are formed only within the same `shadow_run_id`; rank positions from unrelated candidate
+sets are never compared.
+
+### Recommendation live ranking
+
+Live v1 adds three tables for explicit deployment and exposure audit:
+
+- `recommendation_live_deployments`: at most one active `candidate_quality` model;
+- `recommendation_live_deployment_events`: audited activation, blocked promotion, and
+  rollback events;
+- `recommendation_live_observations`: the exact baseline rank, live rank, model id, and
+  candidate-quality score shown for each candidate version in one request.
+
+Live v1 does not generate candidates and does not change candidate membership. The
+selected HDBSCAN/centroid strategy still determines the exact candidate set. When a
+live candidate-quality model is active, existing candidates are ordered by learned
+probability descending and baseline rank is the deterministic tie-breaker.
+
+Promotion cannot bypass the shadow gate. The gate requires real explicit shadow
+feedback, minimum label/sample coverage, offline model approval, acceptable balanced
+accuracy and ROC AUC, and enough same-run positive/negative comparisons to show that the
+learned ordering is not worse than the baseline ordering under the configured policy.
+
+Request-time live ranking is fail-closed. Missing snapshots, incompatible artifacts,
+feature failures, or inability to persist the live exposure all return the unchanged
+baseline order for the entire request. Operators can also delete the active live
+deployment through the rollback command to restore baseline ordering immediately.
+
+`recommended_class_feedback.live_observation_id` optionally links later explicit user
+feedback to the exact live exposure. Live post-evaluation again treats only explicit
+feedback as labels, never interprets unshown candidates as negatives, excludes
+`acceptance/` fixtures by default, and compares live-vs-baseline rank only within the
+same `live_run_id`.
 
 ## ANN search
 
