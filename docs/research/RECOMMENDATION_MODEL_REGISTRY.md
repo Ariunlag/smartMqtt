@@ -66,8 +66,8 @@ RETIRED
 ```
 
 `OFFLINE_APPROVED` means only that the artifact passed the selected offline gate and was
-explicitly selected for the next experiment. It has **no runtime effect**. The current
-Recommended Classes endpoint does not read the model registry.
+explicitly selected for a possible next experiment. Approval itself has **no runtime
+ranking effect** and does not automatically activate inference.
 
 Only one `OFFLINE_APPROVED` model can exist per objective. Approving a newer model retires
 the previously approved model for that objective and records both lifecycle events.
@@ -82,6 +82,10 @@ reports for a model.
 
 `recommendation_model_events` stores `REGISTERED`, `EVALUATED`, `OFFLINE_APPROVED`, and
 `RETIRED` lifecycle events.
+
+Shadow deployment state is deliberately stored in separate tables. The runtime scorer
+only consumes a model when it is both `OFFLINE_APPROVED` and explicitly present in
+`recommendation_shadow_deployments`.
 
 ## Commands
 
@@ -130,12 +134,20 @@ python -X utf8 scripts/manage_recommendation_models.py --docker register \
 
 ## What comes after offline approval
 
-The next phase is a shadow scorer. An `OFFLINE_APPROVED` artifact may be loaded alongside
-the existing HDBSCAN/centroid candidate generators and produce learned membership and
-candidate-quality scores, but those scores must initially be logged only. They must not
-change user-visible ranking until shadow evaluation shows that the learned scorer is
-stable and improves the agreed metrics.
+Shadow inference is a separate explicit deployment decision. `OFFLINE_APPROVED` does not
+imply `SHADOW_ACTIVE`.
 
-A later runtime-promotion migration should introduce explicit `SHADOW` and `LIVE` states
-only when the scorer is actually wired into request-time ranking. This registry does not
-pretend that offline approval is production deployment.
+Activate an approved model only when a shadow experiment is intentionally starting:
+
+```powershell
+python -X utf8 scripts/manage_recommendation_shadow.py --docker activate \
+  <model_id> --reason "Start observational shadow evaluation"
+```
+
+The shadow scorer records learned membership/candidate-quality probabilities beside the
+existing baseline rank, but it never reorders candidates. See
+`docs/research/RECOMMENDATION_SHADOW_RANKING.md` for the exposure-provenance and
+evaluation contract.
+
+A future live-ranking phase must add a separate explicit promotion and rollback contract.
+Neither offline approval nor shadow activation is production ranking deployment.

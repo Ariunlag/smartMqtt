@@ -31,7 +31,8 @@ metadata filtering/deletion.
 
 Relational source-of-truth tables include streams, Saved Classes and memberships,
 duplicate identity/decisions, topic representation versions, recommendation
-candidate/feedback records, and versioned offline-learning model artifacts.
+candidate/feedback records, versioned offline-learning model artifacts, and audited
+shadow deployments/observations.
 
 ### Recommended candidate persistence
 
@@ -69,10 +70,33 @@ not Python pickle blobs. The effective training dataset is fingerprinted indepen
 from the evaluation thresholds, so the same artifact can be evaluated later under a
 new explicit policy without inventing another model version.
 
-`OFFLINE_APPROVED` is registry state only. Current Recommended Classes runtime code does
-not read the model registry, so registering or approving a model cannot change live
-candidate generation or ranking. A later shadow/live integration must use a separate
-explicit runtime-promotion contract.
+`OFFLINE_APPROVED` remains a governance state, not a deployment state. Approving a model
+alone does not make runtime recommendation code consume it.
+
+### Recommendation shadow deployment
+
+Shadow mode adds three runtime-observation tables while preserving baseline ranking:
+
+- `recommendation_shadow_deployments`: the explicitly activated model for each learning
+  objective (`membership` or `candidate_quality`);
+- `recommendation_shadow_deployment_events`: audited activation/deactivation history;
+- `recommendation_shadow_observations`: learned scores for an exact persistent
+  candidate version together with its unchanged baseline rank and the exact model ids
+  used for scoring.
+
+Only an `OFFLINE_APPROVED` model can be explicitly shadow-activated. Shadow activation
+is separate from model approval and has `ranking_effect = none`: HDBSCAN/centroid still
+determine the user-facing candidate set and order.
+
+`recommended_class_feedback.shadow_observation_id` optionally links a later explicit
+user action to the most recent observed shadow score for that exact candidate version.
+The foreign key uses `ON DELETE SET NULL`; the copied immutable candidate evidence in
+the feedback row remains authoritative even if observational shadow history is cleaned
+up later.
+
+Shadow evaluation uses only feedback attached to an observed exposure. Unshown
+candidates are not synthesized as negatives. Repeated feedback is deduplicated with a
+latest-explicit-label policy per model/candidate-version/target.
 
 ## ANN search
 
