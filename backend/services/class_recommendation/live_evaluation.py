@@ -56,6 +56,7 @@ def evaluate_live_rows(
             "score": float(row["candidate_quality_score"]),
             "baseline_rank": int(row["baseline_rank"]),
             "live_rank": int(row["live_rank"]),
+            "live_run_id": str(row.get("live_run_id") or ""),
         }
 
     by_model = defaultdict(list)
@@ -68,10 +69,16 @@ def evaluate_live_rows(
         scores = [item["score"] for item in examples]
         counts = Counter(labels)
         live_pairwise, pair_count = _pairwise_order_accuracy(
-            examples, value_key="live_rank", positive_higher=False
+            examples,
+            value_key="live_rank",
+            positive_higher=False,
+            group_key="live_run_id",
         )
         baseline_pairwise, _ = _pairwise_order_accuracy(
-            examples, value_key="baseline_rank", positive_higher=False
+            examples,
+            value_key="baseline_rank",
+            positive_higher=False,
+            group_key="live_run_id",
         )
         report = {
             "model_id": model_id,
@@ -95,6 +102,7 @@ def evaluate_live_rows(
                 if counts.get(0, 0)
                 else None
             ),
+            "pairwise_grouping": "same_live_run_only",
             "pairwise_comparison_count": pair_count,
             "live_pairwise_accuracy": live_pairwise,
             "baseline_pairwise_accuracy": baseline_pairwise,
@@ -166,6 +174,7 @@ def build_live_evaluation_report(
                f.evidence_snapshot,
                f.live_observation_id::text AS live_observation_id,
                f.occurred_at,
+               o.live_run_id::text AS live_run_id,
                o.strategy_id,
                o.baseline_rank,
                o.live_rank,
