@@ -36,6 +36,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Run the report inside the Compose backend container so it can reach PostgreSQL.",
     )
+    parser.add_argument(
+        "--include-fixture-feedback",
+        action="store_true",
+        help="Include acceptance/* feedback for controlled smoke testing only.",
+    )
     return parser.parse_args()
 
 
@@ -46,7 +51,7 @@ def _write_output(path: Path | None, rendered: str) -> None:
     path.write_text(rendered.rstrip() + "\n", encoding="utf-8")
 
 
-def _run_docker(output: Path | None) -> int:
+def _run_docker(output: Path | None, include_fixture_feedback: bool) -> int:
     command = [
         "docker",
         "compose",
@@ -57,6 +62,8 @@ def _run_docker(output: Path | None) -> int:
         "-m",
         "services.class_recommendation.learning_cli",
     ]
+    if include_fixture_feedback:
+        command.append("--include-fixture-feedback")
     completed = subprocess.run(
         command,
         cwd=ROOT,
@@ -82,9 +89,11 @@ def _run_docker(output: Path | None) -> int:
 def main() -> int:
     args = parse_args()
     if args.docker:
-        return _run_docker(args.output)
+        return _run_docker(args.output, args.include_fixture_feedback)
 
-    report = build_learning_report()
+    report = build_learning_report(
+        include_fixture_feedback=args.include_fixture_feedback,
+    )
     rendered = json.dumps(report, indent=2, sort_keys=True)
     print(rendered)
     _write_output(args.output, rendered)
