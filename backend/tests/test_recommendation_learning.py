@@ -125,7 +125,8 @@ def test_offline_report_refuses_single_class_feedback():
 
     report = train_offline_report(dataset)
     assert report["status"] == "not_trainable"
-    assert report["promotion"] if "promotion" in report else True
+    assert report["feature_contract_version"] == "membership-evidence-v1"
+    assert report["promotion"] == "none"
     assert report["cross_validation"]["status"] == "not_available"
 
 
@@ -165,6 +166,7 @@ def test_offline_report_fits_coefficients_and_uses_candidate_grouped_evaluation(
     report = train_offline_report(dataset)
 
     assert report["status"] == "trained_offline"
+    assert report["feature_contract_version"] == "membership-evidence-v1"
     assert report["promotion"] == "none"
     assert set(report["standardized_coefficients"]) == {"key_score", "has_key"}
     assert report["standardized_coefficients"]["key_score"] > 0
