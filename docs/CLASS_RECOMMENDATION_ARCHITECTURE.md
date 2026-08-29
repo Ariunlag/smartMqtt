@@ -48,7 +48,9 @@ stored evidence snapshot
        ↓
 registered recommendation strategy
        ↓
-Recommended Class candidates
+Recommended Class candidate snapshot
+       ↓
+explicit user feedback labels
 ```
 
 There is one pair-evidence pipeline. Recommendation algorithms do not create their own
@@ -98,6 +100,66 @@ evidence store:
 
 It creates no extra embeddings and owns no separate persistence/UI workflow.
 
+## Persistent candidate snapshots
+
+A recommendation returned to a user is now persisted before feedback is accepted.
+Candidate persistence has two levels:
+
+- `candidate_id` is deterministic for the exact `(strategy, member set)` and does not
+  depend on representation versions;
+- `candidate_version` is monotonic for that candidate id and changes whenever its
+  evidence snapshot changes.
+
+The immutable version snapshot records:
+
+- strategy id;
+- anchor and member topics;
+- member representation versions;
+- discovery evidence ids;
+- topic-to-anchor evidence, coverage, and matched pairs;
+- the representation contract version.
+
+This means an evidence refresh can produce candidate version 2 while feedback against
+version 1 still points to the exact evidence the user saw. A changed member set is a
+new candidate identity; lineage across changing memberships is a separate future
+problem rather than an implicit heuristic.
+
+## User feedback and learning
+
+The current UI collects explicit labels rather than silently changing embeddings or
+centroids:
+
+- `KEEP_TOPIC` — the member belongs in this candidate;
+- `REMOVE_TOPIC` — the member does not belong in this candidate;
+- `ACCEPT_CANDIDATE` — the candidate group is useful;
+- `DISMISS_CANDIDATE` — the candidate group is not useful.
+
+Each feedback event references `(candidate_id, candidate_version)` and stores a copy of
+the immutable candidate evidence snapshot. User-supplied scores are never accepted by
+the feedback API. Topic-level feedback must reference a member of that exact candidate
+version.
+
+Feedback is factual training/evaluation data. It does **not** immediately retrain the
+embedding model, mutate a centroid, change candidate membership, or write into Saved
+Classes. This keeps representation evidence stable and makes later experiments
+reproducible.
+
+The next learning layer can derive supervised features from these events, for example:
+
+- `key`, `value`, `key_value`, `schema`, and `stream_context` scores;
+- pair/source coverage;
+- matched-pair counts;
+- strategy id;
+- positive/negative topic membership labels;
+- positive/negative candidate usefulness labels.
+
+Weighted or learned ranking is promoted only after offline evaluation against the
+HDBSCAN and centroid baselines.
+
+Human feedback on Recommended Classes must not silently mutate Saved Classes. A future
+explicit Save as Class action may create a manual class, but that is a separate side
+effect and feedback label.
+
 ## Future experiments
 
 The same evidence contract supports future strategies such as:
@@ -113,19 +175,6 @@ so experiments can be compared over the same evidence.
 
 A future Recommended Class prototype may maintain separate centroids for each semantic
 pair role and evidence type rather than flattening all pairs into one global centroid.
-
-## User feedback and learning
-
-Future candidate actions should be persisted as versioned factual feedback. Useful
-signals include keep, add, remove, reject, dismiss, and explicit Save as Class.
-
-For learning/evaluation, preserve the evidence snapshot that produced each action:
-individual evidence scores, coverage, strategy id, candidate version, and action. This
-allows later experiments with calibrated weights or ranking models without changing
-raw embeddings.
-
-Human feedback on Recommended Classes must not silently mutate Saved Classes. Only an
-explicit Save as Class or manual Saved-Class action may do that.
 
 ## Duplicate boundary
 
@@ -144,21 +193,35 @@ InfluxDB stores telemetry time series. Active system-recommendation evidence liv
 pair-vector and topic-vector tables and is versioned by the representation contract.
 Algorithm selection does not change those stored representations.
 
+System candidate/feedback relational tables are:
+
+- `recommended_class_candidates`;
+- `recommended_class_candidate_versions`;
+- `recommended_class_feedback`.
+
+Candidate-version rows and feedback events are durable factual records; raw vectors
+remain in the shared pgvector evidence tables.
+
 ## API and UI
 
 `GET /api/recommended-classes` accepts an optional `strategy` query parameter and
 returns:
 
-- candidates,
-- available topics,
-- active strategy metadata,
-- registered strategy catalog,
+- candidates with `candidate_id` and `candidate_version`;
+- available topics;
+- active strategy metadata;
+- registered strategy catalog;
 - evidence catalog.
 
+`POST /api/recommended-classes/{candidate_id}/feedback` records an explicit label for
+an exact candidate version.
+
 The dashboard keeps one Recommended Classes surface. With multiple strategies the same
-surface presents a method selector. A separate research/evaluation screen may later
-compare strategies side-by-side, but end users should not receive duplicate top-level
-recommendation features for each algorithm.
+surface presents a method selector. Candidate cards expose membership labels
+(`Belongs`, `Doesn't belong`) and candidate usefulness labels (`Useful group`,
+`Not useful`). A separate research/evaluation screen may later compare strategies
+side-by-side, but end users should not receive duplicate top-level recommendation
+features for each algorithm.
 
 Saved Class CRUD remains under `/api/classes`. Older Saved-Class recommendation
 endpoints remain compatibility-only and are not the dashboard Recommended Classes

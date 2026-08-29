@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 
-import { getRecommendedClassCandidates } from "../../services/classRecommendationApi";
+import {
+  getRecommendedClassCandidates,
+  submitRecommendedClassFeedback,
+} from "../../services/classRecommendationApi";
 import type {
   EvidenceDefinition,
   EvidenceScores,
   MatchedPairEvidence,
   RecommendationStrategyDefinition,
   RecommendedClassCandidate,
+  RecommendedClassFeedbackAction,
   RecommendedClassTopicEvidence,
 } from "../../types/api_models";
 
@@ -122,6 +126,9 @@ function RecommendedClassCard({
   evidenceCatalog: EvidenceDefinition[];
 }) {
   const [expanded, setExpanded] = useState(false);
+  const [feedbackKey, setFeedbackKey] = useState<string | null>(null);
+  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
+  const [feedbackError, setFeedbackError] = useState<string | null>(null);
   const definitions = useMemo(
     () => new Map(evidenceCatalog.map((item) => [item.evidence_id, item])),
     [evidenceCatalog],
@@ -131,6 +138,32 @@ function RecommendedClassCard({
     [candidate.evidence, evidenceCatalog],
   );
 
+  const sendFeedback = async (
+    action: RecommendedClassFeedbackAction,
+    topic?: string,
+  ) => {
+    const key = `${action}:${topic ?? "candidate"}`;
+    setFeedbackKey(key);
+    setFeedbackMessage(null);
+    setFeedbackError(null);
+    try {
+      await submitRecommendedClassFeedback(candidate.candidate_id, {
+        action,
+        candidate_version: candidate.candidate_version,
+        ...(topic ? { topic } : {}),
+      });
+      setFeedbackMessage(
+        topic
+          ? `Recorded feedback for ${topic}.`
+          : "Recorded feedback for this recommended group.",
+      );
+    } catch (requestError) {
+      setFeedbackError(errorMessage(requestError));
+    } finally {
+      setFeedbackKey(null);
+    }
+  };
+
   return (
     <article className="recommendation-card">
       <div className="recommendation-card__heading">
@@ -139,6 +172,7 @@ function RecommendedClassCard({
           <p>
             {candidate.member_topics.length} suggested members · anchor {candidate.anchor_topic}
           </p>
+          <small>Candidate version {candidate.candidate_version}</small>
         </div>
         {summary.pendingDuplicateCount > 0 && (
           <span className="recommendation-card__pending">Duplicate review pending</span>
@@ -158,7 +192,45 @@ function RecommendedClassCard({
 
       <section className="recommendations__members" aria-label="Suggested members">
         <strong>Suggested members</strong>
-        {candidate.member_topics.map((topic) => <span key={topic}>{topic}</span>)}
+        {candidate.member_topics.map((topic) => (
+          <div key={topic}>
+            <span>{topic}</span>{" "}
+            <button
+              type="button"
+              disabled={feedbackKey !== null}
+              onClick={() => void sendFeedback("KEEP_TOPIC", topic)}
+            >
+              Belongs
+            </button>{" "}
+            <button
+              type="button"
+              disabled={feedbackKey !== null}
+              onClick={() => void sendFeedback("REMOVE_TOPIC", topic)}
+            >
+              Doesn't belong
+            </button>
+          </div>
+        ))}
+      </section>
+
+      <section aria-label="Recommendation feedback">
+        <strong>Is this group useful?</strong>{" "}
+        <button
+          type="button"
+          disabled={feedbackKey !== null}
+          onClick={() => void sendFeedback("ACCEPT_CANDIDATE")}
+        >
+          Useful group
+        </button>{" "}
+        <button
+          type="button"
+          disabled={feedbackKey !== null}
+          onClick={() => void sendFeedback("DISMISS_CANDIDATE")}
+        >
+          Not useful
+        </button>
+        {feedbackMessage && <p role="status">{feedbackMessage}</p>}
+        {feedbackError && <p className="recommendations__error" role="alert">{feedbackError}</p>}
       </section>
 
       <dl className="recommendation-card__channels">

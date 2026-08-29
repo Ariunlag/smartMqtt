@@ -2,11 +2,15 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 
 import RecommendationsManager from "./RecommendationsManager";
-import { getRecommendedClassCandidates } from "../../services/classRecommendationApi";
+import {
+  getRecommendedClassCandidates,
+  submitRecommendedClassFeedback,
+} from "../../services/classRecommendationApi";
 import type { RecommendedClassCandidateSet } from "../../types/api_models";
 
 vi.mock("../../services/classRecommendationApi", () => ({
   getRecommendedClassCandidates: vi.fn(),
+  submitRecommendedClassFeedback: vi.fn(),
 }));
 
 const hdbscanStrategy = {
@@ -41,6 +45,7 @@ const candidateSet: RecommendedClassCandidateSet = {
   candidates: [
     {
       candidate_id: "candidate-1",
+      candidate_version: 3,
       rank: 1,
       anchor_topic: "building/a",
       member_topics: ["building/a", "building/b"],
@@ -104,6 +109,13 @@ const candidateSet: RecommendedClassCandidateSet = {
 beforeEach(() => {
   vi.clearAllMocks();
   vi.mocked(getRecommendedClassCandidates).mockResolvedValue(candidateSet);
+  vi.mocked(submitRecommendedClassFeedback).mockResolvedValue({
+    feedback_id: "feedback-1",
+    candidate_id: "candidate-1",
+    candidate_version: 3,
+    action_type: "KEEP_TOPIC",
+    topic: "building/a",
+  });
 });
 
 it("keeps one recommendation surface and exposes registered methods", async () => {
@@ -118,6 +130,7 @@ it("keeps one recommendation surface and exposes registered methods", async () =
   expect(screen.getByRole("option", { name: "Tag value centroid" })).toBeInTheDocument();
   expect(screen.getByText("Similar keys")).toBeInTheDocument();
   expect(screen.getByText("Similar structure")).toBeInTheDocument();
+  expect(screen.getByText("Candidate version 3")).toBeInTheDocument();
   expect(screen.queryByText(/Overall similarity/i)).not.toBeInTheDocument();
   expect(screen.queryByText(/numeric key/i)).not.toBeInTheDocument();
 });
@@ -133,6 +146,43 @@ it("requests the selected strategy without changing the evidence UI", async () =
 
   await waitFor(() =>
     expect(getRecommendedClassCandidates).toHaveBeenCalledWith("tag_value_centroid"),
+  );
+});
+
+it("records topic membership feedback against the exact candidate version", async () => {
+  render(<RecommendationsManager />);
+  await screen.findByRole("heading", { name: "Recommended class #1" });
+
+  fireEvent.click(screen.getAllByRole("button", { name: "Belongs" })[0]);
+
+  await waitFor(() =>
+    expect(submitRecommendedClassFeedback).toHaveBeenCalledWith("candidate-1", {
+      action: "KEEP_TOPIC",
+      candidate_version: 3,
+      topic: "building/a",
+    }),
+  );
+  expect(await screen.findByText("Recorded feedback for building/a.")).toBeInTheDocument();
+});
+
+it("records candidate usefulness without mutating Saved Classes", async () => {
+  vi.mocked(submitRecommendedClassFeedback).mockResolvedValueOnce({
+    feedback_id: "feedback-2",
+    candidate_id: "candidate-1",
+    candidate_version: 3,
+    action_type: "ACCEPT_CANDIDATE",
+    topic: null,
+  });
+  render(<RecommendationsManager />);
+  await screen.findByRole("heading", { name: "Recommended class #1" });
+
+  fireEvent.click(screen.getByRole("button", { name: "Useful group" }));
+
+  await waitFor(() =>
+    expect(submitRecommendedClassFeedback).toHaveBeenCalledWith("candidate-1", {
+      action: "ACCEPT_CANDIDATE",
+      candidate_version: 3,
+    }),
   );
 });
 

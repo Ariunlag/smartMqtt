@@ -7,9 +7,12 @@ recommended-class workflow used by the dashboard.
 
 import asyncio
 from dataclasses import asdict
+from uuid import UUID
 
 from config import config
 from fastapi import APIRouter, HTTPException, Request
+from models.api_models import RecommendedClassFeedbackRequest
+from services.class_recommendation.candidate_feedback import recommended_candidate_store
 from services.class_recommendation.discovery import (
     RecommendedClassDiscovery,
     RecommendedClassDiscoveryConfig,
@@ -52,6 +55,7 @@ async def recommended_class_candidates(
             min_topic_count=config.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS,
         ),
         strategy_id=strategy,
+        candidate_store=recommended_candidate_store,
     )
     try:
         result = await asyncio.to_thread(discovery.discover)
@@ -60,6 +64,26 @@ async def recommended_class_candidates(
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         raise
     return asdict(result)
+
+
+@router.post("/recommended-classes/{candidate_id}/feedback")
+async def recommended_class_feedback(
+    candidate_id: UUID,
+    payload: RecommendedClassFeedbackRequest,
+):
+    """Record an immutable label against an exact persistent candidate version."""
+    try:
+        return await asyncio.to_thread(
+            recommended_candidate_store.record_feedback,
+            candidate_id=str(candidate_id),
+            candidate_version=payload.candidate_version,
+            action_type=payload.action,
+            topic=payload.topic,
+        )
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 @router.get("/class-recommendations/status")

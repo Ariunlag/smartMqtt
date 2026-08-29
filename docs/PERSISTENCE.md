@@ -30,8 +30,28 @@ HNSW indexes where nearest-neighbor search is required. JSONB payload indexes su
 metadata filtering/deletion.
 
 Relational source-of-truth tables include streams, Saved Classes and memberships,
-duplicate identity/decisions, topic representation versions, and audit/feedback
-records.
+duplicate identity/decisions, topic representation versions, and recommendation
+candidate/feedback records.
+
+### Recommended candidate persistence
+
+System recommendations use three relational tables:
+
+- `recommended_class_candidates`: persistent identity for an exact strategy/member-set
+  candidate and its current version;
+- `recommended_class_candidate_versions`: immutable evidence snapshots for each
+  monotonic candidate version;
+- `recommended_class_feedback`: immutable user labels referencing an exact candidate
+  version.
+
+Candidate ids do not contain representation versions. If the same strategy returns the
+same member set after evidence rematerialization, the candidate id remains stable and a
+new candidate version is created when the evidence snapshot changes. A changed member
+set is a new candidate identity.
+
+Feedback rows copy the candidate evidence snapshot used for the action. The feedback
+API never accepts user-supplied similarity scores. This keeps later training/evaluation
+data tied to the evidence the user actually saw.
 
 ## ANN search
 
@@ -52,7 +72,8 @@ strategy, changing weights, or training a ranking model does not require rewriti
 pair embeddings.
 
 The representation contract changes only when the actual stored evidence shape or
-renderer changes.
+renderer changes. Candidate versions are a separate decision/exposure history and do
+not change the raw embedding contract.
 
 ## Embedding dimension
 
