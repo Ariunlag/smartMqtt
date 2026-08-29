@@ -162,28 +162,60 @@ class RecommendedCandidateStore:
             (candidate_id, candidate_version),
         )
 
-    def latest_shadow_observation(
+    def shadow_observation_for_run(
         self,
+        *,
         candidate_id: str,
         candidate_version: int,
+        shadow_run_id: str | None,
     ) -> dict | None:
-        """Return the latest recorded shadow exposure without making feedback depend on it."""
+        if shadow_run_id is None:
+            return None
         try:
             return self.database.fetch_one(
                 """
-                SELECT observation_id::text AS observation_id, shadow_run_id::text AS shadow_run_id,
+                SELECT observation_id::text AS observation_id,
+                       shadow_run_id::text AS shadow_run_id,
                        membership_model_id::text AS membership_model_id,
                        candidate_quality_model_id::text AS candidate_quality_model_id,
                        created_at
                 FROM recommendation_shadow_observations
-                WHERE candidate_id = %s AND candidate_version = %s
-                ORDER BY created_at DESC, observation_id DESC
+                WHERE shadow_run_id = %s
+                  AND candidate_id = %s
+                  AND candidate_version = %s
                 LIMIT 1
                 """,
-                (candidate_id, candidate_version),
+                (shadow_run_id, candidate_id, candidate_version),
             )
         except Exception:
-            logger.exception("Could not resolve recommendation shadow provenance")
+            logger.exception("Could not resolve exact recommendation shadow provenance")
+            return None
+
+    def live_observation_for_run(
+        self,
+        *,
+        candidate_id: str,
+        candidate_version: int,
+        live_run_id: str | None,
+    ) -> dict | None:
+        if live_run_id is None:
+            return None
+        try:
+            return self.database.fetch_one(
+                """
+                SELECT observation_id::text AS observation_id,
+                       live_run_id::text AS live_run_id,
+                       model_id::text AS model_id, baseline_rank, live_rank, created_at
+                FROM recommendation_live_observations
+                WHERE live_run_id = %s
+                  AND candidate_id = %s
+                  AND candidate_version = %s
+                LIMIT 1
+                """,
+                (live_run_id, candidate_id, candidate_version),
+            )
+        except Exception:
+            logger.exception("Could not resolve exact recommendation live provenance")
             return None
 
     def record_feedback(
@@ -193,6 +225,8 @@ class RecommendedCandidateStore:
         candidate_version: int,
         action_type: str,
         topic: str | None = None,
+        shadow_run_id: str | None = None,
+        live_run_id: str | None = None,
     ) -> dict:
         if action_type not in FEEDBACK_ACTIONS:
             raise ValueError(f"Unknown recommendation feedback action: {action_type}")
@@ -209,8 +243,19 @@ class RecommendedCandidateStore:
         if action_type in TOPIC_FEEDBACK_ACTIONS and topic not in members:
             raise ValueError("Topic feedback must reference a member of this candidate version")
 
-        shadow = self.latest_shadow_observation(candidate_id, candidate_version)
+        shadow = self.shadow_observation_for_run(
+            candidate_id=candidate_id,
+            candidate_version=candidate_version,
+            shadow_run_id=shadow_run_id,
+        )
         shadow_observation_id = str(shadow["observation_id"]) if shadow else None
+        live = self.live_observation_for_run(
+            candidate_id=candidate_id,
+            candidate_version=candidate_version,
+            live_run_id=live_run_id,
+        )
+        live_observation_id = str(live["observation_id"]) if live else None
+
         evidence_snapshot = {
             "candidate_id": str(snapshot["candidate_id"]),
             "candidate_version": int(snapshot["candidate_version"]),
@@ -219,15 +264,19 @@ class RecommendedCandidateStore:
             "discovery_evidence": list(snapshot["discovery_evidence"]),
             "snapshot_fingerprint": snapshot["snapshot_fingerprint"],
             "candidate_evidence": snapshot["evidence_snapshot"],
+            "shadow_run_id": shadow_run_id,
             "shadow_observation_id": shadow_observation_id,
+            "live_run_id": live_run_id,
+            "live_observation_id": live_observation_id,
         }
         feedback_id = str(uuid.uuid4())
         self.database.execute(
             """
             INSERT INTO recommended_class_feedback(
                 feedback_id, candidate_id, candidate_version,
-                action_type, topic, evidence_snapshot, shadow_observation_id
-            ) VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
+                action_type, topic, evidence_snapshot,
+                shadow_observation_id, live_observation_id
+            ) VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s)
             """,
             (
                 feedback_id,
@@ -237,6 +286,7 @@ class RecommendedCandidateStore:
                 topic,
                 _canonical_json(evidence_snapshot),
                 shadow_observation_id,
+                live_observation_id,
             ),
         )
         return {
@@ -245,7 +295,10 @@ class RecommendedCandidateStore:
             "candidate_version": candidate_version,
             "action_type": action_type,
             "topic": topic,
+            "shadow_run_id": shadow_run_id,
             "shadow_observation_id": shadow_observation_id,
+            "live_run_id": live_run_id,
+            "live_observation_id": live_observation_id,
         }
 
 

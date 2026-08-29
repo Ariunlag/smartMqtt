@@ -11,6 +11,7 @@ def _row(
     quality_score=None,
     baseline_rank=1,
     linked=True,
+    shadow_run_id="shadow-run-1",
 ):
     membership_scores = {}
     if topic is not None and membership_score is not None:
@@ -23,6 +24,7 @@ def _row(
         "topic": topic,
         "evidence_snapshot": {},
         "shadow_observation_id": f"obs-{feedback_id}" if linked else None,
+        "shadow_run_id": shadow_run_id if linked else None,
         "strategy_id": "independent_hdbscan" if linked else None,
         "baseline_rank": baseline_rank if linked else None,
         "membership_model_id": "membership-model" if linked else None,
@@ -86,21 +88,21 @@ def test_shadow_evaluation_uses_latest_explicit_membership_label_per_target():
     assert report["skipped_by_reason"]["no_shadow_observation"] == 1
 
 
-def test_candidate_quality_report_keeps_baseline_rank_as_comparison_diagnostic():
+def test_candidate_quality_report_compares_baseline_and_learned_within_run():
     rows = [
         _row(
             "1",
             "ACCEPT_CANDIDATE",
             candidate_id="candidate-a",
             quality_score=0.9,
-            baseline_rank=1,
+            baseline_rank=4,
         ),
         _row(
             "2",
             "DISMISS_CANDIDATE",
             candidate_id="candidate-b",
             quality_score=0.1,
-            baseline_rank=4,
+            baseline_rank=1,
         ),
     ]
 
@@ -110,9 +112,39 @@ def test_candidate_quality_report_keeps_baseline_rank_as_comparison_diagnostic()
     assert model["status"] == "evaluated"
     assert model["sample_count"] == 2
     assert model["accuracy"] == 1.0
-    assert model["positive_mean_baseline_rank"] == 1.0
-    assert model["negative_mean_baseline_rank"] == 4.0
+    assert model["pairwise_grouping"] == "same_shadow_run_only"
+    assert model["pairwise_comparison_count"] == 1
+    assert model["learned_pairwise_accuracy"] == 1.0
+    assert model["baseline_pairwise_accuracy"] == 0.0
+    assert model["pairwise_accuracy_delta"] == 1.0
     assert report["ranking_effect"] == "none"
+
+
+def test_shadow_evaluation_does_not_compare_ranks_across_runs():
+    rows = [
+        _row(
+            "1",
+            "ACCEPT_CANDIDATE",
+            candidate_id="candidate-a",
+            quality_score=0.9,
+            baseline_rank=2,
+            shadow_run_id="run-a",
+        ),
+        _row(
+            "2",
+            "DISMISS_CANDIDATE",
+            candidate_id="candidate-b",
+            quality_score=0.1,
+            baseline_rank=1,
+            shadow_run_id="run-b",
+        ),
+    ]
+
+    report = evaluate_shadow_rows(rows)
+    model = report["candidate_quality"]["models"][0]
+
+    assert model["pairwise_comparison_count"] == 0
+    assert model["pairwise_accuracy_delta"] is None
 
 
 def test_shadow_evaluation_does_not_invent_anchor_membership_scores():

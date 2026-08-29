@@ -45,6 +45,36 @@ def _is_fixture_feedback(row: dict, excluded_prefixes: tuple[str, ...]) -> bool:
     )
 
 
+def _pairwise_order_accuracy(
+    examples: list[dict],
+    *,
+    value_key: str,
+    positive_higher: bool,
+    group_key: str | None = None,
+) -> tuple[float | None, int]:
+    positives = [item for item in examples if int(item["label"]) == 1]
+    negatives = [item for item in examples if int(item["label"]) == 0]
+    comparisons = 0
+    correct = 0.0
+    for positive in positives:
+        for negative in negatives:
+            if group_key is not None:
+                positive_group = positive.get(group_key)
+                negative_group = negative.get(group_key)
+                if not positive_group or positive_group != negative_group:
+                    continue
+            left = float(positive[value_key])
+            right = float(negative[value_key])
+            comparisons += 1
+            if left == right:
+                correct += 0.5
+            elif (left > right) == positive_higher:
+                correct += 1.0
+    if comparisons == 0:
+        return None, 0
+    return float(correct / comparisons), comparisons
+
+
 def _metric_report(examples: list[dict], *, include_baseline_rank: bool) -> dict:
     labels = [int(item["label"]) for item in examples]
     scores = [float(item["score"]) for item in examples]
@@ -77,6 +107,31 @@ def _metric_report(examples: list[dict], *, include_baseline_rank: bool) -> dict
             float(mean(item["baseline_rank"] for item in examples if item["label"] == 0))
             if counts.get(0, 0)
             else None
+        )
+        learned_pairwise, pair_count = _pairwise_order_accuracy(
+            examples,
+            value_key="score",
+            positive_higher=True,
+            group_key="shadow_run_id",
+        )
+        baseline_pairwise, _ = _pairwise_order_accuracy(
+            examples,
+            value_key="baseline_rank",
+            positive_higher=False,
+            group_key="shadow_run_id",
+        )
+        base.update(
+            {
+                "pairwise_grouping": "same_shadow_run_only",
+                "pairwise_comparison_count": pair_count,
+                "learned_pairwise_accuracy": learned_pairwise,
+                "baseline_pairwise_accuracy": baseline_pairwise,
+                "pairwise_accuracy_delta": (
+                    float(learned_pairwise - baseline_pairwise)
+                    if learned_pairwise is not None and baseline_pairwise is not None
+                    else None
+                ),
+            }
         )
 
     if len(counts) < 2:
@@ -168,6 +223,7 @@ def evaluate_shadow_rows(
                 "label": MEMBERSHIP_ACTIONS[action],
                 "score": score,
                 "baseline_rank": int(row.get("baseline_rank") or 0),
+                "shadow_run_id": str(row.get("shadow_run_id") or ""),
             }
         elif action in QUALITY_ACTIONS:
             model_id = row.get("candidate_quality_model_id")
@@ -190,6 +246,7 @@ def evaluate_shadow_rows(
                 "label": QUALITY_ACTIONS[action],
                 "score": float(score),
                 "baseline_rank": int(row.get("baseline_rank") or 0),
+                "shadow_run_id": str(row.get("shadow_run_id") or ""),
             }
         else:
             skipped["unknown_action"] += 1
@@ -256,6 +313,7 @@ def build_shadow_evaluation_report(
                f.evidence_snapshot,
                f.shadow_observation_id::text AS shadow_observation_id,
                f.occurred_at,
+               o.shadow_run_id::text AS shadow_run_id,
                o.strategy_id,
                o.baseline_rank,
                o.membership_model_id::text AS membership_model_id,

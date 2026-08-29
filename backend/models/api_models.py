@@ -1,6 +1,7 @@
 from datetime import datetime
 from enum import Enum
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, field_validator, model_validator
 
@@ -131,6 +132,8 @@ class RecommendedClassFeedbackRequest(BaseModel):
     action: RecommendedClassFeedbackAction
     candidate_version: int
     topic: str | None = None
+    shadow_run_id: UUID | None = None
+    live_run_id: UUID | None = None
 
     @model_validator(mode="after")
     def validate_action_scope(self):

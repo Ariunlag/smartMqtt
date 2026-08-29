@@ -18,6 +18,7 @@ from services.class_recommendation.discovery import (
     RecommendedClassDiscovery,
     RecommendedClassDiscoveryConfig,
 )
+from services.class_recommendation.live_ranking import recommendation_live_ranker
 from services.class_recommendation.shadow import recommendation_shadow_scorer
 from services.class_recommendation.strategies import (
     DEFAULT_STRATEGY_ID,
@@ -63,7 +64,7 @@ async def recommended_class_candidates(
     request: Request,
     strategy: str = DEFAULT_STRATEGY_ID,
 ):
-    """Return baseline candidates plus observational shadow-model diagnostics."""
+    """Return generated candidates with shadow diagnostics and optional live reordering."""
     application = request.app.state.class_recommendation
     metadata_store = _FilteredRecommendationMetadata(
         application.metadata_store,
@@ -88,21 +89,20 @@ async def recommended_class_candidates(
         candidate_store=recommended_candidate_store,
     )
     try:
-        result = await asyncio.to_thread(discovery.discover)
+        baseline = await asyncio.to_thread(discovery.discover)
     except ValueError as exc:
         if "Unknown recommendation strategy" in str(exc):
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         raise
 
-    payload = asdict(result)
     try:
-        payload["shadow_evaluation"] = await asyncio.to_thread(
+        shadow_evaluation = await asyncio.to_thread(
             recommendation_shadow_scorer.evaluate,
-            result,
+            baseline,
         )
-    except Exception:  # shadow evaluation must never change baseline availability/rank
+    except Exception:  # shadow evaluation must never affect recommendation availability
         logger.exception("Recommendation shadow evaluation failed")
-        payload["shadow_evaluation"] = {
+        shadow_evaluation = {
             "mode": "shadow",
             "status": "error",
             "reason": "shadow_evaluation_failed",
@@ -111,6 +111,27 @@ async def recommended_class_candidates(
             "models": {},
             "candidates": [],
         }
+
+    try:
+        result, live_ranking = await asyncio.to_thread(
+            recommendation_live_ranker.apply,
+            baseline,
+        )
+    except Exception:  # live ranking must fail closed to the baseline order
+        logger.exception("Recommendation live ranking failed")
+        result = baseline
+        live_ranking = {
+            "mode": "live",
+            "status": "fallback",
+            "reason": "live_ranking_failed",
+            "ranking_effect": "baseline_fallback",
+            "membership_effect": "none",
+            "model": None,
+        }
+
+    payload = asdict(result)
+    payload["shadow_evaluation"] = shadow_evaluation
+    payload["live_ranking"] = live_ranking
     return payload
 
 
@@ -127,6 +148,12 @@ async def recommended_class_feedback(
             candidate_version=payload.candidate_version,
             action_type=payload.action,
             topic=payload.topic,
+            shadow_run_id=(
+                str(payload.shadow_run_id) if payload.shadow_run_id is not None else None
+            ),
+            live_run_id=(
+                str(payload.live_run_id) if payload.live_run_id is not None else None
+            ),
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
