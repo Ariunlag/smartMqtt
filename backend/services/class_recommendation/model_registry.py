@@ -72,7 +72,7 @@ def _sha256(value: Any) -> str:
 
 
 def dataset_fingerprint(dataset: TrainingDataset) -> str:
-    """Fingerprint semantic training content without overcounting repeated clicks."""
+    """Fingerprint effective training content without overcounting repeated clicks."""
     rows = [
         {
             "candidate_id": example.candidate_id,
@@ -220,10 +220,7 @@ def evaluate_offline_gate(
             "required": policy.min_roc_auc,
         },
     ]
-    gate_policy = {
-        "version": GATE_POLICY_VERSION,
-        **asdict(policy),
-    }
+    gate_policy = {"version": GATE_POLICY_VERSION, **asdict(policy)}
     return {
         "passed": all(check["passed"] for check in checks),
         "policy": gate_policy,
@@ -264,11 +261,17 @@ class RecommendationModelRegistry:
             }
 
         fingerprint = dataset_fingerprint(dataset)
-        artifact = build_model_artifact(dataset)
         gate_report = evaluate_offline_gate(training_report, gate_config)
         feature_contract = FEATURE_CONTRACT_VERSION[dataset.objective]
 
         with self.database.transaction() as conn:
+            # Serialize registration per objective before checking for an existing
+            # semantic dataset. This prevents concurrent commands from allocating
+            # two versions and racing the unique dataset constraint.
+            conn.execute(
+                "SELECT pg_advisory_xact_lock(hashtext(%s))",
+                (f"recommendation-model:{dataset.objective}",),
+            )
             existing = conn.execute(
                 """
                 SELECT model_id::text AS model_id, model_version, status
@@ -282,10 +285,6 @@ class RecommendationModelRegistry:
             ).fetchone()
 
             if existing is None:
-                conn.execute(
-                    "SELECT pg_advisory_xact_lock(hashtext(%s))",
-                    (f"recommendation-model:{dataset.objective}",),
-                )
                 version_row = conn.execute(
                     """
                     SELECT COALESCE(MAX(model_version), 0) + 1 AS next_version
@@ -296,6 +295,7 @@ class RecommendationModelRegistry:
                 ).fetchone()
                 model_version = int(version_row["next_version"])
                 model_id = str(uuid.uuid4())
+                artifact = build_model_artifact(dataset)
                 conn.execute(
                     """
                     INSERT INTO recommendation_model_versions(
@@ -370,7 +370,7 @@ class RecommendationModelRegistry:
         policy_fingerprint = str(gate_report["policy_fingerprint"])
         existing = conn.execute(
             """
-            SELECT evaluation_id::text AS evaluation_id, evaluated_at
+            SELECT evaluation_id::text AS evaluation_id
             FROM recommendation_model_evaluations
             WHERE model_id = %s AND gate_policy_fingerprint = %s
             """,
@@ -466,7 +466,7 @@ class RecommendationModelRegistry:
 
             previous = conn.execute(
                 """
-                SELECT model_id::text AS model_id, model_version
+                SELECT model_id::text AS model_id
                 FROM recommendation_model_versions
                 WHERE objective = %s AND status = 'OFFLINE_APPROVED'
                 FOR UPDATE
@@ -503,10 +503,7 @@ class RecommendationModelRegistry:
                 model_id=model_id,
                 event_type="OFFLINE_APPROVED",
                 reason=reason.strip(),
-                details={
-                    "evaluation_id": evaluation_id,
-                    "runtime_effect": "none",
-                },
+                details={"evaluation_id": evaluation_id, "runtime_effect": "none"},
             )
             return {
                 "model_id": model_id,
@@ -522,7 +519,7 @@ class RecommendationModelRegistry:
         with self.database.transaction() as conn:
             model = conn.execute(
                 """
-                SELECT model_id::text AS model_id, objective, model_version, status
+                SELECT model_id::text AS model_id, status
                 FROM recommendation_model_versions
                 WHERE model_id = %s
                 FOR UPDATE
@@ -532,11 +529,7 @@ class RecommendationModelRegistry:
             if model is None:
                 raise LookupError("Recommendation model was not found")
             if model["status"] == "RETIRED":
-                return {
-                    "model_id": model_id,
-                    "status": "RETIRED",
-                    "changed": False,
-                }
+                return {"model_id": model_id, "status": "RETIRED", "changed": False}
             conn.execute(
                 """
                 UPDATE recommendation_model_versions
