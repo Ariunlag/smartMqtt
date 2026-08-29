@@ -42,6 +42,22 @@ const candidateSet: RecommendedClassCandidateSet = {
       scope: "stream",
     },
   ],
+  shadow_evaluation: {
+    mode: "shadow",
+    status: "scored",
+    shadow_run_id: "11111111-1111-1111-1111-111111111111",
+    ranking_effect: "none",
+    baseline_order_preserved: true,
+    persistence: { status: "stored", count: 1 },
+  },
+  live_ranking: {
+    mode: "live",
+    status: "applied",
+    live_run_id: "22222222-2222-2222-2222-222222222222",
+    ranking_effect: "same_order",
+    membership_effect: "none",
+    persistence: { status: "stored", count: 1 },
+  },
   candidates: [
     {
       candidate_id: "candidate-1",
@@ -149,7 +165,7 @@ it("requests the selected strategy without changing the evidence UI", async () =
   );
 });
 
-it("records topic membership feedback against the exact candidate version", async () => {
+it("records topic membership feedback against the exact candidate and exposure", async () => {
   render(<RecommendationsManager />);
   await screen.findByRole("heading", { name: "Recommended class #1" });
 
@@ -160,6 +176,8 @@ it("records topic membership feedback against the exact candidate version", asyn
       action: "KEEP_TOPIC",
       candidate_version: 3,
       topic: "building/a",
+      shadow_run_id: "11111111-1111-1111-1111-111111111111",
+      live_run_id: "22222222-2222-2222-2222-222222222222",
     }),
   );
   expect(await screen.findByText("Recorded feedback for building/a.")).toBeInTheDocument();
@@ -182,6 +200,8 @@ it("records candidate usefulness without mutating Saved Classes", async () => {
     expect(submitRecommendedClassFeedback).toHaveBeenCalledWith("candidate-1", {
       action: "ACCEPT_CANDIDATE",
       candidate_version: 3,
+      shadow_run_id: "11111111-1111-1111-1111-111111111111",
+      live_run_id: "22222222-2222-2222-2222-222222222222",
     }),
   );
 });
