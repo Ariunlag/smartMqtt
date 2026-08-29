@@ -64,6 +64,13 @@ class Config:
             os.getenv("CLASS_RECOMMENDATION_QUEUE_MAXSIZE", "1000")
         )
 
+        # Normal user-facing discovery excludes synthetic acceptance namespaces.
+        # Acceptance Compose explicitly clears this value so the real-stack harness
+        # can continue discovering its own fixture topics.
+        self.SYSTEM_RECOMMENDATION_EXCLUDED_TOPIC_PREFIXES = self._csv(
+            "SYSTEM_RECOMMENDATION_EXCLUDED_TOPIC_PREFIXES", "acceptance/"
+        )
+
         # HDBSCAN recommendation baseline. These are clustering controls, not
         # semantic-similarity thresholds or cross-evidence weights.
         self.SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE = int(
@@ -111,6 +118,11 @@ class Config:
         if normalized in {"0", "false", "no", "off"}:
             return False
         raise ValueError(f"{name} must be a boolean, got {value!r}")
+
+    @staticmethod
+    def _csv(name: str, default: str = "") -> tuple[str, ...]:
+        value = os.getenv(name, default)
+        return tuple(item.strip() for item in value.split(",") if item.strip())
 
 
 config = Config()
