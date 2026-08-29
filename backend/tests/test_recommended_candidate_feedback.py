@@ -72,6 +72,7 @@ class FakeDatabase:
         self.candidates = {}
         self.versions = {}
         self.feedback = []
+        self.shadow = {}
         self.connection = FakeConnection(self)
 
     @contextmanager
@@ -80,6 +81,10 @@ class FakeDatabase:
 
     def fetch_one(self, sql, params=()):
         normalized = " ".join(sql.split())
+        if "FROM recommendation_shadow_observations" in normalized:
+            candidate_id, version = params
+            return self.shadow.get((str(candidate_id), int(version)))
+
         assert "FROM recommended_class_candidates c" in normalized
         candidate_id, version = params
         candidate = self.candidates.get(str(candidate_id))
@@ -170,8 +175,10 @@ def test_feedback_references_exact_version_and_copies_immutable_candidate_eviden
     assert result["candidate_version"] == 1
     assert result["action_type"] == "KEEP_TOPIC"
     assert result["topic"] == "b"
+    assert result["shadow_observation_id"] is None
     assert len(database.feedback) == 1
-    assert "candidate_evidence" in database.feedback[0][-1]
+    assert "candidate_evidence" in database.feedback[0][-2]
+    assert database.feedback[0][-1] is None
 
     with pytest.raises(ValueError, match="member"):
         store.record_feedback(
@@ -180,6 +187,37 @@ def test_feedback_references_exact_version_and_copies_immutable_candidate_eviden
             action_type="REMOVE_TOPIC",
             topic="not-a-member",
         )
+
+
+def test_feedback_links_latest_shadow_observation_when_available():
+    database = FakeDatabase()
+    store = RecommendedCandidateStore(database)
+    candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan")
+    store.persist_snapshot(
+        candidate_id=candidate_id,
+        strategy_id="independent_hdbscan",
+        member_topics=("a", "b"),
+        discovery_evidence=("key",),
+        evidence_snapshot={"topic_evidence": [{"topic": "b"}]},
+    )
+    database.shadow[(candidate_id, 1)] = {
+        "observation_id": "shadow-observation-1",
+        "shadow_run_id": "shadow-run-1",
+        "membership_model_id": "membership-model",
+        "candidate_quality_model_id": None,
+        "created_at": None,
+    }
+
+    result = store.record_feedback(
+        candidate_id=candidate_id,
+        candidate_version=1,
+        action_type="KEEP_TOPIC",
+        topic="b",
+    )
+
+    assert result["shadow_observation_id"] == "shadow-observation-1"
+    assert database.feedback[0][-1] == "shadow-observation-1"
+    assert "shadow-observation-1" in database.feedback[0][-2]
 
 
 def test_candidate_level_feedback_rejects_topic_payload():
