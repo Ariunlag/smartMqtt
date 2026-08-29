@@ -7,6 +7,8 @@ Human actions become labels over the exact evidence snapshot that produced them.
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections import Counter
 from dataclasses import dataclass
 from statistics import mean
@@ -59,6 +61,7 @@ class TrainingExample:
     target: str
     label: int
     features: tuple[float, ...]
+    evaluation_group: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,7 +77,10 @@ class TrainingDataset:
 
     @property
     def groups(self) -> tuple[str, ...]:
-        return tuple(example.candidate_id for example in self.examples)
+        return tuple(
+            example.evaluation_group or example.candidate_id
+            for example in self.examples
+        )
 
     @property
     def matrix(self) -> tuple[tuple[float, ...], ...]:
@@ -183,6 +189,7 @@ class RecommendationFeedbackDatasetBuilder:
                 float(coverage.get("prototype_coverage", 0.0)),
             )
         )
+        members = candidate.get("member_topics") or snapshot.get("member_topics") or ()
         action = row["action_type"]
         return (
             TrainingExample(
@@ -198,6 +205,7 @@ class RecommendationFeedbackDatasetBuilder:
                 target=str(topic),
                 label=1 if action == "KEEP_TOPIC" else 0,
                 features=tuple(values),
+                evaluation_group=cls._member_group(members, str(row["candidate_id"])),
             ),
             None,
         )
@@ -269,6 +277,7 @@ class RecommendationFeedbackDatasetBuilder:
                 target=str(row["candidate_id"]),
                 label=1 if action == "ACCEPT_CANDIDATE" else 0,
                 features=tuple(values),
+                evaluation_group=cls._member_group(members, str(row["candidate_id"])),
             ),
             None,
         )
@@ -283,6 +292,16 @@ class RecommendationFeedbackDatasetBuilder:
             if evidence_id in EVIDENCE_IDS and score is not None:
                 result[str(evidence_id)] = float(score)
         return result
+
+    @staticmethod
+    def _member_group(members, fallback: str) -> str:
+        canonical_members = sorted(str(member) for member in members)
+        if not canonical_members:
+            return fallback
+        payload = json.dumps(
+            canonical_members, ensure_ascii=False, separators=(",", ":")
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
 def _model() -> Pipeline:
@@ -308,7 +327,10 @@ def train_offline_report(dataset: TrainingDataset) -> dict:
         "sample_count": len(dataset.examples),
         "positive_count": label_counts.get(1, 0),
         "negative_count": label_counts.get(0, 0),
-        "unique_candidate_count": len(set(dataset.groups)),
+        "unique_candidate_count": len(
+            {example.candidate_id for example in dataset.examples}
+        ),
+        "unique_evaluation_group_count": len(set(dataset.groups)),
         "strategy_counts": dict(sorted(strategy_counts.items())),
         "skipped_by_reason": dataset.skipped_by_reason,
         "promotion": "none",
@@ -353,7 +375,7 @@ def train_offline_report(dataset: TrainingDataset) -> dict:
     if split_count < 2:
         cv_report = {
             "status": "not_available",
-            "reason": "each label must occur across at least two candidate groups",
+            "reason": "each label must occur across at least two member-set groups",
         }
     else:
         cv = StratifiedGroupKFold(
