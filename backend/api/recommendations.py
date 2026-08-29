@@ -6,6 +6,7 @@ recommended-class workflow used by the dashboard.
 """
 
 import asyncio
+import logging
 from dataclasses import asdict
 from uuid import UUID
 
@@ -17,11 +18,13 @@ from services.class_recommendation.discovery import (
     RecommendedClassDiscovery,
     RecommendedClassDiscoveryConfig,
 )
+from services.class_recommendation.shadow import recommendation_shadow_scorer
 from services.class_recommendation.strategies import (
     DEFAULT_STRATEGY_ID,
     TagValueCentroidStrategyConfig,
 )
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Class Recommendations"])
 
 
@@ -60,7 +63,7 @@ async def recommended_class_candidates(
     request: Request,
     strategy: str = DEFAULT_STRATEGY_ID,
 ):
-    """Return user-facing system candidates generated from the selected strategy."""
+    """Return baseline candidates plus observational shadow-model diagnostics."""
     application = request.app.state.class_recommendation
     metadata_store = _FilteredRecommendationMetadata(
         application.metadata_store,
@@ -90,7 +93,25 @@ async def recommended_class_candidates(
         if "Unknown recommendation strategy" in str(exc):
             raise HTTPException(status_code=400, detail=str(exc)) from exc
         raise
-    return asdict(result)
+
+    payload = asdict(result)
+    try:
+        payload["shadow_evaluation"] = await asyncio.to_thread(
+            recommendation_shadow_scorer.evaluate,
+            result,
+        )
+    except Exception:  # shadow evaluation must never change baseline availability/rank
+        logger.exception("Recommendation shadow evaluation failed")
+        payload["shadow_evaluation"] = {
+            "mode": "shadow",
+            "status": "error",
+            "reason": "shadow_evaluation_failed",
+            "ranking_effect": "none",
+            "baseline_order_preserved": True,
+            "models": {},
+            "candidates": [],
+        }
+    return payload
 
 
 @router.post("/recommended-classes/{candidate_id}/feedback")
