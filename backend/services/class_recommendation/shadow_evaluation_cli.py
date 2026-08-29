@@ -14,6 +14,11 @@ def build_parser() -> argparse.ArgumentParser:
         description="Evaluate persisted shadow scores against explicit user feedback."
     )
     parser.add_argument(
+        "--include-fixture-feedback",
+        action="store_true",
+        help="Smoke-test only. Include synthetic acceptance namespace feedback.",
+    )
+    parser.add_argument(
         "--output",
         type=Path,
         help="Optional JSON file to receive the report in addition to stdout.",
@@ -23,7 +28,9 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
-    report = build_shadow_evaluation_report()
+    report = build_shadow_evaluation_report(
+        include_fixture_feedback=args.include_fixture_feedback,
+    )
     rendered = json.dumps(report, indent=2, sort_keys=True, default=str)
     print(rendered)
     if args.output is not None:
