@@ -91,8 +91,9 @@ def build_live_promotion_report(
         database,
         include_fixture_feedback=False,
     )
-    evaluation = _model_report(shadow_report, model_id)
-    evaluation = evaluation or {}
+    evaluation = _model_report(shadow_report, model_id) or {}
+    source = shadow_report.get("source") or {}
+    source_policy = source.get("source_policy") or {}
 
     checks = [
         {
@@ -108,10 +109,34 @@ def build_live_promotion_report(
             "required": "OFFLINE_APPROVED",
         },
         {
+            "name": "fixture_feedback_excluded",
+            "passed": source_policy.get("fixture_feedback") == "excluded_by_default",
+            "actual": source_policy.get("fixture_feedback"),
+            "required": "excluded_by_default",
+        },
+        {
+            "name": "explicit_feedback_only",
+            "passed": source.get("label_policy") == "explicit_feedback_only",
+            "actual": source.get("label_policy"),
+            "required": "explicit_feedback_only",
+        },
+        {
+            "name": "unshown_candidates_not_negative",
+            "passed": source.get("unshown_candidates_as_negative") is False,
+            "actual": source.get("unshown_candidates_as_negative"),
+            "required": False,
+        },
+        {
             "name": "shadow_evaluated",
             "passed": evaluation.get("status") == "evaluated",
             "actual": evaluation.get("status"),
             "required": "evaluated",
+        },
+        {
+            "name": "same_run_pairwise_policy",
+            "passed": evaluation.get("pairwise_grouping") == "same_shadow_run_only",
+            "actual": evaluation.get("pairwise_grouping"),
+            "required": "same_shadow_run_only",
         },
         {
             "name": "sample_count",
@@ -183,7 +208,7 @@ def build_live_promotion_report(
             "status": str(model["status"]),
         },
         "shadow_evaluation": evaluation or None,
-        "source_policy": shadow_report.get("source", {}).get("source_policy", {}),
+        "source_policy": source_policy,
         "checks": checks,
         "ranking_policy": "candidate_quality_desc_then_baseline_rank",
         "membership_effect": "none",
