@@ -100,21 +100,30 @@ not compared as if they were identical.
 
 ## Run
 
-From the repository root with the backend environment configured for the target
-PostgreSQL database:
+The normal Docker Compose setup deliberately does not publish PostgreSQL port 5432 to
+the host. For that setup, build/start the current branch and run the offline report
+inside the backend container:
+
+```powershell
+docker compose up -d --build
+python -X utf8 scripts/train_recommendation_feedback.py --docker
+```
+
+Optionally write the container report to a host file:
+
+```powershell
+python -X utf8 scripts/train_recommendation_feedback.py --docker --output artifacts/recommendation-learning.json
+```
+
+If PostgreSQL is intentionally available directly to the host and `POSTGRES_DSN` points
+to that host-accessible database, the same command can run directly without `--docker`:
 
 ```powershell
 python -X utf8 scripts/train_recommendation_feedback.py
 ```
 
-Optionally persist the JSON report outside runtime state:
-
-```powershell
-python -X utf8 scripts/train_recommendation_feedback.py --output artifacts/recommendation-learning.json
-```
-
-The command reads feedback, fits models in memory, prints the report, and exits. It does
-not save/promote a model or alter recommendation state.
+Both modes read feedback, fit models in memory, print the report, and exit. They do not
+save/promote a model or alter recommendation state.
 
 ## Next evaluation step
 
