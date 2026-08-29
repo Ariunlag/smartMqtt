@@ -25,6 +25,29 @@ from services.class_recommendation.strategies import (
 router = APIRouter(tags=["Class Recommendations"])
 
 
+class _FilteredRecommendationMetadata:
+    """User-facing metadata view that hides configured synthetic topic namespaces."""
+
+    def __init__(self, store, excluded_prefixes: tuple[str, ...]) -> None:
+        self.store = store
+        self.excluded_prefixes = tuple(excluded_prefixes)
+
+    def all_topic_states(self):
+        return [
+            row
+            for row in self.store.all_topic_states()
+            if not self._excluded(str(row["canonical_topic"]))
+        ]
+
+    def topic_state(self, topic):
+        if self._excluded(str(topic)):
+            return None
+        return self.store.topic_state(topic)
+
+    def _excluded(self, topic: str) -> bool:
+        return any(topic.startswith(prefix) for prefix in self.excluded_prefixes)
+
+
 @router.get("/topics/{topic:path}/class-recommendations")
 async def topic_class_recommendations(topic: str, request: Request):
     """Legacy topic -> Saved Class view kept for API compatibility."""
@@ -37,10 +60,14 @@ async def recommended_class_candidates(
     request: Request,
     strategy: str = DEFAULT_STRATEGY_ID,
 ):
-    """Return system candidates generated from the selected strategy."""
+    """Return user-facing system candidates generated from the selected strategy."""
     application = request.app.state.class_recommendation
+    metadata_store = _FilteredRecommendationMetadata(
+        application.metadata_store,
+        config.SYSTEM_RECOMMENDATION_EXCLUDED_TOPIC_PREFIXES,
+    )
     discovery = RecommendedClassDiscovery(
-        metadata_store=application.metadata_store,
+        metadata_store=metadata_store,
         pair_store=application.pair_store,
         topic_embedding_store=application.topic_embedding_store,
         identity_store=application.identity_store,
