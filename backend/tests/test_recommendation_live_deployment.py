@@ -1,7 +1,10 @@
+from contextlib import contextmanager
+
 import pytest
 
 from services.class_recommendation.live_deployment import (
     LivePromotionGateConfig,
+    RecommendationLiveDeploymentRegistry,
     build_live_promotion_report,
 )
 
@@ -23,6 +26,52 @@ class FakeDatabase:
         if "FROM recommendation_model_versions" in " ".join(sql.split()):
             return self.model
         raise AssertionError(sql)
+
+
+class _Result:
+    def __init__(self, row=None):
+        self.row = row
+
+    def fetchone(self):
+        return self.row
+
+
+class _LifecycleConnection:
+    def __init__(self, database):
+        self.database = database
+
+    def execute(self, sql, params=()):
+        normalized = " ".join(sql.split())
+        if normalized.startswith("SELECT pg_advisory_xact_lock"):
+            return _Result()
+        if normalized.startswith("SELECT model_id::text AS model_id FROM recommendation_live_deployments"):
+            return _Result(
+                {"model_id": self.database.current_model}
+                if self.database.current_model
+                else None
+            )
+        if normalized.startswith("DELETE FROM recommendation_live_deployments"):
+            self.database.current_model = None
+            return _Result()
+        if normalized.startswith("INSERT INTO recommendation_live_deployments"):
+            model_id, _report, _reason = params
+            self.database.current_model = str(model_id)
+            return _Result()
+        if normalized.startswith("INSERT INTO recommendation_live_deployment_events"):
+            self.database.events.append(params)
+            return _Result()
+        raise AssertionError(normalized)
+
+
+class LifecycleDatabase:
+    def __init__(self):
+        self.current_model = None
+        self.events = []
+        self.connection = _LifecycleConnection(self)
+
+    @contextmanager
+    def transaction(self):
+        yield self.connection
 
 
 def _shadow_report(*, delta=0.1, balanced_accuracy=0.72, roc_auc=0.75):
@@ -52,6 +101,22 @@ def _shadow_report(*, delta=0.1, balanced_accuracy=0.72, roc_auc=0.75):
                 }
             ]
         },
+    }
+
+
+def _passing_promotion_report():
+    return {
+        "passed": True,
+        "model": {
+            "model_id": MODEL_ID,
+            "model_version": 4,
+            "objective": "candidate_quality",
+            "feature_contract_version": "candidate-quality-evidence-v1",
+            "status": "OFFLINE_APPROVED",
+        },
+        "checks": [],
+        "ranking_policy": "candidate_quality_desc_then_baseline_rank",
+        "membership_effect": "none",
     }
 
 
@@ -106,3 +171,27 @@ def test_live_gate_config_rejects_invalid_thresholds():
         LivePromotionGateConfig(min_samples=0)
     with pytest.raises(ValueError, match="min_roc_auc"):
         LivePromotionGateConfig(min_roc_auc=1.1)
+
+
+def test_live_activation_and_rollback_are_explicit_and_audited(monkeypatch):
+    database = LifecycleDatabase()
+    registry = RecommendationLiveDeploymentRegistry(database)
+    monkeypatch.setattr(
+        registry,
+        "check",
+        lambda model_id, config=None: _passing_promotion_report(),
+    )
+
+    activated = registry.activate(model_id=MODEL_ID, reason="shadow gate passed")
+
+    assert activated["state"] == "LIVE_ACTIVE"
+    assert activated["ranking_effect"] == "candidate_reorder"
+    assert database.current_model == MODEL_ID
+    assert len(database.events) == 1
+
+    rolled_back = registry.rollback(reason="manual safety rollback")
+
+    assert rolled_back["state"] == "BASELINE_ACTIVE"
+    assert rolled_back["ranking_effect"] == "baseline"
+    assert database.current_model is None
+    assert len(database.events) == 2
