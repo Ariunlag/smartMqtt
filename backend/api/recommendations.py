@@ -148,6 +148,12 @@ async def recommended_class_feedback(
             candidate_version=payload.candidate_version,
             action_type=payload.action,
             topic=payload.topic,
+            shadow_run_id=(
+                str(payload.shadow_run_id) if payload.shadow_run_id is not None else None
+            ),
+            live_run_id=(
+                str(payload.live_run_id) if payload.live_run_id is not None else None
+            ),
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
