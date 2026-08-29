@@ -46,9 +46,12 @@ APP_TABLES = [
     "recommendation_shadow_deployments",
     "recommendation_shadow_deployment_events",
     "recommendation_shadow_observations",
+    "recommendation_live_deployments",
+    "recommendation_live_deployment_events",
+    "recommendation_live_observations",
 ]
 
-HEAD_REVISION = "0009_recommendation_shadow"
+HEAD_REVISION = "0010_recommendation_live"
 
 
 def _make_config(url: str) -> Config:
