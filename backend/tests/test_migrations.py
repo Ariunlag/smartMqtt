@@ -123,8 +123,26 @@ def test_clean_database_upgrades_to_head(pg_url):
               AND conname = 'duplicates_topic_order_check'
             """
         ).fetchone()
+        shadow_fk = conn.execute(
+            """
+            SELECT pg_get_constraintdef(oid)
+            FROM pg_constraint
+            WHERE conrelid = 'recommended_class_feedback'::regclass
+              AND conname = 'recommended_class_feedback_shadow_observation_id_fkey'
+            """
+        ).fetchone()
+        live_fk = conn.execute(
+            """
+            SELECT pg_get_constraintdef(oid)
+            FROM pg_constraint
+            WHERE conrelid = 'recommended_class_feedback'::regclass
+              AND conname = 'recommended_class_feedback_live_observation_id_fkey'
+            """
+        ).fetchone()
     assert extension and extension[0] == "vector"
     assert constraint and 'COLLATE "C"' in constraint[0]
+    assert shadow_fk and "ON DELETE SET NULL" in shadow_fk[0]
+    assert live_fk and "ON DELETE SET NULL" in live_fk[0]
 
 
 def test_existing_schema_adopts_baseline_without_data_loss(pg_url):
