@@ -40,9 +40,15 @@ APP_TABLES = [
     "recommended_class_candidates",
     "recommended_class_candidate_versions",
     "recommended_class_feedback",
+    "recommendation_model_versions",
+    "recommendation_model_evaluations",
+    "recommendation_model_events",
+    "recommendation_shadow_deployments",
+    "recommendation_shadow_deployment_events",
+    "recommendation_shadow_observations",
 ]
 
-HEAD_REVISION = "0007_recommended_feedback"
+HEAD_REVISION = "0009_recommendation_shadow"
 
 
 def _make_config(url: str) -> Config:
