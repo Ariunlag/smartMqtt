@@ -2,7 +2,8 @@
 
 Unshown candidates are never treated as negatives. Repeated feedback is deduplicated
 within each exact model/candidate-version/target so the latest explicit label wins,
-matching the offline training contract.
+matching the offline training contract. Synthetic acceptance namespaces are excluded by
+default and can only be included by an explicit smoke-test request.
 """
 
 from __future__ import annotations
@@ -13,6 +14,8 @@ from statistics import mean
 from sklearn.metrics import accuracy_score, balanced_accuracy_score, log_loss, roc_auc_score
 
 from services.database.postgres import postgres_client
+
+from .learning import DEFAULT_EXCLUDED_TOPIC_PREFIXES
 
 MEMBERSHIP_ACTIONS = {"KEEP_TOPIC": 1, "REMOVE_TOPIC": 0}
 QUALITY_ACTIONS = {"ACCEPT_CANDIDATE": 1, "DISMISS_CANDIDATE": 0}
@@ -26,6 +29,20 @@ def _score_from_membership(payload: dict | None, topic: str | None) -> float | N
         return None
     value = item.get("score")
     return float(value) if value is not None else None
+
+
+def _is_fixture_feedback(row: dict, excluded_prefixes: tuple[str, ...]) -> bool:
+    snapshot = row.get("evidence_snapshot") or {}
+    candidate = snapshot.get("candidate_evidence") or {}
+    members = candidate.get("member_topics") or snapshot.get("member_topics") or ()
+    topics = [str(member) for member in members]
+    if row.get("topic"):
+        topics.append(str(row["topic"]))
+    return any(
+        topic.startswith(prefix)
+        for topic in topics
+        for prefix in excluded_prefixes
+    )
 
 
 def _metric_report(examples: list[dict], *, include_baseline_rank: bool) -> dict:
@@ -80,23 +97,48 @@ def _metric_report(examples: list[dict], *, include_baseline_rank: bool) -> dict
     }
 
 
-def evaluate_shadow_rows(rows: list[dict]) -> dict:
+def evaluate_shadow_rows(
+    rows: list[dict],
+    *,
+    include_fixture_feedback: bool = False,
+    excluded_topic_prefixes: tuple[str, ...] = DEFAULT_EXCLUDED_TOPIC_PREFIXES,
+) -> dict:
     """Build deterministic per-model shadow metrics from joined feedback rows."""
-    linked_count = sum(bool(row.get("shadow_observation_id")) for row in rows)
+    skipped = Counter()
+    eligible_rows = []
+    for row in rows:
+        if not include_fixture_feedback and _is_fixture_feedback(
+            row, excluded_topic_prefixes
+        ):
+            skipped["fixture_namespace_excluded"] += 1
+            continue
+        eligible_rows.append(row)
+
+    linked_count = sum(
+        bool(row.get("shadow_observation_id")) for row in eligible_rows
+    )
     source = {
         "total_feedback_events": len(rows),
+        "eligible_feedback_events": len(eligible_rows),
         "linked_shadow_events": linked_count,
-        "unlinked_feedback_events": len(rows) - linked_count,
+        "unlinked_feedback_events": len(eligible_rows) - linked_count,
         "label_policy": "explicit_feedback_only",
         "unshown_candidates_as_negative": False,
         "repeat_policy": "latest_label_per_model_candidate_version_target",
+        "source_policy": {
+            "fixture_feedback": (
+                "included_by_explicit_request"
+                if include_fixture_feedback
+                else "excluded_by_default"
+            ),
+            "excluded_topic_prefixes": list(excluded_topic_prefixes),
+        },
     }
 
     membership_latest: dict[tuple, dict] = {}
     quality_latest: dict[tuple, dict] = {}
-    skipped = Counter()
 
-    for row in rows:
+    for row in eligible_rows:
         if not row.get("shadow_observation_id"):
             skipped["no_shadow_observation"] += 1
             continue
@@ -199,7 +241,11 @@ def evaluate_shadow_rows(rows: list[dict]) -> dict:
     }
 
 
-def build_shadow_evaluation_report(database=postgres_client) -> dict:
+def build_shadow_evaluation_report(
+    database=postgres_client,
+    *,
+    include_fixture_feedback: bool = False,
+) -> dict:
     rows = database.fetch_all(
         """
         SELECT f.feedback_id::text AS feedback_id,
@@ -207,6 +253,7 @@ def build_shadow_evaluation_report(database=postgres_client) -> dict:
                f.candidate_version,
                f.action_type,
                f.topic,
+               f.evidence_snapshot,
                f.shadow_observation_id::text AS shadow_observation_id,
                f.occurred_at,
                o.strategy_id,
@@ -227,4 +274,7 @@ def build_shadow_evaluation_report(database=postgres_client) -> dict:
         ORDER BY f.occurred_at, f.feedback_id
         """
     )
-    return evaluate_shadow_rows(list(rows))
+    return evaluate_shadow_rows(
+        list(rows),
+        include_fixture_feedback=include_fixture_feedback,
+    )
