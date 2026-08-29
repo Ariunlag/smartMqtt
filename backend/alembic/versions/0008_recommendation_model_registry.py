@@ -29,7 +29,6 @@ def upgrade() -> None:
             model_type TEXT NOT NULL,
             artifact JSONB NOT NULL,
             training_report JSONB NOT NULL,
-            gate_report JSONB NOT NULL,
             status TEXT NOT NULL DEFAULT 'CANDIDATE' CHECK (
                 status IN ('CANDIDATE', 'OFFLINE_APPROVED', 'RETIRED')
             ),
@@ -52,12 +51,26 @@ def upgrade() -> None:
         CREATE INDEX idx_recommendation_model_objective_created
             ON recommendation_model_versions(objective, created_at DESC);
 
+        CREATE TABLE recommendation_model_evaluations (
+            evaluation_id UUID PRIMARY KEY,
+            model_id UUID NOT NULL REFERENCES recommendation_model_versions(model_id)
+                ON DELETE CASCADE,
+            gate_policy_version TEXT NOT NULL,
+            gate_policy_fingerprint TEXT NOT NULL,
+            gate_report JSONB NOT NULL,
+            evaluated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+            UNIQUE (model_id, gate_policy_fingerprint)
+        );
+
+        CREATE INDEX idx_recommendation_model_evaluations
+            ON recommendation_model_evaluations(model_id, evaluated_at DESC);
+
         CREATE TABLE recommendation_model_events (
             event_id UUID PRIMARY KEY,
             model_id UUID NOT NULL REFERENCES recommendation_model_versions(model_id)
                 ON DELETE CASCADE,
             event_type TEXT NOT NULL CHECK (
-                event_type IN ('REGISTERED', 'OFFLINE_APPROVED', 'RETIRED')
+                event_type IN ('REGISTERED', 'EVALUATED', 'OFFLINE_APPROVED', 'RETIRED')
             ),
             reason TEXT,
             details JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -74,6 +87,7 @@ def downgrade() -> None:
     op.execute(
         """
         DROP TABLE recommendation_model_events;
+        DROP TABLE recommendation_model_evaluations;
         DROP TABLE recommendation_model_versions;
         """
     )
