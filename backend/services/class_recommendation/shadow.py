@@ -1,9 +1,10 @@
-"""Score approved recommendation models in shadow mode without changing ranking.
+"""Score explicitly activated recommendation models without changing baseline ranking.
 
 Shadow scoring is observational only. The baseline HDBSCAN/centroid rank remains the
 user-facing order. Learned probabilities are computed from the exact persisted candidate
 version, returned as diagnostics, and recorded for later comparison with explicit user
-feedback.
+feedback. OFFLINE_APPROVED alone is not enough: a model must also have an explicit
+shadow deployment.
 """
 
 from __future__ import annotations
@@ -102,7 +103,7 @@ def score_model_artifact(model_row: dict, features: tuple[float, ...]) -> float:
 
 
 class RecommendationShadowScorer:
-    """Evaluate OFFLINE_APPROVED models beside the unchanged baseline ranking."""
+    """Evaluate explicitly deployed shadow models beside the unchanged baseline rank."""
 
     def __init__(
         self,
@@ -113,8 +114,8 @@ class RecommendationShadowScorer:
         self.candidate_store = candidate_store
 
     def evaluate(self, candidate_set) -> dict:
-        membership_model = self._approved_model("membership")
-        quality_model = self._approved_model("candidate_quality")
+        membership_model = self._active_model("membership")
+        quality_model = self._active_model("candidate_quality")
         models = {
             "membership": self._model_summary(membership_model),
             "candidate_quality": self._model_summary(quality_model),
@@ -123,7 +124,7 @@ class RecommendationShadowScorer:
             return {
                 "mode": "shadow",
                 "status": "unavailable",
-                "reason": "no_offline_approved_models",
+                "reason": "no_shadow_active_models",
                 "ranking_effect": "none",
                 "baseline_order_preserved": True,
                 "models": models,
@@ -272,13 +273,16 @@ class RecommendationShadowScorer:
             "candidates": candidate_results,
         }
 
-    def _approved_model(self, objective: str) -> dict | None:
+    def _active_model(self, objective: str) -> dict | None:
         return self.database.fetch_one(
             """
-            SELECT model_id::text AS model_id, objective, model_version,
-                   feature_contract_version, artifact
-            FROM recommendation_model_versions
-            WHERE objective = %s AND status = 'OFFLINE_APPROVED'
+            SELECT m.model_id::text AS model_id, m.objective, m.model_version,
+                   m.feature_contract_version, m.artifact
+            FROM recommendation_shadow_deployments d
+            JOIN recommendation_model_versions m ON m.model_id = d.model_id
+            WHERE d.objective = %s
+              AND m.objective = d.objective
+              AND m.status = 'OFFLINE_APPROVED'
             """,
             (objective,),
         )
