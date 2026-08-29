@@ -12,6 +12,7 @@ def _row(
     model_id="quality-model",
     linked=True,
     fixture=False,
+    live_run_id="live-run-1",
 ):
     member = "acceptance/run/topic" if fixture else f"real/{candidate_id}"
     return {
@@ -25,6 +26,7 @@ def _row(
             "candidate_evidence": {"member_topics": [member]},
         },
         "live_observation_id": f"obs-{feedback_id}" if linked else None,
+        "live_run_id": live_run_id if linked else None,
         "strategy_id": "independent_hdbscan" if linked else None,
         "baseline_rank": baseline_rank if linked else None,
         "live_rank": live_rank if linked else None,
@@ -34,7 +36,7 @@ def _row(
     }
 
 
-def test_live_evaluation_compares_live_and_baseline_pairwise_order():
+def test_live_evaluation_compares_live_and_baseline_pairwise_order_within_run():
     rows = [
         _row(
             "1",
@@ -58,11 +60,44 @@ def test_live_evaluation_compares_live_and_baseline_pairwise_order():
     model = report["candidate_quality"]["models"][0]
 
     assert model["status"] == "evaluated"
+    assert model["pairwise_grouping"] == "same_live_run_only"
+    assert model["pairwise_comparison_count"] == 1
     assert model["live_pairwise_accuracy"] == 1.0
     assert model["baseline_pairwise_accuracy"] == 0.0
     assert model["pairwise_accuracy_delta"] == 1.0
     assert model["balanced_accuracy"] == 1.0
     assert report["source"]["unshown_candidates_as_negative"] is False
+
+
+def test_live_evaluation_does_not_compare_ranks_across_different_runs():
+    rows = [
+        _row(
+            "1",
+            "ACCEPT_CANDIDATE",
+            candidate_id="a",
+            score=0.9,
+            baseline_rank=2,
+            live_rank=1,
+            live_run_id="run-a",
+        ),
+        _row(
+            "2",
+            "DISMISS_CANDIDATE",
+            candidate_id="b",
+            score=0.1,
+            baseline_rank=1,
+            live_rank=2,
+            live_run_id="run-b",
+        ),
+    ]
+
+    report = evaluate_live_rows(rows)
+    model = report["candidate_quality"]["models"][0]
+
+    assert model["pairwise_comparison_count"] == 0
+    assert model["live_pairwise_accuracy"] is None
+    assert model["baseline_pairwise_accuracy"] is None
+    assert model["pairwise_accuracy_delta"] is None
 
 
 def test_live_evaluation_latest_explicit_label_wins_per_candidate_version():
