@@ -45,6 +45,30 @@ def _is_fixture_feedback(row: dict, excluded_prefixes: tuple[str, ...]) -> bool:
     )
 
 
+def _pairwise_order_accuracy(
+    examples: list[dict],
+    *,
+    value_key: str,
+    positive_higher: bool,
+) -> tuple[float | None, int]:
+    positives = [item for item in examples if int(item["label"]) == 1]
+    negatives = [item for item in examples if int(item["label"]) == 0]
+    comparisons = 0
+    correct = 0.0
+    for positive in positives:
+        for negative in negatives:
+            left = float(positive[value_key])
+            right = float(negative[value_key])
+            comparisons += 1
+            if left == right:
+                correct += 0.5
+            elif (left > right) == positive_higher:
+                correct += 1.0
+    if comparisons == 0:
+        return None, 0
+    return float(correct / comparisons), comparisons
+
+
 def _metric_report(examples: list[dict], *, include_baseline_rank: bool) -> dict:
     labels = [int(item["label"]) for item in examples]
     scores = [float(item["score"]) for item in examples]
@@ -77,6 +101,28 @@ def _metric_report(examples: list[dict], *, include_baseline_rank: bool) -> dict
             float(mean(item["baseline_rank"] for item in examples if item["label"] == 0))
             if counts.get(0, 0)
             else None
+        )
+        learned_pairwise, pair_count = _pairwise_order_accuracy(
+            examples,
+            value_key="score",
+            positive_higher=True,
+        )
+        baseline_pairwise, _ = _pairwise_order_accuracy(
+            examples,
+            value_key="baseline_rank",
+            positive_higher=False,
+        )
+        base.update(
+            {
+                "pairwise_comparison_count": pair_count,
+                "learned_pairwise_accuracy": learned_pairwise,
+                "baseline_pairwise_accuracy": baseline_pairwise,
+                "pairwise_accuracy_delta": (
+                    float(learned_pairwise - baseline_pairwise)
+                    if learned_pairwise is not None and baseline_pairwise is not None
+                    else None
+                ),
+            }
         )
 
     if len(counts) < 2:
