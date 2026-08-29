@@ -83,11 +83,11 @@ class FakeDatabase:
     def fetch_one(self, sql, params=()):
         normalized = " ".join(sql.split())
         if "FROM recommendation_shadow_observations" in normalized:
-            candidate_id, version = params
-            return self.shadow.get((str(candidate_id), int(version)))
+            run_id, candidate_id, version = params
+            return self.shadow.get((str(run_id), str(candidate_id), int(version)))
         if "FROM recommendation_live_observations" in normalized:
-            candidate_id, version = params
-            return self.live.get((str(candidate_id), int(version)))
+            run_id, candidate_id, version = params
+            return self.live.get((str(run_id), str(candidate_id), int(version)))
 
         assert "FROM recommended_class_candidates c" in normalized
         candidate_id, version = params
@@ -157,7 +157,7 @@ def test_candidate_snapshot_version_only_increments_when_snapshot_changes():
     assert database.candidates[candidate_id]["current_version"] == 2
 
 
-def test_feedback_references_exact_version_and_copies_immutable_candidate_evidence():
+def test_feedback_without_exposure_run_remains_valid_and_unattributed():
     database = FakeDatabase()
     store = RecommendedCandidateStore(database)
     candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "tag_value_centroid")
@@ -194,7 +194,7 @@ def test_feedback_references_exact_version_and_copies_immutable_candidate_eviden
         )
 
 
-def test_feedback_links_latest_shadow_and_live_observations_when_available():
+def test_feedback_links_exact_shadow_and_live_run_observations():
     database = FakeDatabase()
     store = RecommendedCandidateStore(database)
     candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan")
@@ -205,14 +205,14 @@ def test_feedback_links_latest_shadow_and_live_observations_when_available():
         discovery_evidence=("key",),
         evidence_snapshot={"topic_evidence": [{"topic": "b"}]},
     )
-    database.shadow[(candidate_id, 1)] = {
+    database.shadow[("shadow-run-1", candidate_id, 1)] = {
         "observation_id": "shadow-observation-1",
         "shadow_run_id": "shadow-run-1",
         "membership_model_id": "membership-model",
         "candidate_quality_model_id": None,
         "created_at": None,
     }
-    database.live[(candidate_id, 1)] = {
+    database.live[("live-run-1", candidate_id, 1)] = {
         "observation_id": "live-observation-1",
         "live_run_id": "live-run-1",
         "model_id": "quality-model",
@@ -226,14 +226,44 @@ def test_feedback_links_latest_shadow_and_live_observations_when_available():
         candidate_version=1,
         action_type="KEEP_TOPIC",
         topic="b",
+        shadow_run_id="shadow-run-1",
+        live_run_id="live-run-1",
     )
 
+    assert result["shadow_run_id"] == "shadow-run-1"
     assert result["shadow_observation_id"] == "shadow-observation-1"
+    assert result["live_run_id"] == "live-run-1"
     assert result["live_observation_id"] == "live-observation-1"
     assert database.feedback[0][-2] == "shadow-observation-1"
     assert database.feedback[0][-1] == "live-observation-1"
     assert "shadow-observation-1" in database.feedback[0][-3]
     assert "live-observation-1" in database.feedback[0][-3]
+
+
+def test_unknown_exposure_run_does_not_block_or_misattribute_feedback():
+    database = FakeDatabase()
+    store = RecommendedCandidateStore(database)
+    candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan")
+    store.persist_snapshot(
+        candidate_id=candidate_id,
+        strategy_id="independent_hdbscan",
+        member_topics=("a", "b"),
+        discovery_evidence=("key",),
+        evidence_snapshot={"topic_evidence": [{"topic": "b"}]},
+    )
+
+    result = store.record_feedback(
+        candidate_id=candidate_id,
+        candidate_version=1,
+        action_type="KEEP_TOPIC",
+        topic="b",
+        shadow_run_id="missing-shadow-run",
+        live_run_id="missing-live-run",
+    )
+
+    assert result["shadow_observation_id"] is None
+    assert result["live_observation_id"] is None
+    assert database.feedback[0][-2:] == (None, None)
 
 
 def test_candidate_level_feedback_rejects_topic_payload():
