@@ -29,6 +29,7 @@ FEATURE_CONTRACT_VERSION = {
     "membership": "membership-evidence-v1",
     "candidate_quality": "candidate-quality-evidence-v1",
 }
+DEFAULT_EXCLUDED_TOPIC_PREFIXES = ("acceptance/",)
 
 MEMBERSHIP_FEATURES = tuple(
     [f"{evidence_id}_score" for evidence_id in EVIDENCE_IDS]
@@ -70,6 +71,8 @@ class TrainingDataset:
     feature_names: tuple[str, ...]
     examples: tuple[TrainingExample, ...]
     skipped_by_reason: dict[str, int]
+    include_fixture_feedback: bool = False
+    excluded_topic_prefixes: tuple[str, ...] = DEFAULT_EXCLUDED_TOPIC_PREFIXES
 
     @property
     def labels(self) -> tuple[int, ...]:
@@ -90,8 +93,16 @@ class TrainingDataset:
 class RecommendationFeedbackDatasetBuilder:
     """Convert latest explicit feedback labels into deterministic feature datasets."""
 
-    def __init__(self, database=postgres_client) -> None:
+    def __init__(
+        self,
+        database=postgres_client,
+        *,
+        include_fixture_feedback: bool = False,
+        excluded_topic_prefixes: tuple[str, ...] = DEFAULT_EXCLUDED_TOPIC_PREFIXES,
+    ) -> None:
         self.database = database
+        self.include_fixture_feedback = include_fixture_feedback
+        self.excluded_topic_prefixes = tuple(excluded_topic_prefixes)
 
     def build(self) -> dict[Objective, TrainingDataset]:
         rows = self.database.fetch_all(
@@ -127,6 +138,10 @@ class RecommendationFeedbackDatasetBuilder:
         membership_skipped: Counter[str] = Counter()
         for key in sorted(latest_membership):
             row = latest_membership[key]
+            excluded = self._source_exclusion_reason(row)
+            if excluded is not None:
+                membership_skipped[excluded] += 1
+                continue
             example, reason = self._membership_example(row)
             if example is None:
                 membership_skipped[reason or "unknown"] += 1
@@ -137,6 +152,10 @@ class RecommendationFeedbackDatasetBuilder:
         quality_skipped: Counter[str] = Counter()
         for key in sorted(latest_quality):
             row = latest_quality[key]
+            excluded = self._source_exclusion_reason(row)
+            if excluded is not None:
+                quality_skipped[excluded] += 1
+                continue
             example, reason = self._candidate_quality_example(row)
             if example is None:
                 quality_skipped[reason or "unknown"] += 1
@@ -149,14 +168,35 @@ class RecommendationFeedbackDatasetBuilder:
                 feature_names=MEMBERSHIP_FEATURES,
                 examples=tuple(membership_examples),
                 skipped_by_reason=dict(membership_skipped),
+                include_fixture_feedback=self.include_fixture_feedback,
+                excluded_topic_prefixes=self.excluded_topic_prefixes,
             ),
             "candidate_quality": TrainingDataset(
                 objective="candidate_quality",
                 feature_names=CANDIDATE_QUALITY_FEATURES,
                 examples=tuple(quality_examples),
                 skipped_by_reason=dict(quality_skipped),
+                include_fixture_feedback=self.include_fixture_feedback,
+                excluded_topic_prefixes=self.excluded_topic_prefixes,
             ),
         }
+
+    def _source_exclusion_reason(self, row: dict) -> str | None:
+        if self.include_fixture_feedback:
+            return None
+        snapshot = row.get("evidence_snapshot") or {}
+        candidate = snapshot.get("candidate_evidence") or {}
+        members = candidate.get("member_topics") or snapshot.get("member_topics") or ()
+        topics = [str(member) for member in members]
+        if row.get("topic"):
+            topics.append(str(row["topic"]))
+        if any(
+            topic.startswith(prefix)
+            for topic in topics
+            for prefix in self.excluded_topic_prefixes
+        ):
+            return "fixture_namespace_excluded"
+        return None
 
     @classmethod
     def _membership_example(cls, row: dict):
@@ -333,6 +373,14 @@ def train_offline_report(dataset: TrainingDataset) -> dict:
         "unique_evaluation_group_count": len(set(dataset.groups)),
         "strategy_counts": dict(sorted(strategy_counts.items())),
         "skipped_by_reason": dataset.skipped_by_reason,
+        "source_policy": {
+            "fixture_feedback": (
+                "included_by_explicit_request"
+                if dataset.include_fixture_feedback
+                else "excluded_by_default"
+            ),
+            "excluded_topic_prefixes": list(dataset.excluded_topic_prefixes),
+        },
         "promotion": "none",
     }
     if len(label_counts) < 2:
@@ -419,8 +467,15 @@ def train_offline_report(dataset: TrainingDataset) -> dict:
     }
 
 
-def build_learning_report(database=postgres_client) -> dict:
-    datasets = RecommendationFeedbackDatasetBuilder(database).build()
+def build_learning_report(
+    database=postgres_client,
+    *,
+    include_fixture_feedback: bool = False,
+) -> dict:
+    datasets = RecommendationFeedbackDatasetBuilder(
+        database,
+        include_fixture_feedback=include_fixture_feedback,
+    ).build()
     return {
         objective: train_offline_report(dataset)
         for objective, dataset in datasets.items()
