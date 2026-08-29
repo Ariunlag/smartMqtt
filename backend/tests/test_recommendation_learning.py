@@ -1,8 +1,8 @@
 from services.class_recommendation.learning import (
     MEMBERSHIP_FEATURES,
+    RecommendationFeedbackDatasetBuilder,
     TrainingDataset,
     TrainingExample,
-    RecommendationFeedbackDatasetBuilder,
     train_offline_report,
 )
 
@@ -104,6 +104,57 @@ def test_builder_uses_latest_explicit_label_and_skips_anchor_without_inventing_f
     assert quality.examples[0].label == 0
 
 
+def test_builder_excludes_acceptance_fixture_feedback_by_default():
+    members = (
+        "acceptance/feedback-learning1/sensor-a",
+        "acceptance/feedback-learning1/sensor-b",
+    )
+    snapshot = _snapshot(
+        members=members,
+        evidence=[_topic_evidence(members[1], 0.95, 0.9)],
+    )
+    rows = [
+        _row("1", "KEEP_TOPIC", topic=members[1], snapshot=snapshot, order=1),
+        _row("2", "ACCEPT_CANDIDATE", snapshot=snapshot, order=2),
+    ]
+
+    datasets = RecommendationFeedbackDatasetBuilder(FakeDatabase(rows)).build()
+
+    assert datasets["membership"].examples == ()
+    assert datasets["candidate_quality"].examples == ()
+    assert datasets["membership"].skipped_by_reason == {
+        "fixture_namespace_excluded": 1
+    }
+    assert datasets["candidate_quality"].skipped_by_reason == {
+        "fixture_namespace_excluded": 1
+    }
+
+
+def test_builder_can_include_fixture_feedback_only_when_explicitly_requested():
+    members = (
+        "acceptance/feedback-learning1/sensor-a",
+        "acceptance/feedback-learning1/sensor-b",
+    )
+    snapshot = _snapshot(
+        members=members,
+        evidence=[_topic_evidence(members[1], 0.95, 0.9)],
+    )
+    rows = [
+        _row("1", "KEEP_TOPIC", topic=members[1], snapshot=snapshot, order=1),
+        _row("2", "ACCEPT_CANDIDATE", snapshot=snapshot, order=2),
+    ]
+
+    datasets = RecommendationFeedbackDatasetBuilder(
+        FakeDatabase(rows),
+        include_fixture_feedback=True,
+    ).build()
+
+    assert len(datasets["membership"].examples) == 1
+    assert len(datasets["candidate_quality"].examples) == 1
+    assert datasets["membership"].skipped_by_reason == {}
+    assert datasets["candidate_quality"].skipped_by_reason == {}
+
+
 def test_offline_report_refuses_single_class_feedback():
     dataset = TrainingDataset(
         objective="membership",
@@ -127,6 +178,7 @@ def test_offline_report_refuses_single_class_feedback():
     assert report["status"] == "not_trainable"
     assert report["feature_contract_version"] == "membership-evidence-v1"
     assert report["promotion"] == "none"
+    assert report["source_policy"]["fixture_feedback"] == "excluded_by_default"
     assert report["cross_validation"]["status"] == "not_available"
 
 
