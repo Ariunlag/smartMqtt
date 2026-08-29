@@ -57,7 +57,8 @@ def upgrade() -> None:
 
         ALTER TABLE recommended_class_feedback
             ADD COLUMN shadow_observation_id UUID
-            REFERENCES recommendation_shadow_observations(observation_id);
+            REFERENCES recommendation_shadow_observations(observation_id)
+            ON DELETE SET NULL;
 
         CREATE INDEX idx_recommended_feedback_shadow_observation
             ON recommended_class_feedback(shadow_observation_id)
