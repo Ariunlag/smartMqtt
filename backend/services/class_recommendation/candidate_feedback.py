@@ -186,6 +186,29 @@ class RecommendedCandidateStore:
             logger.exception("Could not resolve recommendation shadow provenance")
             return None
 
+    def latest_live_observation(
+        self,
+        candidate_id: str,
+        candidate_version: int,
+    ) -> dict | None:
+        """Return the latest live exposure; absence must never block feedback writes."""
+        try:
+            return self.database.fetch_one(
+                """
+                SELECT observation_id::text AS observation_id,
+                       live_run_id::text AS live_run_id,
+                       model_id::text AS model_id, baseline_rank, live_rank, created_at
+                FROM recommendation_live_observations
+                WHERE candidate_id = %s AND candidate_version = %s
+                ORDER BY created_at DESC, observation_id DESC
+                LIMIT 1
+                """,
+                (candidate_id, candidate_version),
+            )
+        except Exception:
+            logger.exception("Could not resolve recommendation live provenance")
+            return None
+
     def record_feedback(
         self,
         *,
@@ -211,6 +234,8 @@ class RecommendedCandidateStore:
 
         shadow = self.latest_shadow_observation(candidate_id, candidate_version)
         shadow_observation_id = str(shadow["observation_id"]) if shadow else None
+        live = self.latest_live_observation(candidate_id, candidate_version)
+        live_observation_id = str(live["observation_id"]) if live else None
         evidence_snapshot = {
             "candidate_id": str(snapshot["candidate_id"]),
             "candidate_version": int(snapshot["candidate_version"]),
@@ -220,14 +245,16 @@ class RecommendedCandidateStore:
             "snapshot_fingerprint": snapshot["snapshot_fingerprint"],
             "candidate_evidence": snapshot["evidence_snapshot"],
             "shadow_observation_id": shadow_observation_id,
+            "live_observation_id": live_observation_id,
         }
         feedback_id = str(uuid.uuid4())
         self.database.execute(
             """
             INSERT INTO recommended_class_feedback(
                 feedback_id, candidate_id, candidate_version,
-                action_type, topic, evidence_snapshot, shadow_observation_id
-            ) VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s)
+                action_type, topic, evidence_snapshot,
+                shadow_observation_id, live_observation_id
+            ) VALUES (%s, %s, %s, %s, %s, %s::jsonb, %s, %s)
             """,
             (
                 feedback_id,
@@ -237,6 +264,7 @@ class RecommendedCandidateStore:
                 topic,
                 _canonical_json(evidence_snapshot),
                 shadow_observation_id,
+                live_observation_id,
             ),
         )
         return {
@@ -246,6 +274,7 @@ class RecommendedCandidateStore:
             "action_type": action_type,
             "topic": topic,
             "shadow_observation_id": shadow_observation_id,
+            "live_observation_id": live_observation_id,
         }
 
 
