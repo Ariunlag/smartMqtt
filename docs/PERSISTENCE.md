@@ -88,11 +88,17 @@ Only an `OFFLINE_APPROVED` model can be explicitly shadow-activated. Shadow acti
 is separate from model approval and has `ranking_effect = none`: HDBSCAN/centroid still
 determine the user-facing candidate set and order.
 
-`recommended_class_feedback.shadow_observation_id` optionally links a later explicit
-user action to the most recent observed shadow score for that exact candidate version.
-The foreign key uses `ON DELETE SET NULL`; the copied immutable candidate evidence in
-the feedback row remains authoritative even if observational shadow history is cleaned
-up later.
+A successful shadow-scored response exposes one `shadow_run_id` for that exact request.
+The UI returns that run id with later feedback. The backend resolves
+`(shadow_run_id, candidate_id, candidate_version)` and only then stores the corresponding
+`recommended_class_feedback.shadow_observation_id`. It never guesses the most recent
+observation, because a later refresh may have produced another exposure after the page
+the user actually judged. Legacy clients may omit the run id; their feedback remains
+valid but shadow attribution is `NULL`.
+
+The shadow-observation foreign key uses `ON DELETE SET NULL`; the copied immutable
+candidate evidence in the feedback row remains authoritative if observational history
+is cleaned up later.
 
 Shadow evaluation uses only feedback attached to an observed exposure. Unshown
 candidates are not synthesized as negatives. Repeated feedback is deduplicated with a
@@ -116,20 +122,27 @@ live candidate-quality model is active, existing candidates are ordered by learn
 probability descending and baseline rank is the deterministic tie-breaker.
 
 Promotion cannot bypass the shadow gate. The gate requires real explicit shadow
-feedback, minimum label/sample coverage, offline model approval, acceptable balanced
-accuracy and ROC AUC, and enough same-run positive/negative comparisons to show that the
-learned ordering is not worse than the baseline ordering under the configured policy.
+feedback, minimum label/sample coverage, offline model approval, fixture exclusion,
+explicit-feedback-only semantics, no synthetic negatives for unshown candidates,
+acceptable balanced accuracy and ROC AUC, and enough same-run positive/negative
+comparisons to show that the learned ordering is not worse than the baseline ordering
+under the configured policy.
 
 Request-time live ranking is fail-closed. Missing snapshots, incompatible artifacts,
 feature failures, or inability to persist the live exposure all return the unchanged
 baseline order for the entire request. Operators can also delete the active live
 deployment through the rollback command to restore baseline ordering immediately.
 
-`recommended_class_feedback.live_observation_id` optionally links later explicit user
-feedback to the exact live exposure. Live post-evaluation again treats only explicit
-feedback as labels, never interprets unshown candidates as negatives, excludes
-`acceptance/` fixtures by default, and compares live-vs-baseline rank only within the
-same `live_run_id`.
+A successfully persisted live-ranked response exposes one `live_run_id`. Feedback from
+that displayed response carries the run id back to the API, which resolves the exact
+`(live_run_id, candidate_id, candidate_version)` observation before filling
+`recommended_class_feedback.live_observation_id`. No run id means no live attribution;
+an unresolved run also leaves attribution `NULL` rather than blocking the user's label.
+Both shadow and live observation links use `ON DELETE SET NULL`.
+
+Live post-evaluation again treats only explicit feedback as labels, never interprets
+unshown candidates as negatives, excludes `acceptance/` fixtures by default, and
+compares live-vs-baseline rank only within the same `live_run_id`.
 
 ## ANN search
 
