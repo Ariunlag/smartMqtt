@@ -77,10 +77,12 @@ class LifecycleDatabase:
 def _shadow_report(*, delta=0.1, balanced_accuracy=0.72, roc_auc=0.75):
     return {
         "source": {
+            "label_policy": "explicit_feedback_only",
+            "unshown_candidates_as_negative": False,
             "source_policy": {
                 "fixture_feedback": "excluded_by_default",
                 "excluded_topic_prefixes": ["acceptance/"],
-            }
+            },
         },
         "candidate_quality": {
             "models": [
@@ -94,6 +96,7 @@ def _shadow_report(*, delta=0.1, balanced_accuracy=0.72, roc_auc=0.75):
                     "unique_candidate_count": 18,
                     "balanced_accuracy": balanced_accuracy,
                     "roc_auc": roc_auc,
+                    "pairwise_grouping": "same_shadow_run_only",
                     "pairwise_comparison_count": 144,
                     "learned_pairwise_accuracy": 0.70,
                     "baseline_pairwise_accuracy": 0.60,
@@ -145,6 +148,23 @@ def test_live_promotion_gate_blocks_pairwise_regression(monkeypatch):
 
     assert report["passed"] is False
     check = next(item for item in report["checks"] if item["name"] == "pairwise_vs_baseline")
+    assert check["passed"] is False
+
+
+def test_live_promotion_gate_rejects_unsafe_shadow_source_policy(monkeypatch):
+    unsafe = _shadow_report()
+    unsafe["source"]["unshown_candidates_as_negative"] = True
+    monkeypatch.setattr(
+        "services.class_recommendation.live_deployment.build_shadow_evaluation_report",
+        lambda database, include_fixture_feedback=False: unsafe,
+    )
+
+    report = build_live_promotion_report(FakeDatabase(), model_id=MODEL_ID)
+
+    assert report["passed"] is False
+    check = next(
+        item for item in report["checks"] if item["name"] == "unshown_candidates_not_negative"
+    )
     assert check["passed"] is False
 
 
