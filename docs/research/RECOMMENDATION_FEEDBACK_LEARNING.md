@@ -15,6 +15,20 @@ channel scores, coverage, matched pair evidence, member topics, discovery eviden
 strategy metadata. Future feature extractors can therefore be compared without asking
 the user to repeat old feedback.
 
+### Fixture isolation
+
+Acceptance runs intentionally create synthetic topics under the `acceptance/` namespace.
+Feedback attached to any candidate containing those topics is excluded from the default
+learning dataset. The raw feedback rows remain immutable in PostgreSQL for audit and
+smoke-test reproducibility; they are simply not treated as real user-preference data.
+
+Reports expose this policy through `source_policy` and count excluded, deduplicated labels
+under `skipped_by_reason.fixture_namespace_excluded`.
+
+For a controlled end-to-end smoke test only, fixture feedback can be included explicitly
+with `--include-fixture-feedback`. Production/user-learning evaluation should use the
+default exclusion policy.
+
 ## Two learning objectives
 
 Membership and candidate usefulness are different questions and must not be mixed into
@@ -109,6 +123,13 @@ docker compose up -d --build
 python -X utf8 scripts/train_recommendation_feedback.py --docker
 ```
 
+The default report excludes `acceptance/` fixture feedback. To reproduce the controlled
+fixture smoke test explicitly:
+
+```powershell
+python -X utf8 scripts/train_recommendation_feedback.py --docker --include-fixture-feedback
+```
+
 Optionally write the container report to a host file:
 
 ```powershell
@@ -127,7 +148,7 @@ save/promote a model or alter recommendation state.
 
 ## Next evaluation step
 
-Once enough feedback exists, compare at least:
+Once enough real feedback exists, compare at least:
 
 1. HDBSCAN candidate generation alone;
 2. tag-value centroid candidate generation alone;
