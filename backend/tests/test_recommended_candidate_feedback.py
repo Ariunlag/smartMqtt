@@ -73,6 +73,7 @@ class FakeDatabase:
         self.versions = {}
         self.feedback = []
         self.shadow = {}
+        self.live = {}
         self.connection = FakeConnection(self)
 
     @contextmanager
@@ -84,6 +85,9 @@ class FakeDatabase:
         if "FROM recommendation_shadow_observations" in normalized:
             candidate_id, version = params
             return self.shadow.get((str(candidate_id), int(version)))
+        if "FROM recommendation_live_observations" in normalized:
+            candidate_id, version = params
+            return self.live.get((str(candidate_id), int(version)))
 
         assert "FROM recommended_class_candidates c" in normalized
         candidate_id, version = params
@@ -176,9 +180,10 @@ def test_feedback_references_exact_version_and_copies_immutable_candidate_eviden
     assert result["action_type"] == "KEEP_TOPIC"
     assert result["topic"] == "b"
     assert result["shadow_observation_id"] is None
+    assert result["live_observation_id"] is None
     assert len(database.feedback) == 1
-    assert "candidate_evidence" in database.feedback[0][-2]
-    assert database.feedback[0][-1] is None
+    assert "candidate_evidence" in database.feedback[0][-3]
+    assert database.feedback[0][-2:] == (None, None)
 
     with pytest.raises(ValueError, match="member"):
         store.record_feedback(
@@ -189,7 +194,7 @@ def test_feedback_references_exact_version_and_copies_immutable_candidate_eviden
         )
 
 
-def test_feedback_links_latest_shadow_observation_when_available():
+def test_feedback_links_latest_shadow_and_live_observations_when_available():
     database = FakeDatabase()
     store = RecommendedCandidateStore(database)
     candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan")
@@ -207,6 +212,14 @@ def test_feedback_links_latest_shadow_observation_when_available():
         "candidate_quality_model_id": None,
         "created_at": None,
     }
+    database.live[(candidate_id, 1)] = {
+        "observation_id": "live-observation-1",
+        "live_run_id": "live-run-1",
+        "model_id": "quality-model",
+        "baseline_rank": 2,
+        "live_rank": 1,
+        "created_at": None,
+    }
 
     result = store.record_feedback(
         candidate_id=candidate_id,
@@ -216,8 +229,11 @@ def test_feedback_links_latest_shadow_observation_when_available():
     )
 
     assert result["shadow_observation_id"] == "shadow-observation-1"
-    assert database.feedback[0][-1] == "shadow-observation-1"
-    assert "shadow-observation-1" in database.feedback[0][-2]
+    assert result["live_observation_id"] == "live-observation-1"
+    assert database.feedback[0][-2] == "shadow-observation-1"
+    assert database.feedback[0][-1] == "live-observation-1"
+    assert "shadow-observation-1" in database.feedback[0][-3]
+    assert "live-observation-1" in database.feedback[0][-3]
 
 
 def test_candidate_level_feedback_rejects_topic_payload():
