@@ -18,12 +18,19 @@ def parse_args() -> argparse.Namespace:
         type=Path,
         help="Optional JSON file to receive the report in addition to stdout.",
     )
+    parser.add_argument(
+        "--include-fixture-feedback",
+        action="store_true",
+        help="Include acceptance/* feedback for controlled smoke testing only.",
+    )
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
-    report = build_learning_report()
+    report = build_learning_report(
+        include_fixture_feedback=args.include_fixture_feedback,
+    )
     rendered = json.dumps(report, indent=2, sort_keys=True)
     print(rendered)
     if args.output is not None:
