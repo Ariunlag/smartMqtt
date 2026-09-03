@@ -1,6 +1,28 @@
-from services.influx.client import influx_client
+import json
+import logging
+
 from config import config
-from models.api_models import TopicListResponse, MeasurementSeriesResponse, MeasurementPoint
+from models.api_models import MeasurementPoint, MeasurementSeriesResponse, TopicListResponse
+from services.influx.client import influx_client
+
+logger = logging.getLogger(__name__)
+
+
+def _flux_string_literal(value: object) -> str:
+    """Render an untrusted value as one Flux string literal.
+
+    Flux uses JSON-style escapes for quoted strings. Encoding the complete value rather
+    than interpolating inside hand-written quotes prevents measurements/topics from
+    terminating the literal and injecting Flux syntax.
+    """
+    return json.dumps(str(value), ensure_ascii=False)
+
+
+def _measurement_filter(measurements: list[str]) -> str:
+    return " or ".join(
+        f"r._measurement == {_flux_string_literal(measurement)}"
+        for measurement in measurements
+    )
 
 
 class QueryManager:
@@ -9,9 +31,10 @@ class QueryManager:
 
     async def list_measurements(self) -> TopicListResponse:
         """Return all measurement names in the bucket."""
+        bucket = _flux_string_literal(config.INFLUX_BUCKET)
         flux = f'''
         import "influxdata/influxdb/schema"
-        schema.measurements(bucket: "{config.INFLUX_BUCKET}")
+        schema.measurements(bucket: {bucket})
         '''
         try:
             result = self.client.query_raw(flux)
@@ -21,18 +44,21 @@ class QueryManager:
                     for record in table.records:
                         names.append(record["_value"])
             return names
-        except Exception as e:
-            print(f"[QueryManager] Failed to list measurements: {e}")
+        except Exception as exc:
+            logger.warning("[QueryManager] Failed to list measurements: %s", exc)
             return TopicListResponse(topics=[])
 
-    async def get_timeseries(self, measurements: list[str], start: str, stop: str = "now()") -> list[MeasurementSeriesResponse]:
+    async def get_timeseries(
+        self, measurements: list[str], start: str, stop: str = "now()"
+    ) -> list[MeasurementSeriesResponse]:
         """Fetch time-series data for one or more measurements."""
         if not measurements:
             return []
 
-        filter_str = " or ".join([f'r._measurement == "{m}"' for m in measurements])
+        filter_str = _measurement_filter(measurements)
+        bucket = _flux_string_literal(config.INFLUX_BUCKET)
         flux = f'''
-        from(bucket: "{config.INFLUX_BUCKET}")
+        from(bucket: {bucket})
           |> range(start: {start}, stop: {stop})
           |> filter(fn: (r) => {filter_str})
         '''
@@ -43,20 +69,22 @@ class QueryManager:
             filtered = [r for r in rows if r["measurement"] == name]
             points = [
                 MeasurementPoint(timestamp=r["time"], value=r["value"])
-                for r in filtered if isinstance(r["value"], (int, float))
+                for r in filtered
+                if isinstance(r["value"], (int, float))
             ]
             results.append(MeasurementSeriesResponse(measurement=name, points=points))
         return results
-    
+
     async def get_recent_messages(self, limit: int = 200):
         """Return the most recent N messages across all measurements (topics)."""
         measurements = await self.list_measurements()
         if not measurements:
             return []
-        filter_str = " or ".join([f'r._measurement == "{m}"' for m in measurements])
+        filter_str = _measurement_filter(measurements)
+        bucket = _flux_string_literal(config.INFLUX_BUCKET)
         row_limit = max(limit * 10, limit)
         flux = f'''
-        from(bucket: "{config.INFLUX_BUCKET}")
+        from(bucket: {bucket})
         |> range(start: -1h)
         |> filter(fn: (r) => {filter_str})
         |> sort(columns: ["_time"], desc: true)
@@ -77,19 +105,17 @@ class QueryManager:
         return list(messages.values())[:limit]
 
     async def get_last_points(self, topic: str, limit: int = 100):
-        """
-        Return the last N numeric points for a specific measurement (topic).
-        Used for cosine/correlation similarity checks.
-        """
+        """Return the last N numeric points for a specific measurement (topic)."""
+        bucket = _flux_string_literal(config.INFLUX_BUCKET)
+        topic_literal = _flux_string_literal(topic)
         flux = f'''
-        from(bucket: "{config.INFLUX_BUCKET}")
+        from(bucket: {bucket})
           |> range(start: -24h)
-          |> filter(fn: (r) => r._measurement == "{topic}")
+          |> filter(fn: (r) => r._measurement == {topic_literal})
           |> sort(columns: ["_time"], desc: true)
           |> limit(n: {limit})
         '''
         rows = await self._run(flux)
-        # Return only numeric values in consistent dict format
         return [
             {"time": r["time"], "value": r["value"]}
             for r in rows
@@ -104,21 +130,24 @@ class QueryManager:
             if result:
                 for table in result:
                     for record in table.records:
-                        rows.append({
-                            "time": record.get_time(),
-                            "measurement": record.get_measurement(),
-                            "field": record.get_field(),
-                            "value": record.get_value(),
-                            "tags": {
-                                k: v for k, v in record.values.items()
-                                if not k.startswith("_")
-                                and k not in ["result", "table"]
+                        rows.append(
+                            {
+                                "time": record.get_time(),
+                                "measurement": record.get_measurement(),
+                                "field": record.get_field(),
+                                "value": record.get_value(),
+                                "tags": {
+                                    k: v
+                                    for k, v in record.values.items()
+                                    if not k.startswith("_")
+                                    and k not in ["result", "table"]
+                                },
                             }
-                        })
+                        )
             return rows
-        except Exception as e:
-            print(f"[QueryManager] Query failed: {e}")
+        except Exception as exc:
+            logger.warning("[QueryManager] Query failed: %s", exc)
             return []
 
-# Singleton
+
 query_manager = QueryManager()
