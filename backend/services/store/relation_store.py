@@ -225,6 +225,28 @@ class DupeStore:
     def has_pending(self, topic: str) -> bool:
         return self.database_has_pending(topic)
 
+    def pending_topics(self, topics: list[str] | tuple[str, ...]) -> set[str]:
+        """Return requested topics participating in any pending duplicate pair."""
+        selected = tuple(sorted(set(topics)))
+        if not selected:
+            return set()
+        rows = postgres_client.fetch_all(
+            """
+            SELECT topic_a, topic_b FROM duplicates
+            WHERE status = 'PENDING'
+              AND (topic_a = ANY(%s::text[]) OR topic_b = ANY(%s::text[]))
+            """,
+            (list(selected), list(selected)),
+        )
+        requested = set(selected)
+        pending: set[str] = set()
+        for row in rows:
+            if row["topic_a"] in requested:
+                pending.add(row["topic_a"])
+            if row["topic_b"] in requested:
+                pending.add(row["topic_b"])
+        return pending
+
     @staticmethod
     def database_has_pending(topic: str) -> bool:
         row = postgres_client.fetch_one(
