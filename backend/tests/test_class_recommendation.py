@@ -87,6 +87,13 @@ def test_vector_pair_store_round_trip_preserves_views_and_text():
         def all_points(self, collection):
             return list(self.points)
 
+        def points_where(self, collection, filters):
+            return [
+                point
+                for point in self.points
+                if all(point.payload.get(key) == value for key, value in filters.items())
+            ]
+
         def delete_where(self, collection, filters):
             self.points = [
                 point
