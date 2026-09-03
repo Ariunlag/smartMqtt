@@ -22,6 +22,21 @@ def test_flux_string_literal_keeps_injection_text_inside_one_literal():
     assert literal == '"x\\" or true or r._measurement==\\"y"'
 
 
+def test_flux_string_literal_disables_flux_string_interpolation():
+    malicious = 'topic/${die(msg: "owned")}/value'
+
+    literal = _flux_string_literal(malicious)
+
+    assert '\\${die(msg: \\"owned\\")}' in literal
+    assert '${die(msg: "owned")}' not in literal
+
+
+def test_flux_string_literal_escapes_backslash_and_control_characters():
+    literal = _flux_string_literal("a\\b\n\t\x01")
+
+    assert literal == '"a\\\\b\\n\\t\\x01"'
+
+
 @pytest.mark.asyncio
 async def test_timeseries_escapes_measurement_names_before_building_flux():
     client = CapturingInfluxClient()
