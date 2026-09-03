@@ -4,6 +4,7 @@ import logging
 from config import config
 from services.database.postgres import postgres_client
 from services.dependency_monitor import DependencyMonitor
+from services.dupe_manager import dupe_manager
 from services.influx.client import influx_client
 from services.mqtt.client import mqtt_client
 from services.topic_manager import topic_manager
@@ -60,6 +61,7 @@ class ServiceManager:
         await mqtt_client.stop_ingestion()
         if self._class_recommendation_application is not None:
             await self._class_recommendation_application.processing_service.stop()
+        await dupe_manager.shutdown()
         await self.monitor.stop()
         for service in self.services:
             if hasattr(service, "disconnect"):
