@@ -74,13 +74,11 @@ class PairEmbeddingStore:
                     },
                 )
 
-    def get_topic(self, topic: str) -> tuple[PairEmbeddingRecord, ...]:
+    @staticmethod
+    def _records_from_points(topic: str, points) -> tuple[PairEmbeddingRecord, ...]:
         grouped: dict[PairIdentity, dict] = {}
-        points = self.client.all_points(PAIR_EMBEDDING_COLLECTION)
         for point in points:
             payload = point.payload
-            if payload.get("canonical_topic") != topic:
-                continue
             identity = PairIdentity(
                 payload["source"], payload["normalized_key"], payload["datatype"]
             )
@@ -94,6 +92,7 @@ class PairEmbeddingStore:
                     payload.get("representation_text", ""),
                 )
             )
+
         records = []
         for identity in sorted(grouped):
             row = grouped[identity]
@@ -117,6 +116,35 @@ class PairEmbeddingStore:
                 )
             )
         return tuple(records)
+
+    def get_topic(self, topic: str) -> tuple[PairEmbeddingRecord, ...]:
+        points = self.client.points_where(
+            PAIR_EMBEDDING_COLLECTION,
+            {"canonical_topic": topic},
+        )
+        return self._records_from_points(topic, points)
+
+    def get_topics(
+        self, topics: list[str] | tuple[str, ...]
+    ) -> dict[str, tuple[PairEmbeddingRecord, ...]]:
+        """Load pair evidence for many topics in one database round-trip."""
+        selected = tuple(sorted(set(topics)))
+        result = {topic: () for topic in selected}
+        if not selected:
+            return result
+        points = self.client.points_by_payload_values(
+            PAIR_EMBEDDING_COLLECTION,
+            "canonical_topic",
+            selected,
+        )
+        by_topic = {topic: [] for topic in selected}
+        for point in points:
+            topic = point.payload.get("canonical_topic")
+            if topic in by_topic:
+                by_topic[topic].append(point)
+        for topic in selected:
+            result[topic] = self._records_from_points(topic, by_topic[topic])
+        return result
 
     def remove_topic(self, topic: str) -> None:
         self.client.delete_where(PAIR_EMBEDDING_COLLECTION, {"canonical_topic": topic})
@@ -212,7 +240,8 @@ class RecommendationMetadataStore:
     def all_topic_states(self) -> list[dict]:
         return self.database.fetch_all(
             """
-            SELECT canonical_topic, representation_version
+            SELECT canonical_topic, representation_version,
+                   representation_fingerprint, representation_contract_version
             FROM topic_representations ORDER BY canonical_topic
             """
         )
