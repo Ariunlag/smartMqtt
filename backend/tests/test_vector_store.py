@@ -82,6 +82,66 @@ def test_pgvector_ann_can_filter_by_payload():
     assert params[-1] == 3
 
 
+def test_pgvector_store_points_where_filters_before_vector_transfer():
+    database = FakeDatabase()
+    store = PostgresVectorStore(database)
+    database.rows = [
+        {
+            "identity": "pair/a",
+            "payload": {"canonical_topic": "topic/a"},
+            "embedding": json.dumps(_vector(0.25)),
+        }
+    ]
+
+    points = store.points_where(
+        "class_pair_embeddings", {"canonical_topic": "topic/a"}
+    )
+
+    assert len(points) == 1
+    sql, params = database.executed[-1]
+    assert "FROM class_pair_embeddings" in sql
+    assert "WHERE payload @> %s::jsonb" in sql
+    assert json.loads(params[0]) == {"canonical_topic": "topic/a"}
+
+
+def test_pgvector_store_bulk_payload_values_use_one_query():
+    database = FakeDatabase()
+    store = PostgresVectorStore(database)
+    database.rows = []
+
+    points = store.points_by_payload_values(
+        "class_pair_embeddings",
+        "canonical_topic",
+        ["topic/b", "topic/a", "topic/a"],
+    )
+
+    assert points == []
+    assert len(database.executed) == 1
+    sql, params = database.executed[0]
+    assert "payload ->> %s = ANY(%s::text[])" in sql
+    assert params[0] == "canonical_topic"
+    assert params[1] == ["topic/a", "topic/b"]
+
+
+def test_pgvector_store_retrieve_many_uses_identity_array():
+    database = FakeDatabase()
+    store = PostgresVectorStore(database)
+    database.rows = [
+        {
+            "identity": "topic/a",
+            "payload": {"topic": "topic/a"},
+            "embedding": json.dumps(_vector(0.5)),
+        }
+    ]
+
+    points = store.retrieve_many("topic_embeddings", ["topic/a", "topic/b"])
+
+    assert [point.id for point in points] == ["topic/a"]
+    sql, params = database.executed[-1]
+    assert "WHERE identity = ANY(%s::text[])" in sql
+    assert params[0] == ["topic/a", "topic/b"]
+
+
 def test_pgvector_store_filters_delete_in_sql_instead_of_scanning_points():
     database = FakeDatabase()
     store = PostgresVectorStore(database)
