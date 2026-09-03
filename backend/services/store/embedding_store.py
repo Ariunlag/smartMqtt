@@ -37,6 +37,18 @@ class TopicEmbeddingStore:
             "tags": point.payload.get("tags", {}),
         }
 
+    def get_many(self, topics: list[str] | tuple[str, ...]) -> dict[str, dict]:
+        """Load authoritative stream-context vectors in one database round-trip."""
+        points = vector_store.retrieve_many(TOPIC_COLLECTION, topics)
+        return {
+            point.id: {
+                "topic": point.payload.get("topic", point.id),
+                "embedding": point.vector,
+                "tags": point.payload.get("tags", {}),
+            }
+            for point in points
+        }
+
     def candidates_for(
         self,
         topic: str,
