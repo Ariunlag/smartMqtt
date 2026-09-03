@@ -34,7 +34,11 @@ class Config:
         self.BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8000"))
         self.CORS_ALLOWED_ORIGINS = self._csv(
             "CORS_ALLOWED_ORIGINS",
-            "http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173",
+            (
+                "http://localhost,http://127.0.0.1,"
+                "http://localhost:3000,http://127.0.0.1:3000,"
+                "http://localhost:5173,http://127.0.0.1:5173"
+            ),
         )
 
         # Embedding model config. The pgvector schema currently fixes the vector
