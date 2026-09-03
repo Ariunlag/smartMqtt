@@ -25,7 +25,3 @@ class ClassManager:
         if not removed:
             raise ValueError(f"Class '{name}' not found")
         return True
-
-
-# Singleton
-class_manager = ClassManager()
