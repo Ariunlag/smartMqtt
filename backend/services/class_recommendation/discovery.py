@@ -230,7 +230,7 @@ class RecommendedClassDiscovery:
             cluster_labels=self.cluster_labels,
         )
 
-        topics, versions, pairs_by_topic, streams = self._active_material()
+        topics, versions, pairs_by_topic, streams, pending_topics = self._active_material()
         if len(topics) < 2:
             return RecommendedClassCandidateSet(
                 candidates=(),
@@ -249,7 +249,7 @@ class RecommendedClassDiscovery:
                     reference_topic=right,
                     reference_pairs=pairs_by_topic[right],
                     reference_stream=streams[right],
-                    duplicate_pending=self.dupe_store.has_pending(left),
+                    duplicate_pending=left in pending_topics,
                 )
                 reverse = TopicEvidenceMatcher.compare(
                     candidate_topic=right,
@@ -258,7 +258,7 @@ class RecommendedClassDiscovery:
                     reference_topic=left,
                     reference_pairs=pairs_by_topic[left],
                     reference_stream=streams[left],
-                    duplicate_pending=self.dupe_store.has_pending(right),
+                    duplicate_pending=right in pending_topics,
                 )
                 comparisons[(left, right)] = forward
                 comparisons[(right, left)] = reverse
@@ -345,23 +345,58 @@ class RecommendedClassDiscovery:
         )
 
     def _active_material(self):
+        states = tuple(self.metadata_store.all_topic_states())
+        state_topics = tuple(str(row["canonical_topic"]) for row in states)
+        if hasattr(self.identity_store, "resolve_many"):
+            identities = self.identity_store.resolve_many(state_topics)
+        else:  # compatibility for lightweight test adapters
+            identities = {
+                topic: None if self.identity_store.is_duplicate_alias(topic) else topic
+                for topic in state_topics
+            }
+
+        active_states = tuple(
+            row
+            for row in states
+            if identities.get(str(row["canonical_topic"]), str(row["canonical_topic"]))
+            == str(row["canonical_topic"])
+            and row.get("representation_contract_version")
+            == REPRESENTATION_CONTRACT_VERSION
+        )
+        selected_topics = tuple(
+            sorted(str(row["canonical_topic"]) for row in active_states)
+        )
+
+        if hasattr(self.pair_store, "get_topics"):
+            pairs_by_topic = self.pair_store.get_topics(selected_topics)
+        else:
+            pairs_by_topic = {
+                topic: tuple(self.pair_store.get_topic(topic)) for topic in selected_topics
+            }
+
+        if hasattr(self.topic_embedding_store, "get_many"):
+            stream_rows = self.topic_embedding_store.get_many(selected_topics)
+        else:
+            stream_rows = {
+                topic: self.topic_embedding_store.get(topic) for topic in selected_topics
+            }
+
+        if hasattr(self.dupe_store, "pending_topics"):
+            pending_topics = set(self.dupe_store.pending_topics(selected_topics))
+        else:
+            pending_topics = {
+                topic for topic in selected_topics if self.dupe_store.has_pending(topic)
+            }
+
+        versions = {
+            str(row["canonical_topic"]): int(row["representation_version"])
+            for row in active_states
+        }
         topics = []
-        versions = {}
-        pairs_by_topic = {}
         streams = {}
-        for row in self.metadata_store.all_topic_states():
-            topic = row["canonical_topic"]
-            if self.identity_store.is_duplicate_alias(topic):
-                continue
-            state = self.metadata_store.topic_state(topic)
-            if (
-                state is None
-                or state.get("representation_contract_version")
-                != REPRESENTATION_CONTRACT_VERSION
-            ):
-                continue
-            pairs = tuple(self.pair_store.get_topic(topic))
-            stream = self.topic_embedding_store.get(topic)
+        for topic in selected_topics:
+            pairs = tuple(pairs_by_topic.get(topic, ()))
+            stream = stream_rows.get(topic)
             stream_vector = (
                 tuple(float(value) for value in stream["embedding"])
                 if stream is not None
@@ -370,15 +405,17 @@ class RecommendedClassDiscovery:
             if not pairs and stream_vector is None:
                 continue
             topics.append(topic)
-            versions[topic] = int(state["representation_version"])
             pairs_by_topic[topic] = pairs
             streams[topic] = stream_vector
-        ordered = tuple(sorted(topics))
+
+        ordered = tuple(topics)
+        active_set = set(ordered)
         return (
             ordered,
-            versions,
+            {topic: versions[topic] for topic in ordered},
             {topic: pairs_by_topic[topic] for topic in ordered},
             {topic: streams[topic] for topic in ordered},
+            pending_topics & active_set,
         )
 
     @staticmethod
