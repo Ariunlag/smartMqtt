@@ -27,15 +27,43 @@ class DupeManager:
         )
         self.id_thresh = config.ID_THRESH
         self.delay = config.DUPE_CHECK_DELAY
+        self._check_tasks: set[asyncio.Task] = set()
 
     async def check_new_topic(self, topic: str, embedding: list[float]):
-        """Schedule a delayed check when a new topic is embedded."""
+        """Schedule a delayed check and retain it until completion."""
         if hasattr(embedding, "tolist"):
             embedding = embedding.tolist()
-        asyncio.create_task(self._delayed_check(topic, embedding))
+        task = asyncio.create_task(
+            self._delayed_check(topic, embedding),
+            name=f"duplicate-check:{topic}",
+        )
+        self._check_tasks.add(task)
+        task.add_done_callback(self._check_done)
+
+    def _check_done(self, task: asyncio.Task) -> None:
+        self._check_tasks.discard(task)
+        if task.cancelled():
+            return
+        try:
+            task.result()
+        except Exception as exc:  # background boundary: surface failures in logs
+            logger.error(
+                "Delayed duplicate check failed: %s",
+                task.get_name(),
+                exc_info=(type(exc), exc, exc.__traceback__),
+            )
+
+    async def shutdown(self) -> None:
+        """Cancel and await delayed checks during application shutdown."""
+        tasks = tuple(self._check_tasks)
+        for task in tasks:
+            task.cancel()
+        if tasks:
+            await asyncio.gather(*tasks, return_exceptions=True)
+        self._check_tasks.clear()
 
     async def _delayed_check(self, topic: str, embedding: list[float]):
-        for _ in range(3):  # check up to 3 times (every 2 min)
+        for _ in range(3):  # check up to 3 times
             await asyncio.sleep(self.delay)
 
             candidates = topic_embedding_store.candidates_for(
