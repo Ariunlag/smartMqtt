@@ -63,6 +63,18 @@ class PostgresVectorStore:
     def _decode_vector(value: str) -> list[float]:
         return [float(item) for item in json.loads(value)]
 
+    @classmethod
+    def _decode_points(cls, rows) -> list[VectorPoint]:
+        return [
+            VectorPoint(
+                id=row["identity"],
+                vector=cls._decode_vector(row["embedding"]),
+                payload=dict(row["payload"] or {}),
+                score=float(row["score"]) if row.get("score") is not None else None,
+            )
+            for row in rows
+        ]
+
     def _fetch_one(self, sql: str, params=(), *, conn=None):
         if conn is not None:
             return conn.execute(sql, params).fetchone()
@@ -150,15 +162,7 @@ class PostgresVectorStore:
             tuple(params),
             conn=conn,
         )
-        return [
-            VectorPoint(
-                id=row["identity"],
-                vector=self._decode_vector(row["embedding"]),
-                payload=dict(row["payload"] or {}),
-                score=float(row["score"]),
-            )
-            for row in rows
-        ]
+        return self._decode_points(rows)
 
     def retrieve(self, collection: str, identity: str, *, conn=None):
         table = self._table(collection)
@@ -177,6 +181,81 @@ class PostgresVectorStore:
             vector=self._decode_vector(row["embedding"]),
             payload=dict(row["payload"] or {}),
         )
+
+    def retrieve_many(
+        self,
+        collection: str,
+        identities: list[str] | tuple[str, ...],
+        *,
+        conn=None,
+    ) -> list[VectorPoint]:
+        unique = tuple(sorted(set(identities)))
+        if not unique:
+            return []
+        table = self._table(collection)
+        rows = self._fetch_all(
+            f"""
+            SELECT identity, payload, embedding::text AS embedding
+            FROM {table}
+            WHERE identity = ANY(%s::text[])
+            ORDER BY identity
+            """,
+            (list(unique),),
+            conn=conn,
+        )
+        return self._decode_points(rows)
+
+    def points_where(
+        self,
+        collection: str,
+        payload_filter: dict[str, Any],
+        *,
+        conn=None,
+    ) -> list[VectorPoint]:
+        if not payload_filter:
+            return self.all_points(collection, conn=conn)
+        table = self._table(collection)
+        rows = self._fetch_all(
+            f"""
+            SELECT identity, payload, embedding::text AS embedding
+            FROM {table}
+            WHERE payload @> %s::jsonb
+            ORDER BY identity
+            """,
+            (json.dumps(payload_filter),),
+            conn=conn,
+        )
+        return self._decode_points(rows)
+
+    def points_by_payload_values(
+        self,
+        collection: str,
+        payload_key: str,
+        values: list[str] | tuple[str, ...],
+        *,
+        conn=None,
+    ) -> list[VectorPoint]:
+        """Bulk-read only rows whose JSON payload key is in the requested values.
+
+        This intentionally performs one database round-trip for a set of topics. The
+        single-value path should prefer ``points_where`` so PostgreSQL can directly use
+        the existing JSONB GIN containment index.
+        """
+        unique = tuple(sorted(set(values)))
+        if not unique:
+            return []
+        table = self._table(collection)
+        rows = self._fetch_all(
+            f"""
+            SELECT identity, payload, embedding::text AS embedding
+            FROM {table}
+            WHERE payload ->> %s = ANY(%s::text[])
+            ORDER BY identity
+            """,
+            (payload_key, list(unique)),
+            conn=conn,
+        )
+        return self._decode_points(rows)
 
     def delete(self, collection: str, identity: str, *, conn=None) -> None:
         table = self._table(collection)
@@ -209,14 +288,7 @@ class PostgresVectorStore:
             """,
             conn=conn,
         )
-        return [
-            VectorPoint(
-                id=row["identity"],
-                vector=self._decode_vector(row["embedding"]),
-                payload=dict(row["payload"] or {}),
-            )
-            for row in rows
-        ]
+        return self._decode_points(rows)
 
 
 vector_store = PostgresVectorStore()
