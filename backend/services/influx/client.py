@@ -1,5 +1,11 @@
+import logging
+
 from influxdb_client import InfluxDBClient, Point, WritePrecision
+
 from config import config
+
+logger = logging.getLogger(__name__)
+
 
 class InfluxClient:
     def __init__(self, url: str, token: str, org: str):
@@ -12,19 +18,25 @@ class InfluxClient:
         self.buckets_api = None
 
     def connect(self):
+        if not self.token:
+            # Keep dependency startup recoverable, but make the configuration defect
+            # visible immediately instead of only through a later readiness failure.
+            logger.warning(
+                "[InfluxClient] INFLUX_TOKEN is empty; Influx readiness may fail"
+            )
         try:
             self.client = InfluxDBClient(
                 url=self.url,
                 token=self.token,
-                org=self.org
+                org=self.org,
             )
             self.write_api = self.client.write_api()
             self.query_api = self.client.query_api()
             self.buckets_api = self.client.buckets_api()
             self._ensure_bucket()
-            print(f"[InfluxClient] Connected to {self.url}")
-        except Exception as e:
-            print(f"[InfluxClient] Failed to connect: {e}")
+            logger.info("[InfluxClient] Connected to %s", self.url)
+        except Exception as exc:
+            logger.warning("[InfluxClient] Failed to connect: %s", exc)
             self.client = None
 
     def _ensure_bucket(self):
@@ -35,16 +47,20 @@ class InfluxClient:
             if bucket is None:
                 org = self.client.organizations_api().find_organization_by_name(self.org)
                 if org:
-                    self.buckets_api.create_bucket(bucket_name=config.INFLUX_BUCKET, org_id=org.id)
-                    print(f"[InfluxClient] Created bucket {config.INFLUX_BUCKET}")
-        except Exception as e:
-            print(f"[InfluxClient] Bucket setup failed: {e}")
+                    self.buckets_api.create_bucket(
+                        bucket_name=config.INFLUX_BUCKET, org_id=org.id
+                    )
+                    logger.info(
+                        "[InfluxClient] Created bucket %s", config.INFLUX_BUCKET
+                    )
+        except Exception as exc:
+            logger.warning("[InfluxClient] Bucket setup failed: %s", exc)
 
     def disconnect(self):
         if self.client:
             self.client.close()
             self.client = None
-            print("[InfluxClient] Disconnected")
+            logger.info("[InfluxClient] Disconnected")
 
     def check_health(self) -> bool:
         """Return True if Influx server is healthy."""
@@ -60,10 +76,10 @@ class InfluxClient:
         if not self.write_api:
             raise RuntimeError("InfluxDB write API is not connected")
         point = Point(measurement)
-        for k, v in tags.items():
-            point = point.tag(k, v)
-        for k, v in fields.items():
-            point = point.field(k, v)
+        for key, value in tags.items():
+            point = point.tag(key, value)
+        for key, value in fields.items():
+            point = point.field(key, value)
         if timestamp:
             point = point.time(timestamp, WritePrecision.NS)
         self.write_api.write(bucket=config.INFLUX_BUCKET, record=point)
@@ -71,13 +87,14 @@ class InfluxClient:
     def query_raw(self, flux: str):
         try:
             return self.query_api.query(flux)
-        except Exception as e:
-            print(f"[InfluxClient] Query failed: {e}")
+        except Exception as exc:
+            logger.warning("[InfluxClient] Query failed: %s", exc)
             return None
+
 
 # Singleton instance
 influx_client = InfluxClient(
     url=config.INFLUX_URL,
     token=config.INFLUX_TOKEN,
-    org=config.INFLUX_ORG
+    org=config.INFLUX_ORG,
 )
