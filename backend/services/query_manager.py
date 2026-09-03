@@ -1,4 +1,3 @@
-import json
 import logging
 
 from config import config
@@ -9,13 +8,37 @@ logger = logging.getLogger(__name__)
 
 
 def _flux_string_literal(value: object) -> str:
-    """Render an untrusted value as one Flux string literal.
+    """Render an untrusted value as one non-interpolating Flux string literal.
 
-    Flux uses JSON-style escapes for quoted strings. Encoding the complete value rather
-    than interpolating inside hand-written quotes prevents measurements/topics from
-    terminating the literal and injecting Flux syntax.
+    Flux strings require escapes for quotes/backslashes/control characters and also
+    treat `${...}` as string interpolation. Escape all of those constructs so MQTT
+    topic and measurement names remain data rather than executable Flux syntax.
     """
-    return json.dumps(str(value), ensure_ascii=False)
+    text = str(value)
+    escaped: list[str] = ['"']
+    index = 0
+    simple_escapes = {
+        "\\": "\\\\",
+        '"': '\\"',
+        "\n": "\\n",
+        "\r": "\\r",
+        "\t": "\\t",
+    }
+    while index < len(text):
+        if text.startswith("${", index):
+            escaped.append("\\${")
+            index += 2
+            continue
+        char = text[index]
+        if char in simple_escapes:
+            escaped.append(simple_escapes[char])
+        elif ord(char) < 0x20 or ord(char) == 0x7F:
+            escaped.extend(f"\\x{byte:02x}" for byte in char.encode("utf-8"))
+        else:
+            escaped.append(char)
+        index += 1
+    escaped.append('"')
+    return "".join(escaped)
 
 
 def _measurement_filter(measurements: list[str]) -> str:
