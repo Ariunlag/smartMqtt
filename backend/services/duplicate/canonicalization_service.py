@@ -92,7 +92,7 @@ class DuplicateCanonicalizationService:
             }
 
         if recommendation_application is not None:
-            # Durable audit first: a later Qdrant/profile rebuild failure must not
+            # Durable audit first: a later derived-profile cleanup failure must not
             # erase the fact that the human duplicate decision committed.
             recommendation_application.metadata_store.audit(
                 action_type="DUPLICATE_CONFIRM",
@@ -172,16 +172,12 @@ class DuplicateCanonicalizationService:
 
     @staticmethod
     def _reconcile_relations(conn, canonical: str, aliases: tuple[str, ...]) -> None:
+        """Move only active runtime relations to the canonical topic.
+
+        Historical tag-group tables are intentionally retained by migrations for
+        compatibility/research history, but the retired runtime no longer writes them.
+        """
         for alias in aliases:
-            conn.execute(
-                """
-                INSERT INTO tag_group_topics(group_id, topic)
-                SELECT group_id, %s FROM tag_group_topics WHERE topic = %s
-                ON CONFLICT DO NOTHING
-                """,
-                (canonical, alias),
-            )
-            conn.execute("DELETE FROM tag_group_topics WHERE topic = %s", (alias,))
             conn.execute(
                 """
                 INSERT INTO class_topics(class_name, topic, position)
