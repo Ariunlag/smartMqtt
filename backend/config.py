@@ -22,10 +22,20 @@ class Config:
             "POSTGRES_DSN",
             "postgresql://influxai:influxai@localhost:5432/influxai",
         )
+        self.POSTGRES_POOL_MAX_SIZE = int(os.getenv("POSTGRES_POOL_MAX_SIZE", "10"))
+        self.POSTGRES_POOL_TIMEOUT = float(os.getenv("POSTGRES_POOL_TIMEOUT", "5.0"))
+        if self.POSTGRES_POOL_MAX_SIZE < 1:
+            raise ValueError("POSTGRES_POOL_MAX_SIZE must be at least 1")
+        if self.POSTGRES_POOL_TIMEOUT <= 0:
+            raise ValueError("POSTGRES_POOL_TIMEOUT must be positive")
 
-        # Runtime host/port
+        # Runtime host/port and browser access.
         self.BACKEND_HOST = os.getenv("BACKEND_HOST", "0.0.0.0")
         self.BACKEND_PORT = int(os.getenv("BACKEND_PORT", "8000"))
+        self.CORS_ALLOWED_ORIGINS = self._csv(
+            "CORS_ALLOWED_ORIGINS",
+            "http://localhost,http://127.0.0.1,http://localhost:5173,http://127.0.0.1:5173",
+        )
 
         # Embedding model config. The pgvector schema currently fixes the vector
         # dimension at 384; changing model dimensionality requires a migration.
