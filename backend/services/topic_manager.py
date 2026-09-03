@@ -1,7 +1,11 @@
+import logging
+
 from services.mqtt.client import mqtt_client
 
 from .store.canonical_identity_store import canonical_identity_store
 from .store.topic_store import ignored_topic_store, topic_store
+
+logger = logging.getLogger(__name__)
 
 
 class DuplicateAliasSubscriptionError(ValueError):
@@ -25,12 +29,12 @@ class TopicManager:
         ignored = ignored_topic_store.get_all()
 
         if topic in ignored:
-            print(f"[TopicManager] Skipping subscribe for ignored topic: {topic}")
+            logger.info("Skipping subscribe for ignored topic: %s", topic)
             return
 
         mqtt_client.subscribe(topic)
         topic_store.add(topic)
-        print(f"[TopicManager] Subscribed to {topic} (stored as {topic})")
+        logger.info("Subscribed to %s", topic)
 
     def unsubscribe(self, topic: str) -> bool:
         """Unsubscribe and remove from store."""
@@ -40,10 +44,10 @@ class TopicManager:
         if topic in topics or identity.is_alias:
             mqtt_client.unsubscribe(topic)
             topic_store.remove(topic)
-            print(f"[TopicManager] Unsubscribed from {topic}")
+            logger.info("Unsubscribed from %s", topic)
             return True
 
-        print(f"[TopicManager] Cannot unsubscribe, topic not found: {topic}")
+        logger.info("Cannot unsubscribe, topic not found: %s", topic)
         return False
 
     def get_subscribed_topics(self) -> list[str]:
@@ -59,15 +63,14 @@ class TopicManager:
         for topic in topics:
             canonical = identities.get(topic, topic)
             if canonical != topic:
-                print(
-                    f"[TopicManager] Skipping duplicate alias {topic} "
-                    f"(canonical {canonical})"
+                logger.info(
+                    "Skipping duplicate alias %s (canonical %s)", topic, canonical
                 )
             elif topic not in ignored:
                 mqtt_client.subscribe(topic)
-                print(f"[TopicManager] Resubscribed to {topic}")
+                logger.info("Resubscribed to %s", topic)
             else:
-                print(f"[TopicManager] Skipping ignored topic {topic}")
+                logger.info("Skipping ignored topic %s", topic)
 
 
 # Singleton
