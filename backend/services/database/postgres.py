@@ -1,14 +1,12 @@
 import logging
+from collections.abc import Iterator
 from contextlib import contextmanager
 from threading import Lock
-from typing import Iterator
 
 import psycopg
+from config import config
 from psycopg.rows import dict_row
 from psycopg_pool import ConnectionPool
-
-from config import config
-
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +48,7 @@ class PostgresClient:
                 conn.execute("SELECT 1")
             self._ready = True
             logger.info("[PostgresClient] Connected")
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - pool/driver failures share recovery
             self._ready = False
             logger.warning("[PostgresClient] Connection failed: %s", exc)
 
@@ -71,7 +69,7 @@ class PostgresClient:
                     """
                 ).fetchone()
             self._ready = bool(row and row["ready"])
-        except Exception:
+        except Exception:  # noqa: BLE001 - readiness collapses pool/driver failures
             self._ready = False
         return self._ready
 

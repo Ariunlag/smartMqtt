@@ -28,7 +28,10 @@ _PAIR_EVIDENCE_ORDER = {
 
 def _evidence_sort_key(item) -> tuple[int, str]:
     evidence_id = item[0]
-    return (_PAIR_EVIDENCE_ORDER.get(evidence_id, len(_PAIR_EVIDENCE_ORDER)), evidence_id)
+    return (
+        _PAIR_EVIDENCE_ORDER.get(evidence_id, len(_PAIR_EVIDENCE_ORDER)),
+        evidence_id,
+    )
 
 
 class PairEmbeddingStore:

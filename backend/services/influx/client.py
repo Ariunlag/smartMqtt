@@ -1,8 +1,7 @@
 import logging
 
-from influxdb_client import InfluxDBClient, Point, WritePrecision
-
 from config import config
+from influxdb_client import InfluxDBClient, Point, WritePrecision
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ class InfluxClient:
             self.buckets_api = self.client.buckets_api()
             self._ensure_bucket()
             logger.info("[InfluxClient] Connected to %s", self.url)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - external SDK recovery boundary
             logger.warning("[InfluxClient] Failed to connect: %s", exc)
             self.client = None
 
@@ -45,7 +44,9 @@ class InfluxClient:
         try:
             bucket = self.buckets_api.find_bucket_by_name(config.INFLUX_BUCKET)
             if bucket is None:
-                org = self.client.organizations_api().find_organization_by_name(self.org)
+                org = self.client.organizations_api().find_organization_by_name(
+                    self.org
+                )
                 if org:
                     self.buckets_api.create_bucket(
                         bucket_name=config.INFLUX_BUCKET, org_id=org.id
@@ -53,7 +54,7 @@ class InfluxClient:
                     logger.info(
                         "[InfluxClient] Created bucket %s", config.INFLUX_BUCKET
                     )
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - external SDK recovery boundary
             logger.warning("[InfluxClient] Bucket setup failed: %s", exc)
 
     def disconnect(self):
@@ -69,7 +70,7 @@ class InfluxClient:
                 return False
             health = self.client.health()
             return getattr(health, "status", None) == "pass"
-        except Exception:
+        except Exception:  # noqa: BLE001 - health collapses external SDK failures
             return False
 
     def write_point(self, measurement: str, tags: dict, fields: dict, timestamp=None):
@@ -87,7 +88,7 @@ class InfluxClient:
     def query_raw(self, flux: str):
         try:
             return self.query_api.query(flux)
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - external SDK query boundary
             logger.warning("[InfluxClient] Query failed: %s", exc)
             return None
 

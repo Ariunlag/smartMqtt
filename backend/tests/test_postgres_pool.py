@@ -1,4 +1,5 @@
 from contextlib import contextmanager
+from typing import ClassVar
 
 from services.database import postgres as postgres_module
 
@@ -28,7 +29,7 @@ class FakeConnection:
 
 
 class FakePool:
-    instances = []
+    instances: ClassVar[list] = []
 
     def __init__(self, **kwargs):
         self.kwargs = kwargs

@@ -1,7 +1,6 @@
 import json
 
 import pytest
-
 from services.database.vector import (
     PostgresVectorStore,
     deterministic_vector_identity,
@@ -93,9 +92,7 @@ def test_pgvector_store_points_where_filters_before_vector_transfer():
         }
     ]
 
-    points = store.points_where(
-        "class_pair_embeddings", {"canonical_topic": "topic/a"}
-    )
+    points = store.points_where("class_pair_embeddings", {"canonical_topic": "topic/a"})
 
     assert len(points) == 1
     sql, params = database.executed[-1]

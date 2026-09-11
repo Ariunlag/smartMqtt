@@ -91,7 +91,9 @@ def test_vector_pair_store_round_trip_preserves_views_and_text():
             return [
                 point
                 for point in self.points
-                if all(point.payload.get(key) == value for key, value in filters.items())
+                if all(
+                    point.payload.get(key) == value for key, value in filters.items()
+                )
             ]
 
         def delete_where(self, collection, filters):
@@ -446,9 +448,9 @@ async def test_representation_contract_change_forces_rematerialization():
     model = CountingModel()
     application = _application(model)
     assert await application.observe(_message(1.0)) is True
-    application.metadata_store.rows["sensor"][
-        "representation_contract_version"
-    ] = "obsolete-contract"
+    application.metadata_store.rows["sensor"]["representation_contract_version"] = (
+        "obsolete-contract"
+    )
 
     assert await application.observe(_message(2.0)) is True
     assert len(model.calls) == 2

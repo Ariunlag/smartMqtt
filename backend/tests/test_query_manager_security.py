@@ -1,5 +1,4 @@
 import pytest
-
 from services.query_manager import QueryManager, _flux_string_literal
 
 

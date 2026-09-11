@@ -70,7 +70,9 @@ class RecommendedClassCandidateSet:
     candidates: tuple[RecommendedClassCandidate, ...]
     available_topics: tuple[str, ...]
     strategy: RecommendationStrategyDefinition
-    strategy_catalog: tuple[RecommendationStrategyDefinition, ...] = STRATEGY_DEFINITIONS
+    strategy_catalog: tuple[RecommendationStrategyDefinition, ...] = (
+        STRATEGY_DEFINITIONS
+    )
     evidence_catalog: tuple[EvidenceDefinition, ...] = EVIDENCE_CATALOG
 
 
@@ -230,7 +232,9 @@ class RecommendedClassDiscovery:
             cluster_labels=self.cluster_labels,
         )
 
-        topics, versions, pairs_by_topic, streams, pending_topics = self._active_material()
+        topics, versions, pairs_by_topic, streams, pending_topics = (
+            self._active_material()
+        )
         if len(topics) < 2:
             return RecommendedClassCandidateSet(
                 candidates=(),
@@ -371,14 +375,16 @@ class RecommendedClassDiscovery:
             pairs_by_topic = self.pair_store.get_topics(selected_topics)
         else:
             pairs_by_topic = {
-                topic: tuple(self.pair_store.get_topic(topic)) for topic in selected_topics
+                topic: tuple(self.pair_store.get_topic(topic))
+                for topic in selected_topics
             }
 
         if hasattr(self.topic_embedding_store, "get_many"):
             stream_rows = self.topic_embedding_store.get_many(selected_topics)
         else:
             stream_rows = {
-                topic: self.topic_embedding_store.get(topic) for topic in selected_topics
+                topic: self.topic_embedding_store.get(topic)
+                for topic in selected_topics
             }
 
         if hasattr(self.dupe_store, "pending_topics"):
@@ -466,7 +472,9 @@ class RecommendedClassDiscovery:
             "members": list(members),
         }
         fingerprint = hashlib.sha256(
-            json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+            json.dumps(payload, separators=(",", ":"), ensure_ascii=False).encode(
+                "utf-8"
+            )
         ).hexdigest()
         return str(
             uuid.uuid5(

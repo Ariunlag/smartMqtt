@@ -2,7 +2,6 @@ import asyncio
 import logging
 
 import pytest
-
 from services.dupe_manager import DupeManager
 
 
@@ -12,7 +11,9 @@ class FakeCanonicalizationService:
 
 @pytest.mark.asyncio
 async def test_duplicate_check_task_is_retained_until_completion():
-    manager = DupeManager(store=object(), canonicalization_service=FakeCanonicalizationService())
+    manager = DupeManager(
+        store=object(), canonicalization_service=FakeCanonicalizationService()
+    )
     started = asyncio.Event()
     release = asyncio.Event()
 
@@ -38,7 +39,9 @@ async def test_duplicate_check_task_is_retained_until_completion():
 
 @pytest.mark.asyncio
 async def test_duplicate_check_exception_is_observed_and_logged(caplog):
-    manager = DupeManager(store=object(), canonicalization_service=FakeCanonicalizationService())
+    manager = DupeManager(
+        store=object(), canonicalization_service=FakeCanonicalizationService()
+    )
 
     async def delayed_check(topic, embedding):
         raise RuntimeError("boom")
@@ -58,7 +61,9 @@ async def test_duplicate_check_exception_is_observed_and_logged(caplog):
 
 @pytest.mark.asyncio
 async def test_duplicate_manager_shutdown_cancels_pending_checks():
-    manager = DupeManager(store=object(), canonicalization_service=FakeCanonicalizationService())
+    manager = DupeManager(
+        store=object(), canonicalization_service=FakeCanonicalizationService()
+    )
     started = asyncio.Event()
 
     async def delayed_check(topic, embedding):

@@ -92,7 +92,9 @@ def test_active_material_prefetches_each_database_dimension_once():
         dupe_store=dupes,
     )
 
-    topics, versions, pairs_by_topic, stream_vectors, pending = discovery._active_material()
+    topics, versions, pairs_by_topic, stream_vectors, pending = (
+        discovery._active_material()
+    )
 
     assert topics == ("topic/a", "topic/b")
     assert versions == {"topic/a": 1, "topic/b": 2}

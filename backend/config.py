@@ -97,7 +97,9 @@ class Config:
             "SYSTEM_RECOMMENDATION_ALLOW_SINGLE_CLUSTER", False
         )
         if self.SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE < 2:
-            raise ValueError("SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE must be at least 2")
+            raise ValueError(
+                "SYSTEM_RECOMMENDATION_MIN_CLUSTER_SIZE must be at least 2"
+            )
         if self.SYSTEM_RECOMMENDATION_MIN_SAMPLES < 1:
             raise ValueError("SYSTEM_RECOMMENDATION_MIN_SAMPLES must be at least 1")
 

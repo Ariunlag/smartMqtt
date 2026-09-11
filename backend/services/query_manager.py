@@ -1,7 +1,11 @@
 import logging
 
 from config import config
-from models.api_models import MeasurementPoint, MeasurementSeriesResponse, TopicListResponse
+from models.api_models import (
+    MeasurementPoint,
+    MeasurementSeriesResponse,
+    TopicListResponse,
+)
 from services.influx.client import influx_client
 
 logger = logging.getLogger(__name__)
@@ -55,10 +59,10 @@ class QueryManager:
     async def list_measurements(self) -> TopicListResponse:
         """Return all measurement names in the bucket."""
         bucket = _flux_string_literal(config.INFLUX_BUCKET)
-        flux = f'''
+        flux = f"""
         import "influxdata/influxdb/schema"
         schema.measurements(bucket: {bucket})
-        '''
+        """
         try:
             result = self.client.query_raw(flux)
             names = []
@@ -67,7 +71,7 @@ class QueryManager:
                     for record in table.records:
                         names.append(record["_value"])
             return names
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tolerate malformed SDK responses
             logger.warning("[QueryManager] Failed to list measurements: %s", exc)
             return TopicListResponse(topics=[])
 
@@ -80,11 +84,11 @@ class QueryManager:
 
         filter_str = _measurement_filter(measurements)
         bucket = _flux_string_literal(config.INFLUX_BUCKET)
-        flux = f'''
+        flux = f"""
         from(bucket: {bucket})
           |> range(start: {start}, stop: {stop})
           |> filter(fn: (r) => {filter_str})
-        '''
+        """
         rows = await self._run(flux)
 
         results = []
@@ -106,13 +110,13 @@ class QueryManager:
         filter_str = _measurement_filter(measurements)
         bucket = _flux_string_literal(config.INFLUX_BUCKET)
         row_limit = max(limit * 10, limit)
-        flux = f'''
+        flux = f"""
         from(bucket: {bucket})
         |> range(start: -1h)
         |> filter(fn: (r) => {filter_str})
         |> sort(columns: ["_time"], desc: true)
         |> limit(n: {row_limit})
-        '''
+        """
         rows = await self._run(flux)
         messages = {}
         for row in rows:
@@ -131,13 +135,13 @@ class QueryManager:
         """Return the last N numeric points for a specific measurement (topic)."""
         bucket = _flux_string_literal(config.INFLUX_BUCKET)
         topic_literal = _flux_string_literal(topic)
-        flux = f'''
+        flux = f"""
         from(bucket: {bucket})
           |> range(start: -24h)
           |> filter(fn: (r) => r._measurement == {topic_literal})
           |> sort(columns: ["_time"], desc: true)
           |> limit(n: {limit})
-        '''
+        """
         rows = await self._run(flux)
         return [
             {"time": r["time"], "value": r["value"]}
@@ -168,7 +172,7 @@ class QueryManager:
                             }
                         )
             return rows
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 - tolerate malformed SDK responses
             logger.warning("[QueryManager] Query failed: %s", exc)
             return []
 
