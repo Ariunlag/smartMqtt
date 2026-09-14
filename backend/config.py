@@ -77,6 +77,22 @@ class Config:
         self.CLASS_RECOMMENDATION_QUEUE_MAXSIZE = int(
             os.getenv("CLASS_RECOMMENDATION_QUEUE_MAXSIZE", "1000")
         )
+        self.RECOMMENDATION_ENVIRONMENT = os.getenv("RECOMMENDATION_ENVIRONMENT", "default").strip()
+        self.ADAPTIVE_SIMILARITY_THRESHOLD = self._ratio("ADAPTIVE_SIMILARITY_THRESHOLD", 0.80)
+        self.ADAPTIVE_LEARNING_INTERVAL = float(os.getenv("ADAPTIVE_LEARNING_INTERVAL", "30"))
+        self.ADAPTIVE_MIN_LABELS = int(os.getenv("ADAPTIVE_MIN_LABELS", "12"))
+        self.ADAPTIVE_EXACT_LIMIT = int(os.getenv("ADAPTIVE_EXACT_LIMIT", "192"))
+        self.ADAPTIVE_NEIGHBORS = int(os.getenv("ADAPTIVE_NEIGHBORS", "32"))
+        self.ADAPTIVE_SERIES_MODE = os.getenv("ADAPTIVE_SERIES_MODE", "active")
+        self.ADAPTIVE_SERIES_STEP = int(os.getenv("ADAPTIVE_SERIES_STEP", "60"))
+        self.ADAPTIVE_SERIES_BINS = int(os.getenv("ADAPTIVE_SERIES_BINS", "32"))
+        self.ADAPTIVE_SERIES_MIN_POINTS = int(os.getenv("ADAPTIVE_SERIES_MIN_POINTS", "16"))
+        if self.ADAPTIVE_SERIES_MODE not in {"off", "shadow", "active"}:
+            raise ValueError("ADAPTIVE_SERIES_MODE must be off, shadow or active")
+        if not self.RECOMMENDATION_ENVIRONMENT:
+            raise ValueError("RECOMMENDATION_ENVIRONMENT must not be empty")
+        if self.ADAPTIVE_LEARNING_INTERVAL < 1 or self.ADAPTIVE_MIN_LABELS < 4:
+            raise ValueError("Adaptive learning interval must be >= 1 and min labels >= 4")
 
         # Normal user-facing discovery excludes synthetic acceptance namespaces.
         # Acceptance Compose explicitly clears this value so the real-stack harness

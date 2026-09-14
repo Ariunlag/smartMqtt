@@ -1,3 +1,5 @@
+import asyncio
+
 from fastapi import APIRouter, HTTPException, Request
 from models.api_models import (
     ClassListResponse,
@@ -13,6 +15,9 @@ router = APIRouter(prefix="/classes", tags=["Classes"])
 
 @router.get("/", response_model=ClassListResponse)
 async def list_classes(request: Request):
+    adaptive = getattr(request.app.state.class_recommendation, "adaptive", None)
+    if adaptive is not None:
+        return ClassListResponse(classes=await asyncio.to_thread(adaptive.store.classes))
     return ClassListResponse(
         classes=request.app.state.class_recommendation.class_manager.list_classes()
     )
@@ -22,6 +27,8 @@ async def list_classes(request: Request):
 async def create_class(req: CreateClassRequest, request: Request):
     try:
         application = request.app.state.class_recommendation
+        if getattr(application, "adaptive", None) is not None:
+            return await asyncio.to_thread(application.adaptive.manual_class, req.name, req.topics)
         return application.create_class(req.name, req.topics)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc)) from exc
@@ -30,6 +37,13 @@ async def create_class(req: CreateClassRequest, request: Request):
 @router.put("/{name}", response_model=ClassRecord)
 async def update_class(name: str, req: UpdateClassRequest, request: Request):
     application = request.app.state.class_recommendation
+    if getattr(application, "adaptive", None) is not None:
+        try:
+            return await asyncio.to_thread(application.adaptive.manual_class, name, req.topics, update=True)
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
     updated = application.update_class(name, req.topics)
     if not updated:
         raise HTTPException(status_code=404, detail="Class not found")
@@ -39,6 +53,12 @@ async def update_class(name: str, req: UpdateClassRequest, request: Request):
 @router.delete("/{name}")
 async def delete_class(name: str, request: Request):
     application = request.app.state.class_recommendation
+    if getattr(application, "adaptive", None) is not None:
+        try:
+            await asyncio.to_thread(application.adaptive.delete_class, name)
+            return {"status": "deleted", "name": name}
+        except LookupError as exc:
+            raise HTTPException(status_code=404, detail=str(exc)) from exc
     try:
         application.delete_class(name)
     except ValueError as exc:

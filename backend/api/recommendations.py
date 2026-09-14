@@ -12,7 +12,8 @@ from uuid import UUID
 
 from config import config
 from fastapi import APIRouter, HTTPException, Request
-from models.api_models import RecommendedClassFeedbackRequest
+from models.api_models import RecommendedClassFeedbackRequest, AdaptiveGroupActionRequest
+from services.class_recommendation.adaptive import RevisionConflict
 from services.class_recommendation.candidate_feedback import recommended_candidate_store
 from services.class_recommendation.discovery import (
     RecommendedClassDiscovery,
@@ -27,6 +28,31 @@ from services.class_recommendation.strategies import (
 
 logger = logging.getLogger(__name__)
 router = APIRouter(tags=["Class Recommendations"])
+
+
+def adaptive_service(request: Request):
+    service = getattr(request.app.state.class_recommendation, "adaptive", None)
+    if service is None:
+        raise HTTPException(status_code=503, detail="Adaptive recommendation service is not configured")
+    return service
+
+
+@router.get("/adaptive-recommendations")
+async def adaptive_recommendations(request: Request):
+    return await asyncio.to_thread(adaptive_service(request).recommendations)
+
+
+@router.post("/adaptive-recommendations/{group_id}/actions")
+async def adaptive_group_action(group_id: str, payload: AdaptiveGroupActionRequest, request: Request):
+    try:
+        return await asyncio.to_thread(adaptive_service(request).edit, group_id, payload.action,
+                                       payload.revision, topic=payload.topic, name=payload.name)
+    except RevisionConflict as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
+    except LookupError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
 class _FilteredRecommendationMetadata:

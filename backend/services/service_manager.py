@@ -44,6 +44,8 @@ class ServiceManager:
 
         self._class_recommendation_application = class_recommendation_application
         await class_recommendation_application.processing_service.start()
+        if getattr(class_recommendation_application, "adaptive", None) is not None:
+            await class_recommendation_application.adaptive.start()
         register_mqtt_handlers(
             class_recommendation_application.processing_service,
             identity_store=class_recommendation_application.identity_store,
@@ -61,6 +63,8 @@ class ServiceManager:
         await mqtt_client.stop_ingestion()
         if self._class_recommendation_application is not None:
             await self._class_recommendation_application.processing_service.stop()
+            if getattr(self._class_recommendation_application, "adaptive", None) is not None:
+                await self._class_recommendation_application.adaptive.stop()
         await dupe_manager.shutdown()
         await self.monitor.stop()
         for service in self.services:

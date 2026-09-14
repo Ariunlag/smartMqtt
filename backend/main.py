@@ -33,11 +33,36 @@ def _build_default_class_recommendation_application() -> ClassRecommendationAppl
     """Build the production recommender lazily during application startup."""
     from services.embedding_manager import embedding_manager
 
-    return build_class_recommendation_application(
+    application = build_class_recommendation_application(
         model=embedding_manager.model,
         stream_context_refresher=embedding_manager.embed_flattened_topic,
         processing_capacity=config.CLASS_RECOMMENDATION_QUEUE_MAXSIZE,
     )
+    from services.class_recommendation.adaptive import AdaptiveRecommendations
+    from services.class_recommendation.adaptive_discovery import DiscoveryConfig
+    from services.class_recommendation.adaptive_series import InfluxSeriesSource, SeriesConfig, SeriesShapeProvider
+    from services.influx.client import influx_client
+
+    series = None if config.ADAPTIVE_SERIES_MODE == "off" else SeriesShapeProvider(
+        SeriesConfig(step_seconds=config.ADAPTIVE_SERIES_STEP, bins=config.ADAPTIVE_SERIES_BINS,
+                     min_points=config.ADAPTIVE_SERIES_MIN_POINTS), active=config.ADAPTIVE_SERIES_MODE == "active")
+
+    application.adaptive = AdaptiveRecommendations(
+        embedding_manager.model, application.identity_store,
+        environment_id=config.RECOMMENDATION_ENVIRONMENT,
+        model_id=config.EMBEDDING_MODEL,
+        threshold=config.ADAPTIVE_SIMILARITY_THRESHOLD,
+        interval=config.ADAPTIVE_LEARNING_INTERVAL,
+        min_labels=config.ADAPTIVE_MIN_LABELS,
+        excluded_prefixes=config.SYSTEM_RECOMMENDATION_EXCLUDED_TOPIC_PREFIXES,
+        discovery_config=DiscoveryConfig(exact_limit=config.ADAPTIVE_EXACT_LIMIT, neighbors=config.ADAPTIVE_NEIGHBORS),
+        series_provider=series,
+        series_source=InfluxSeriesSource(influx_client, config.INFLUX_BUCKET) if series else None,
+    )
+    # The runtime has one recommendation sidecar. Legacy pair/Saved-Class APIs
+    # remain for compatibility, but no longer embed fields/schema during ingestion.
+    application.processing_service.application = application.adaptive
+    return application
 
 
 def create_app(

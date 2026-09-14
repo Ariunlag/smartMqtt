@@ -16,6 +16,11 @@ from alembic.config import Config
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 
 APP_TABLES = [
+    "adaptive_models",
+    "adaptive_events",
+    "adaptive_groups",
+    "adaptive_evidence",
+    "adaptive_topics",
     "streams",
     "ignored_topics",
     "detected_topics",
@@ -51,7 +56,7 @@ APP_TABLES = [
     "recommendation_live_observations",
 ]
 
-HEAD_REVISION = "0010_recommendation_live"
+HEAD_REVISION = "0011_adaptive_recommendations"
 
 
 def _make_config(url: str) -> Config:

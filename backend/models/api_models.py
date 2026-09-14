@@ -3,7 +3,7 @@ from enum import Enum
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, field_validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 # ---------------------------
 # Topics
@@ -145,3 +145,10 @@ class RecommendedClassFeedbackRequest(BaseModel):
         if self.action not in topic_actions and self.topic is not None:
             raise ValueError(f"{self.action} does not accept a topic")
         return self
+
+
+class AdaptiveGroupActionRequest(BaseModel):
+    action: Literal["add", "remove", "confirm", "undo", "save", "dismiss", "useful"]
+    revision: int = Field(ge=1)
+    topic: str | None = None
+    name: str | None = Field(default=None, max_length=200)

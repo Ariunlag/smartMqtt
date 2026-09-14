@@ -881,6 +881,35 @@ label {
    Print
    ================================ */
 
+.adaptive { display: grid; gap: 1rem; }
+.adaptive__header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: .75rem; }
+.adaptive__header h2, .adaptive__header h3 { margin: 0 0 .35rem; }
+.adaptive__header p, .adaptive__status { margin: 0; color: var(--muted-text); }
+.adaptive__learning { border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
+.adaptive summary { cursor: pointer; padding: .45rem 0; }
+.adaptive__weights { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; }
+.adaptive__weights > div { display: grid; gap: .25rem; background: var(--surface-sunken); padding: .75rem; border-radius: var(--radius-sm); }
+.adaptive__groups { display: grid; gap: 1rem; }
+.adaptive__card { min-width: 0; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1rem; background: var(--sidebar-bg); }
+.adaptive__members { display: grid; margin: .75rem 0; }
+.adaptive__member { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; padding: .75rem 0; border-bottom: 1px solid var(--border-color); }
+.adaptive__member small { display: block; margin-top: .25rem; color: var(--muted-text); }
+.adaptive__topic { overflow-wrap: anywhere; min-width: 0; }
+.adaptive__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
+.adaptive footer { margin-top: 1rem; }
+.adaptive__form { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: 1rem 0; }
+.adaptive__form label { display: grid; flex: 1; min-width: 0; gap: .4rem; }
+.adaptive__form input, .adaptive__form select { width: 100%; min-width: 0; box-sizing: border-box; }
+.adaptive__evidence { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; }
+.adaptive__evidence section { min-width: 0; padding: .75rem; background: var(--surface-sunken); border-radius: var(--radius-sm); }
+.adaptive__evidence span { float: right; }
+.adaptive__evidence p { overflow-wrap: anywhere; font-size: .85rem; }
+.adaptive__proposal { display: flex; justify-content: space-between; gap: .75rem; padding: .4rem 0; }
+@media (max-width: 680px) {
+  .adaptive__member { grid-template-columns: minmax(0, 1fr); }
+  .adaptive__evidence { grid-template-columns: minmax(0, 1fr); }
+}
+
 @media print {
   :root {
     --app-bg: #fff;

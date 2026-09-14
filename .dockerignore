@@ -7,3 +7,17 @@
 .git/
 .gitignore
 README.md
+.local/
+.claude/
+.env
+.env.*
+benchmark/
+notebook/
+backend/research/
+docs/
+images/
+test/
+frontend/public/semantic-demo*
+**/*.ipynb
+**/*.pdf
+**/.ruff_cache/

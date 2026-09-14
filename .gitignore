@@ -1,6 +1,24 @@
 # -----------------------
 # Python / Backend
 # -----------------------
+.local/
+.claude/
+.ruff_cache/
+.pytest_cache/
+**/.pytest_cache/
+
+# Local research material and generated demo/benchmark outputs
+/backend/research/
+/benchmark/
+/notebook/
+/docs/research/
+/docs/engineering/
+/duplicate-logic.pdf
+/group-tag-logic.pdf
+/duplicate_logic.md
+/frontend/public/semantic-demo*
+/frontend/dist/semantic-demo*
+
 __pycache__/
 *.py[cod]
 *.egg-info/
