@@ -8,7 +8,7 @@ import MqttManager from "./components/mqtt/MqttManager";
 import DuplicateManager from "./components/duplicates/DuplicateManager";
 import ClassBuilder from "./components/classes/ClassBuilder";
 import SavedClasses from "./components/savedClasses/SavedClasses";
-import RecommendationsManager from "./components/recommendations/AdaptiveRecommendationsManager";
+import RecommendationsManager from "./components/recommendations/RecommendationsManager";
 
 const STATUS_LABEL: Record<ConnectionStatus, string> = {
   connecting: "Connecting…",
