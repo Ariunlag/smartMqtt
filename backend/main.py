@@ -24,6 +24,7 @@ from services.class_recommendation import (
     ClassRecommendationApplication,
     build_class_recommendation_application,
 )
+from services.class_recommendation.processing import RecommendationObservationFanout
 from services.service_manager import service_manager
 
 ClassRecommendationApplicationFactory = Callable[[], ClassRecommendationApplication]
@@ -40,28 +41,48 @@ def _build_default_class_recommendation_application() -> ClassRecommendationAppl
     )
     from services.class_recommendation.adaptive import AdaptiveRecommendations
     from services.class_recommendation.adaptive_discovery import DiscoveryConfig
-    from services.class_recommendation.adaptive_series import InfluxSeriesSource, SeriesConfig, SeriesShapeProvider
+    from services.class_recommendation.adaptive_series import (
+        InfluxSeriesSource,
+        SeriesConfig,
+        SeriesShapeProvider,
+    )
     from services.influx.client import influx_client
 
     series = None if config.ADAPTIVE_SERIES_MODE == "off" else SeriesShapeProvider(
-        SeriesConfig(step_seconds=config.ADAPTIVE_SERIES_STEP, bins=config.ADAPTIVE_SERIES_BINS,
-                     min_points=config.ADAPTIVE_SERIES_MIN_POINTS), active=config.ADAPTIVE_SERIES_MODE == "active")
+        SeriesConfig(
+            step_seconds=config.ADAPTIVE_SERIES_STEP,
+            bins=config.ADAPTIVE_SERIES_BINS,
+            min_points=config.ADAPTIVE_SERIES_MIN_POINTS,
+        ),
+        active=config.ADAPTIVE_SERIES_MODE == "active",
+    )
 
     application.adaptive = AdaptiveRecommendations(
-        embedding_manager.model, application.identity_store,
+        embedding_manager.model,
+        application.identity_store,
         environment_id=config.RECOMMENDATION_ENVIRONMENT,
         model_id=config.EMBEDDING_MODEL,
         threshold=config.ADAPTIVE_SIMILARITY_THRESHOLD,
         interval=config.ADAPTIVE_LEARNING_INTERVAL,
         min_labels=config.ADAPTIVE_MIN_LABELS,
         excluded_prefixes=config.SYSTEM_RECOMMENDATION_EXCLUDED_TOPIC_PREFIXES,
-        discovery_config=DiscoveryConfig(exact_limit=config.ADAPTIVE_EXACT_LIMIT, neighbors=config.ADAPTIVE_NEIGHBORS),
+        discovery_config=DiscoveryConfig(
+            exact_limit=config.ADAPTIVE_EXACT_LIMIT,
+            neighbors=config.ADAPTIVE_NEIGHBORS,
+        ),
         series_provider=series,
-        series_source=InfluxSeriesSource(influx_client, config.INFLUX_BUCKET) if series else None,
+        series_source=(
+            InfluxSeriesSource(influx_client, config.INFLUX_BUCKET) if series else None
+        ),
     )
-    # The runtime has one recommendation sidecar. Legacy pair/Saved-Class APIs
-    # remain for compatibility, but no longer embed fields/schema during ingestion.
-    application.processing_service.application = application.adaptive
+    # Production evidence remains the original independent pair/stream contract:
+    # key, value, key_value, schema, and stream_context. The adaptive subsystem is
+    # retained as a best-effort secondary observer for experimentation/editing, but it
+    # cannot replace or block the stable recommendation materialization path.
+    application.processing_service.application = RecommendationObservationFanout(
+        application,
+        application.adaptive,
+    )
     return application
 
 
