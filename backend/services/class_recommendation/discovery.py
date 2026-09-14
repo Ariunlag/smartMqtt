@@ -293,6 +293,7 @@ class RecommendedClassDiscovery:
             candidate_id = self._candidate_id(
                 members,
                 strategy.definition.strategy_id,
+                group.evidence_ids,
             )
             evidence_snapshot = self._candidate_snapshot(
                 anchor=anchor,
@@ -323,9 +324,13 @@ class RecommendedClassDiscovery:
                 )
             )
 
+        evidence_order = {
+            evidence_id: index
+            for index, evidence_id in enumerate(DISCOVERY_EVIDENCE_IDS)
+        }
         candidates.sort(
             key=lambda item: (
-                -len(item.discovery_channels),
+                evidence_order.get(item.discovery_channels[0], len(evidence_order)),
                 -len(item.member_topics),
                 item.member_topics,
             )
@@ -465,10 +470,17 @@ class RecommendedClassDiscovery:
     def _candidate_id(
         members: tuple[str, ...],
         strategy_id: str,
+        discovery_channels: tuple[str, ...],
     ) -> str:
-        """Stable identity for one strategy/member set, independent of evidence version."""
+        """Stable identity for one strategy/evidence/member set.
+
+        Identical memberships discovered independently from ``key`` and ``value`` are
+        intentionally different candidates so their feedback histories and learned
+        usefulness can remain independent.
+        """
         payload = {
             "strategy": strategy_id,
+            "discovery_evidence": list(discovery_channels),
             "members": list(members),
         }
         fingerprint = hashlib.sha256(
