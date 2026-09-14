@@ -23,7 +23,7 @@ vi.mock("./components/classes/ClassBuilder", () => ({
 vi.mock("./components/savedClasses/SavedClasses", () => ({
   default: () => <section data-testid="saved-classes" />,
 }));
-vi.mock("./components/recommendations/AdaptiveRecommendationsManager", () => ({
+vi.mock("./components/recommendations/RecommendationsManager", () => ({
   default: () => <section data-testid="recommendations-manager" />,
 }));
 
