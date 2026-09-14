@@ -1,3 +1,5 @@
+from types import SimpleNamespace
+
 import pytest
 
 from services.class_recommendation.discovery import RecommendedClassDiscovery
@@ -98,7 +100,7 @@ async def test_observation_fanout_keeps_primary_pipeline_authoritative(caplog):
             calls.append(("secondary", message))
             raise RuntimeError("experimental failure")
 
-    message = object()
+    message = SimpleNamespace(topic="topic/test")
     fanout = RecommendationObservationFanout(Primary(), Secondary())
 
     assert await fanout.observe(message) == "primary-result"
