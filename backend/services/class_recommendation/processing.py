@@ -10,6 +10,33 @@ from models.mqtt_message import MQTTMessage
 logger = logging.getLogger(__name__)
 
 
+class RecommendationObservationFanout:
+    """Feed the stable pair pipeline first, then optional secondary observers.
+
+    The primary observer owns the production key/value/key_value/schema and
+    stream-context materialization contract. Secondary observers are best-effort so an
+    experimental/adaptive path cannot make the production recommendation sidecar fail.
+    """
+
+    def __init__(self, primary, *secondary) -> None:
+        self.primary = primary
+        self.secondary = tuple(item for item in secondary if item is not None)
+
+    async def observe(self, message: MQTTMessage):
+        result = await self.primary.observe(message)
+        for observer in self.secondary:
+            try:
+                await observer.observe(message)
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                logger.exception(
+                    "Secondary recommendation observer failed for topic=%s",
+                    message.topic,
+                )
+        return result
+
+
 class ClassRecommendationProcessingService:
     """Coalesce pending observations by topic without blocking MQTT/Influx."""
 
