@@ -80,14 +80,21 @@ class TagValueCentroidStrategyConfig:
 
 
 class IndependentEvidenceHdbscanStrategy:
-    """Cluster every registered evidence channel independently, without fusion."""
+    """Cluster every registered evidence channel independently, without fusion.
+
+    A membership discovered from ``key`` is intentionally a different recommendation
+    from the same membership discovered from ``value``. Keeping source evidence in the
+    candidate identity lets feedback and later ranking learn which discovery spaces are
+    useful without allowing learned weights to change cluster membership.
+    """
 
     definition = RecommendationStrategyDefinition(
         strategy_id=DEFAULT_STRATEGY_ID,
         label="Independent evidence (HDBSCAN)",
         description=(
-            "Runs HDBSCAN separately for each evidence type and merges identical "
-            "topic groups as consensus. No cross-evidence weighting is applied."
+            "Runs HDBSCAN separately for each evidence type and keeps every evidence "
+            "result as its own candidate. No cross-evidence weighting or membership "
+            "fusion is applied."
         ),
     )
 
@@ -103,7 +110,7 @@ class IndependentEvidenceHdbscanStrategy:
     def discover(
         self, evidence: RecommendationStrategyInput
     ) -> tuple[StrategyCandidateGroup, ...]:
-        memberships: dict[tuple[str, ...], set[str]] = {}
+        groups: list[StrategyCandidateGroup] = []
         for evidence_id in DISCOVERY_EVIDENCE_IDS:
             matrix = self._distance_matrix(
                 evidence.topics,
@@ -122,22 +129,31 @@ class IndependentEvidenceHdbscanStrategy:
                     continue
                 by_label.setdefault(label, []).append(topic)
 
-            for members in by_label.values():
-                canonical_members = tuple(sorted(members))
-                if len(canonical_members) >= self.config.min_cluster_size:
-                    memberships.setdefault(canonical_members, set()).add(evidence_id)
-
-        return tuple(
-            StrategyCandidateGroup(
-                members=members,
-                evidence_ids=tuple(
-                    evidence_id
-                    for evidence_id in DISCOVERY_EVIDENCE_IDS
-                    if evidence_id in supporting_evidence
-                ),
+            evidence_groups = {
+                tuple(sorted(members))
+                for members in by_label.values()
+                if len(members) >= self.config.min_cluster_size
+            }
+            groups.extend(
+                StrategyCandidateGroup(
+                    members=members,
+                    evidence_ids=(evidence_id,),
+                )
+                for members in sorted(evidence_groups)
             )
-            for members, supporting_evidence in memberships.items()
+
+        evidence_order = {
+            evidence_id: index
+            for index, evidence_id in enumerate(DISCOVERY_EVIDENCE_IDS)
+        }
+        groups.sort(
+            key=lambda group: (
+                evidence_order[group.evidence_ids[0]],
+                -len(group.members),
+                group.members,
+            )
         )
+        return tuple(groups)
 
     @staticmethod
     def _distance_matrix(
