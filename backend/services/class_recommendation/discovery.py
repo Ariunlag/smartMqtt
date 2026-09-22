@@ -363,6 +363,7 @@ class RecommendedClassDiscovery:
                 member_topics=item.member_topics,
                 discovery_channels=item.discovery_channels,
                 evidence=item.evidence,
+                discovery_support=item.discovery_support,
             )
             for index, item in enumerate(candidates, 1)
         )
