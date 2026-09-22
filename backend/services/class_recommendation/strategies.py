@@ -447,7 +447,6 @@ class TagValueCentroidStrategy:
 
         groups: list[dict] = []
         for topic, identity, vector in items:
-            del identity
             best_index = None
             best_score = -2.0
             for index, group in enumerate(groups):
@@ -456,12 +455,22 @@ class TagValueCentroidStrategy:
                     best_score = score
                     best_index = index
 
+            text = next(
+                (
+                    record.representation.text_for("value")
+                    for record in evidence.pairs_by_topic.get(topic, ())
+                    if record.representation.identity == identity
+                ),
+                None,
+            )
+
             if best_index is None or best_score < self.config.threshold:
                 groups.append(
                     {
                         "vectors": [vector],
                         "centroid": vector,
                         "topics": {topic},
+                        "items": [(topic, vector, text)],
                     }
                 )
                 continue
@@ -469,16 +478,50 @@ class TagValueCentroidStrategy:
             group = groups[best_index]
             group["vectors"].append(vector)
             group["topics"].add(topic)
+            group["items"].append((topic, vector, text))
             group["centroid"] = centroid(group["vectors"])
 
-        memberships = {
-            tuple(sorted(group["topics"]))
-            for group in groups
-            if len(group["topics"]) >= self.config.min_topic_count
-        }
+        # Different value centroids can yield the same exact topic membership.
+        # Merge those reasons into one candidate, mirroring the membership identity
+        # rule used by the independent HDBSCAN strategy.
+        by_membership: dict[tuple[str, ...], list[StrategySupportItem]] = {}
+        for group in groups:
+            members = tuple(sorted(group["topics"]))
+            if len(members) < self.config.min_topic_count:
+                continue
+            center = group["centroid"]
+            support = by_membership.setdefault(members, [])
+            support.extend(
+                StrategySupportItem(
+                    topic=topic,
+                    text=text,
+                    similarity=cosine(vector, center),
+                    source="tag",
+                )
+                for topic, vector, text in group["items"]
+            )
+
         return tuple(
-            StrategyCandidateGroup(members=members, evidence_ids=("value",))
-            for members in sorted(memberships)
+            StrategyCandidateGroup(
+                members=members,
+                evidence_ids=("value",),
+                support=(
+                    StrategyEvidenceSupport(
+                        evidence_id="value",
+                        items=tuple(
+                            sorted(
+                                support,
+                                key=lambda item: (
+                                    item.topic,
+                                    item.text or "",
+                                    -item.similarity,
+                                ),
+                            )
+                        ),
+                    ),
+                ),
+            )
+            for members, support in sorted(by_membership.items())
         )
 
 
