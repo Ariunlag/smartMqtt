@@ -173,10 +173,12 @@ it("requests the selected strategy without changing the evidence UI", async () =
   );
 });
 
-it("renders the editable review surface for a discovered candidate", async () => {
+it("opens the editable review surface only for the selected candidate", async () => {
   render(<RecommendationsManager />);
   await screen.findByRole("heading", { name: "Recommended class #1" });
 
+  expect(screen.queryByLabelText("Editable recommendation review")).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Review graph & edit group" }));
   expect(screen.getByLabelText("Editable recommendation review")).toHaveTextContent(
     "building/a,building/b",
   );
