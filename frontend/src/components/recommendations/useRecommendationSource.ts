@@ -12,7 +12,7 @@ import type {
   GroupAction as ApiGroupAction,
 } from "../../services/adaptiveRecommendationApi";
 import { useInfluxStore } from "../../store/useInfluxStore";
-import { percentText, similarityText } from "./recommendationModel";
+import { percentText } from "./recommendationModel";
 import type {
   EvidenceMatch,
   EvidenceRow,
@@ -49,87 +49,83 @@ function evidenceRows(
   response: AdaptiveResponse,
   rows: Record<string, AdaptiveEvidence> | undefined,
 ): EvidenceRow[] {
-  return response.catalog
-    .map((channel) => {
-      const row = rows?.[channel.evidence_id];
-      const weight = response.model.weights[channel.evidence_id] ?? 0;
-      if (
-        !channel.active ||
-        weight <= 0 ||
-        row?.status !== "available" ||
-        row.score === null ||
-        row.coverage <= 0
-      ) {
-        return null;
-      }
+  const ranked: Array<{ row: EvidenceRow; contribution: number }> = [];
 
-      const contribution = weight * row.score * row.coverage;
-      const matches: EvidenceMatch[] = (row.matches ?? []).map((match) => ({
-        left: payloadText(match.left),
-        right: payloadText(match.right),
-        detail: `${percentText(match.similarity)} semantic similarity`,
-        leftValues: match.left.values ?? null,
-        rightValues: match.right.values ?? null,
-      }));
+  for (const channel of response.catalog) {
+    const row = rows?.[channel.evidence_id];
+    const weight = response.model.weights[channel.evidence_id] ?? 0;
+    if (
+      !channel.active ||
+      weight <= 0 ||
+      row?.status !== "available" ||
+      row.score === null ||
+      row.coverage <= 0
+    ) {
+      continue;
+    }
 
-      return {
-        row: {
-          channelId: channel.evidence_id,
-          channelLabel: channel.label,
-          value: percentText(row.score),
-          detail:
-            `Weight ${percentText(weight)} · coverage ${percentText(row.coverage)} · weighted support ${percentText(contribution)}`,
-          matches,
-        } satisfies EvidenceRow,
-        contribution,
-      };
-    })
-    .filter(
-      (
-        item,
-      ): item is {
-        row: EvidenceRow;
-        contribution: number;
-      } => item !== null,
-    )
-    .sort((left, right) => right.contribution - left.contribution)
-    .map((item) => item.row);
+    const contribution = weight * row.score * row.coverage;
+    const matches: EvidenceMatch[] = (row.matches ?? []).map((match) => ({
+      left: payloadText(match.left),
+      right: payloadText(match.right),
+      detail: `${percentText(match.similarity)} semantic similarity`,
+      leftValues: match.left.values ?? null,
+      rightValues: match.right.values ?? null,
+    }));
+
+    ranked.push({
+      row: {
+        channelId: channel.evidence_id,
+        channelLabel: channel.label,
+        value: percentText(row.score),
+        detail:
+          `Weight ${percentText(weight)} · coverage ${percentText(row.coverage)} · weighted support ${percentText(contribution)}`,
+        matches,
+      },
+      contribution,
+    });
+  }
+
+  ranked.sort((left, right) => right.contribution - left.contribution);
+  return ranked.map((item) => item.row);
 }
 
 function groupDiscoveryChannels(
   response: AdaptiveResponse,
   group: AdaptiveGroup,
 ): string[] {
-  return response.catalog
-    .map((channel) => {
-      const weight = response.model.weights[channel.evidence_id] ?? 0;
-      if (!channel.active || weight <= 0) return null;
+  const ranked: Array<{ label: string; contribution: number }> = [];
 
-      const contributions = group.members
-        .map((topic) => group.evidence[topic]?.[channel.evidence_id])
-        .filter(
-          (row): row is AdaptiveEvidence =>
-            row?.status === "available" &&
-            row.score !== null &&
-            row.coverage > 0,
-        )
-        .map((row) => weight * (row.score ?? 0) * row.coverage);
+  for (const channel of response.catalog) {
+    const weight = response.model.weights[channel.evidence_id] ?? 0;
+    if (!channel.active || weight <= 0) continue;
 
-      if (contributions.length === 0) return null;
-      const average =
-        contributions.reduce((sum, value) => sum + value, 0) /
-        contributions.length;
+    const contributions: number[] = [];
+    for (const topic of group.members) {
+      const row = group.evidence[topic]?.[channel.evidence_id];
+      if (
+        row?.status !== "available" ||
+        row.score === null ||
+        row.coverage <= 0
+      ) {
+        continue;
+      }
+      contributions.push(weight * row.score * row.coverage);
+    }
 
-      return {
-        label: `${channel.label} · ${percentText(weight)} weight`,
-        contribution: average,
-      };
-    })
-    .filter(
-      (item): item is { label: string; contribution: number } => item !== null,
-    )
-    .sort((left, right) => right.contribution - left.contribution)
-    .map((item) => item.label);
+    if (contributions.length === 0) continue;
+    const average =
+      contributions.reduce((sum, value) => sum + value, 0) /
+      contributions.length;
+
+    ranked.push({
+      label: `${channel.label} · ${percentText(weight)} weight`,
+      contribution: average,
+    });
+  }
+
+  ranked.sort((left, right) => right.contribution - left.contribution);
+  return ranked.map((item) => item.label);
 }
 
 function toGroup(response: AdaptiveResponse, group: AdaptiveGroup): RecommendationGroup {
