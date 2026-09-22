@@ -18,6 +18,12 @@ Semantic evidence is materialized through separate providers:
 
 The recommender combines available evidence with weights, forms groups with complete-link style discovery, and can learn new weights from explicit recommendation interactions. This branch intentionally studies adaptive weighted recommendation behavior; results should not be treated as the baseline for the independent-evidence experiment.
 
+## Recommendation surface
+
+The dashboard surface is shared with every other recommendation experiment so the branches stay comparable. `frontend/src/components/recommendations/` holds one presentational panel (`RecommendationsPanel`) driven by one view model (`recommendationModel.ts`). The only branch-local file is `useRecommendationSource.ts`, which maps this branch's API onto that model.
+
+Keep changes to the panel, the model, and `index.css` identical across experiment branches. Algorithm-specific wording belongs in the adapter, not the panel.
+
 ## Run
 
 ```sh
