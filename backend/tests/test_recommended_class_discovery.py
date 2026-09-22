@@ -13,6 +13,26 @@ from services.class_recommendation.domain import (
 from services.class_recommendation.evidence import PAIR_EVIDENCE_IDS
 
 
+def _record_with_vectors(topic, source, key, datatype, vectors):
+    identity = PairIdentity(source, key, datatype)
+    representation = PairRepresentation(
+        canonical_topic=topic,
+        original_topic=topic,
+        identity=identity,
+        raw_key=key,
+        raw_value=key,
+        normalized_key=key,
+        normalized_value=key,
+        datatype=datatype,
+        representation_version=1,
+        texts=tuple((name, f"{key}:{name}") for name in PAIR_EVIDENCE_IDS),
+    )
+    return PairEmbeddingRecord(
+        representation,
+        tuple((name, tuple(vectors[name])) for name in PAIR_EVIDENCE_IDS),
+    )
+
+
 def _record(topic, source, key, datatype, vector):
     identity = PairIdentity(source, key, datatype)
     views = PAIR_EVIDENCE_IDS
@@ -220,6 +240,95 @@ def test_tag_value_centroid_reuses_individual_tag_value_vectors():
     candidate = result.candidates[0]
     assert candidate.member_topics == ("a", "b")
     assert candidate.discovery_channels == ("value",)
+    assert tuple(item.evidence_id for item in candidate.discovery_support) == ("value",)
+    assert {item.topic for item in candidate.discovery_support[0].items} == {"a", "b"}
+    assert all(item.source == "tag" for item in candidate.discovery_support[0].items)
+
+
+def test_hdbscan_and_centroid_use_different_grouping_logic_on_same_embeddings():
+    from services.class_recommendation.strategies import (
+        HdbscanStrategyConfig,
+        IndependentEvidenceHdbscanStrategy,
+        RecommendationStrategyInput,
+        TagValueCentroidStrategy,
+        TagValueCentroidStrategyConfig,
+    )
+
+    pairs = {
+        "a": (
+            _record_with_vectors(
+                "a",
+                "tag",
+                "location",
+                "string",
+                {
+                    "key": (1.0, 0.0),
+                    "value": (1.0, 0.0),
+                    "key_value": (1.0, 0.0),
+                    "schema": (1.0, 0.0),
+                },
+            ),
+        ),
+        "b": (
+            _record_with_vectors(
+                "b",
+                "tag",
+                "location",
+                "string",
+                {
+                    "key": (1.0, 0.0),
+                    "value": (0.0, 1.0),
+                    "key_value": (0.0, 1.0),
+                    "schema": (0.0, 1.0),
+                },
+            ),
+        ),
+        "c": (
+            _record_with_vectors(
+                "c",
+                "tag",
+                "zone",
+                "string",
+                {
+                    "key": (0.0, 1.0),
+                    "value": (0.0, 1.0),
+                    "key_value": (0.0, 1.0),
+                    "schema": (0.0, 1.0),
+                },
+            ),
+        ),
+    }
+    evidence = RecommendationStrategyInput(
+        topics=("a", "b", "c"),
+        versions={"a": 1, "b": 1, "c": 1},
+        pairs_by_topic=pairs,
+        stream_vectors={"a": None, "b": None, "c": None},
+        symmetric_scores={},
+    )
+
+    def key_only_labels(channel, matrix):
+        if channel == "key":
+            assert len(matrix) == 3
+            return (0, 0, -1)
+        return tuple(-1 for _ in matrix)
+
+    hdbscan = IndependentEvidenceHdbscanStrategy(
+        HdbscanStrategyConfig(min_cluster_size=2),
+        cluster_labels=key_only_labels,
+    )
+    centroid = TagValueCentroidStrategy(
+        TagValueCentroidStrategyConfig(threshold=0.85, min_topic_count=2)
+    )
+
+    hdbscan_groups = hdbscan.discover(evidence)
+    centroid_groups = centroid.discover(evidence)
+
+    assert [(group.members, group.evidence_ids) for group in hdbscan_groups] == [
+        (("a", "b"), ("key",))
+    ]
+    assert [(group.members, group.evidence_ids) for group in centroid_groups] == [
+        (("b", "c"), ("value",))
+    ]
 
 
 def test_confirmed_duplicate_alias_is_not_an_independent_candidate_member():
