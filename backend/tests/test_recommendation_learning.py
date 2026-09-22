@@ -224,3 +224,19 @@ def test_offline_report_fits_coefficients_and_uses_candidate_grouped_evaluation(
     assert report["standardized_coefficients"]["key_score"] > 0
     assert report["cross_validation"]["status"] == "available"
     assert report["cross_validation"]["folds"] == 2
+
+
+def test_builder_treats_explicit_add_as_positive_membership_feedback():
+    snapshot = _snapshot(
+        members=("a", "b"),
+        evidence=[_topic_evidence("c", 0.92, 0.81)],
+    )
+    rows = [
+        _row("1", "ADD_TOPIC", topic="c", snapshot=snapshot, order=1),
+    ]
+
+    dataset = RecommendationFeedbackDatasetBuilder(FakeDatabase(rows)).build()["membership"]
+
+    assert len(dataset.examples) == 1
+    assert dataset.examples[0].target == "c"
+    assert dataset.examples[0].label == 1
