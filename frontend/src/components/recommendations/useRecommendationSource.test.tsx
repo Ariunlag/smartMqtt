@@ -83,8 +83,9 @@ it("publishes the environment, weights, and catalog-defined evidence", async () 
   const row = memberRow("lab/a");
   fireEvent.click(within(row).getByRole("button", { name: "Why?" }));
   expect(within(row).getByText("lab a ↔ lab b")).toBeInTheDocument();
-  expect(within(row).getByText("Series shape")).toBeInTheDocument();
-  expect(within(row).getByText("missing")).toBeInTheDocument();
+  expect(within(row).getByText("90.0% semantic similarity")).toBeInTheDocument();
+  expect(within(row).queryByText("Series shape")).not.toBeInTheDocument();
+  expect(within(row).queryByText("missing")).not.toBeInTheDocument();
 });
 
 it("removes members immediately and undo restores server membership", async () => {
