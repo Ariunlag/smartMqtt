@@ -161,8 +161,6 @@ const candidateSet: RecommendedClassCandidateSet = {
 const centroidSet: RecommendedClassCandidateSet = {
   ...candidateSet,
   strategy: centroidStrategy,
-  shadow_evaluation: undefined,
-  live_ranking: undefined,
   candidates: [
     {
       candidate_id: "centroid-1",
