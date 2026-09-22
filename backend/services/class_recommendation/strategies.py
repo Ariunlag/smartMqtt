@@ -454,7 +454,13 @@ class IndependentEvidenceCentroidStrategy:
             else:
                 items = self._pair_items(evidence, evidence_id)
 
-            for members, support_items in self._centroid_memberships(items):
+            # Important: every evidence channel gets a fresh, independent centroid
+            # space. Key centroids never contain value vectors; value centroids never
+            # contain key vectors; schema and stream context have their own centroids.
+            for members, support_items in self._centroid_memberships(
+                evidence_id,
+                items,
+            ):
                 per_evidence = discovered.setdefault(members, {})
                 per_evidence.setdefault(evidence_id, []).extend(support_items)
 
@@ -571,8 +577,14 @@ class IndependentEvidenceCentroidStrategy:
 
     def _centroid_memberships(
         self,
+        evidence_id: str,
         items: list[tuple[str, tuple[float, ...], str | None, str | None]],
     ) -> list[tuple[tuple[str, ...], tuple[StrategySupportItem, ...]]]:
+        if evidence_id not in DISCOVERY_EVIDENCE_IDS:
+            raise ValueError(f"Unknown centroid evidence space: {evidence_id}")
+
+        # This collection is intentionally local to one evidence_id. It is never
+        # shared across calls, so every channel owns a separate set of centroids.
         groups: list[dict] = []
         for topic, vector, text, source in items:
             best_index = None
