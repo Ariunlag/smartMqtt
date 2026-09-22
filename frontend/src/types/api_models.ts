@@ -209,7 +209,7 @@ export interface RecommendedClassCandidate {
   anchor_topic: string;
   member_topics: string[];
   discovery_channels: string[];
-  discovery_support: RecommendedClassDiscoverySupport[];
+  discovery_support?: RecommendedClassDiscoverySupport[];
   evidence: RecommendedClassTopicEvidence[];
 }
 
