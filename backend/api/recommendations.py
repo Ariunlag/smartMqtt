@@ -222,6 +222,10 @@ def _feedback_topic_evidence(
         if hasattr(application.dupe_store, "has_pending")
         else False
     )
+    discovery_evidence = tuple(
+        str(evidence_id)
+        for evidence_id in candidate_snapshot.get("discovery_evidence") or ()
+    )
     evidence = TopicEvidenceMatcher.compare(
         candidate_topic=canonical_topic,
         candidate_pairs=candidate_pairs,
@@ -230,6 +234,7 @@ def _feedback_topic_evidence(
         reference_pairs=reference_pairs,
         reference_stream=reference_stream,
         duplicate_pending=duplicate_pending,
+        evidence_ids=discovery_evidence or None,
     )
     return canonical_topic, asdict(evidence)
 
