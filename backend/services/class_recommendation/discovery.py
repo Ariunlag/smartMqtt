@@ -64,8 +64,8 @@ class RecommendedClassCandidate:
     anchor_topic: str
     member_topics: tuple[str, ...]
     discovery_channels: tuple[str, ...]
-    discovery_support: tuple[StrategyEvidenceSupport, ...]
     evidence: tuple[TopicComparisonEvidence, ...]
+    discovery_support: tuple[StrategyEvidenceSupport, ...] = ()
 
 
 @dataclass(frozen=True, slots=True)
