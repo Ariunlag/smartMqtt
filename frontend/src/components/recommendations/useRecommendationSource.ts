@@ -58,41 +58,37 @@ const scoreFor = (scores: EvidenceScores, evidenceId: string) =>
 const pairText = (pair: { normalized_key: string; datatype: string }) =>
   `${pair.normalized_key}:${pair.datatype}`;
 
-function evidenceRows(
-  catalog: EvidenceDefinition[],
-  topicEvidence: RecommendedClassTopicEvidence | undefined,
-  allowedEvidenceIds: Set<string>,
+function discoveryEvidenceRows(
+  candidate: RecommendedClassCandidate,
+  labels: Map<string, string>,
+  topic: string,
 ): EvidenceRow[] {
-  if (!topicEvidence) return [];
+  return (candidate.discovery_support ?? [])
+    .map((support) => {
+      const items = support.items.filter((item) => item.topic === topic);
+      if (items.length === 0) return null;
 
-  return catalog
-    .filter((definition) => allowedEvidenceIds.has(definition.evidence_id))
-    .map((definition) => {
-      const score = topicEvidence
-        ? scoreFor(topicEvidence.channel_scores, definition.evidence_id)
-        : null;
-      const matches = (topicEvidence?.matched_pairs ?? [])
-        .map((match) => ({ match, score: scoreFor(match.scores, definition.evidence_id) }))
-        .filter((entry) => entry.score !== null)
-        .map(({ match, score: pairScore }) => ({
-          left: match.candidate_text ?? pairText(match.candidate),
-          right: match.prototype_text ?? pairText(match.prototype),
-          detail: `${match.candidate.source === "tag" ? "Tag" : "Field"} similarity · ${percentText(pairScore)}`,
-          leftValues: null,
-          rightValues: null,
-        }));
+      const average =
+        items.reduce((sum, item) => sum + item.similarity, 0) / items.length;
 
       return {
-        channelId: definition.evidence_id,
-        channelLabel: definition.label,
-        value: score === null ? "N/A" : percentText(score),
+        channelId: support.evidence_id,
+        channelLabel: labels.get(support.evidence_id) ?? support.evidence_id,
+        value: percentText(average),
         detail:
-          definition.scope === "pair"
-            ? `${matches.length} similar metadata pair${matches.length === 1 ? "" : "s"}`
-            : "Whole-stream similarity",
-        matches,
-      };
-    });
+          items.length === 1
+            ? "1 exact item from the discovery cluster"
+            : `${items.length} exact items from the discovery cluster`,
+        matches: items.map((item) => ({
+          left: item.text ?? topic,
+          right: "discovery cluster",
+          detail: `${item.source ?? "evidence"} · ${percentText(item.similarity)} cluster similarity`,
+          leftValues: null,
+          rightValues: null,
+        })),
+      } satisfies EvidenceRow;
+    })
+    .filter((row): row is EvidenceRow => row !== null);
 }
 
 function toGroup(
@@ -122,17 +118,15 @@ function toGroup(
       return {
         topic,
         detail:
-          topic === candidate.anchor_topic
-            ? "Cluster member"
+          (candidate.discovery_support ?? []).some((support) =>
+            support.items.some((item) => item.topic === topic),
+          )
+            ? "Matched on this recommendation's exact discovery evidence"
             : topicEvidence
-              ? "Matched on this recommendation's discovery evidence"
+              ? "Cluster member"
               : "Added during review",
         confirmed: overlay?.confirmed.includes(topic) ?? false,
-        evidence: evidenceRows(
-          set.evidence_catalog,
-          topicEvidence,
-          new Set(candidate.discovery_channels),
-        ),
+        evidence: discoveryEvidenceRows(candidate, labels, topic),
       };
     }),
     // Discovery is unsupervised here: this method scores no topics outside a
