@@ -49,27 +49,87 @@ function evidenceRows(
   response: AdaptiveResponse,
   rows: Record<string, AdaptiveEvidence> | undefined,
 ): EvidenceRow[] {
-  return response.catalog.map((channel) => {
-    const row = rows?.[channel.evidence_id];
-    const matches: EvidenceMatch[] = (row?.matches ?? []).map((match) => ({
-      left: payloadText(match.left),
-      right: payloadText(match.right),
-      detail: null,
-      leftValues: match.left.values ?? null,
-      rightValues: match.right.values ?? null,
-    }));
+  return response.catalog
+    .map((channel) => {
+      const row = rows?.[channel.evidence_id];
+      const weight = response.model.weights[channel.evidence_id] ?? 0;
+      if (
+        !channel.active ||
+        weight <= 0 ||
+        row?.status !== "available" ||
+        row.score === null ||
+        row.coverage <= 0
+      ) {
+        return null;
+      }
 
-    return {
-      channelId: channel.evidence_id,
-      channelLabel: channel.label,
-      value: row?.status === "available" ? similarityText(row.score) : (row?.status ?? "missing"),
-      detail:
-        row?.status === "available"
-          ? `Coverage ${(row.coverage * 100).toFixed(0)}% · ${row.support_count ?? 0} reference topics`
-          : null,
-      matches,
-    };
-  });
+      const contribution = weight * row.score * row.coverage;
+      const matches: EvidenceMatch[] = (row.matches ?? []).map((match) => ({
+        left: payloadText(match.left),
+        right: payloadText(match.right),
+        detail: `${percentText(match.similarity)} semantic similarity`,
+        leftValues: match.left.values ?? null,
+        rightValues: match.right.values ?? null,
+      }));
+
+      return {
+        row: {
+          channelId: channel.evidence_id,
+          channelLabel: channel.label,
+          value: percentText(row.score),
+          detail:
+            `Weight ${percentText(weight)} · coverage ${percentText(row.coverage)} · weighted support ${percentText(contribution)}`,
+          matches,
+        } satisfies EvidenceRow,
+        contribution,
+      };
+    })
+    .filter(
+      (
+        item,
+      ): item is {
+        row: EvidenceRow;
+        contribution: number;
+      } => item !== null,
+    )
+    .sort((left, right) => right.contribution - left.contribution)
+    .map((item) => item.row);
+}
+
+function groupDiscoveryChannels(
+  response: AdaptiveResponse,
+  group: AdaptiveGroup,
+): string[] {
+  return response.catalog
+    .map((channel) => {
+      const weight = response.model.weights[channel.evidence_id] ?? 0;
+      if (!channel.active || weight <= 0) return null;
+
+      const contributions = group.members
+        .map((topic) => group.evidence[topic]?.[channel.evidence_id])
+        .filter(
+          (row): row is AdaptiveEvidence =>
+            row?.status === "available" &&
+            row.score !== null &&
+            row.coverage > 0,
+        )
+        .map((row) => weight * (row.score ?? 0) * row.coverage);
+
+      if (contributions.length === 0) return null;
+      const average =
+        contributions.reduce((sum, value) => sum + value, 0) /
+        contributions.length;
+
+      return {
+        label: `${channel.label} · ${percentText(weight)} weight`,
+        contribution: average,
+      };
+    })
+    .filter(
+      (item): item is { label: string; contribution: number } => item !== null,
+    )
+    .sort((left, right) => right.contribution - left.contribution)
+    .map((item) => item.label);
 }
 
 function toGroup(response: AdaptiveResponse, group: AdaptiveGroup): RecommendationGroup {
@@ -83,17 +143,15 @@ function toGroup(response: AdaptiveResponse, group: AdaptiveGroup): Recommendati
         : "System suggestion",
     members: group.members.map((topic) => ({
       topic,
-      detail: `Similarity: ${similarityText(group.member_scores[topic])}`,
+      detail: `Combined similarity: ${percentText(group.member_scores[topic])}`,
       confirmed: group.confirmed?.includes(topic) ?? false,
       evidence: evidenceRows(response, group.evidence[topic]),
     })),
     proposals: group.proposals.map((proposal) => ({
       topic: proposal.topic,
-      detail: similarityText(proposal.score),
+      detail: `Combined similarity: ${percentText(proposal.score)}`,
     })),
-    discoveryChannels: response.catalog
-      .filter((channel) => channel.active)
-      .map((channel) => channel.label),
+    discoveryChannels: groupDiscoveryChannels(response, group),
     savedClass: group.saved_class,
     dismissed: group.dismissed,
     canUndo: group.can_undo,
