@@ -159,7 +159,7 @@ def test_system_candidates_merge_independent_channel_reasons_and_keep_pair_evide
     assert result.strategy.strategy_id == "independent_hdbscan"
     assert tuple(item.strategy_id for item in result.strategy_catalog) == (
         "independent_hdbscan",
-        "tag_value_centroid",
+        "independent_centroid",
     )
     assert tuple(item.evidence_id for item in result.evidence_catalog) == (
         "key",
@@ -232,26 +232,41 @@ def test_different_memberships_stay_separate_and_topics_can_overlap():
     assert sum("b" in candidate.member_topics for candidate in result.candidates) == 3
 
 
-def test_tag_value_centroid_reuses_individual_tag_value_vectors():
-    result = _discovery().discover("tag_value_centroid")
+def test_independent_centroid_uses_all_independent_evidence_spaces():
+    result = _discovery().discover("independent_centroid")
 
-    assert result.strategy.strategy_id == "tag_value_centroid"
+    assert result.strategy.strategy_id == "independent_centroid"
     assert len(result.candidates) == 1
     candidate = result.candidates[0]
     assert candidate.member_topics == ("a", "b")
-    assert candidate.discovery_channels == ("value",)
-    assert tuple(item.evidence_id for item in candidate.discovery_support) == ("value",)
-    assert {item.topic for item in candidate.discovery_support[0].items} == {"a", "b"}
-    assert all(item.source == "tag" for item in candidate.discovery_support[0].items)
+    assert candidate.discovery_channels == (
+        "key",
+        "value",
+        "key_value",
+        "schema",
+        "stream_context",
+    )
+    assert tuple(item.evidence_id for item in candidate.discovery_support) == (
+        "key",
+        "value",
+        "key_value",
+        "schema",
+        "stream_context",
+    )
+    assert {
+        item.topic
+        for support in candidate.discovery_support
+        for item in support.items
+    } == {"a", "b"}
 
 
 def test_hdbscan_and_centroid_use_different_grouping_logic_on_same_embeddings():
     from services.class_recommendation.strategies import (
         HdbscanStrategyConfig,
+        CentroidStrategyConfig,
+        IndependentEvidenceCentroidStrategy,
         IndependentEvidenceHdbscanStrategy,
         RecommendationStrategyInput,
-        TagValueCentroidStrategy,
-        TagValueCentroidStrategyConfig,
     )
 
     pairs = {
@@ -276,7 +291,7 @@ def test_hdbscan_and_centroid_use_different_grouping_logic_on_same_embeddings():
                 "location",
                 "string",
                 {
-                    "key": (1.0, 0.0),
+                    "key": (-1.0, 0.0),
                     "value": (0.0, 1.0),
                     "key_value": (0.0, 1.0),
                     "schema": (0.0, 1.0),
@@ -316,8 +331,8 @@ def test_hdbscan_and_centroid_use_different_grouping_logic_on_same_embeddings():
         HdbscanStrategyConfig(min_cluster_size=2),
         cluster_labels=key_only_labels,
     )
-    centroid = TagValueCentroidStrategy(
-        TagValueCentroidStrategyConfig(threshold=0.85, min_topic_count=2)
+    centroid = IndependentEvidenceCentroidStrategy(
+        CentroidStrategyConfig(threshold=0.85, min_topic_count=2)
     )
 
     hdbscan_groups = hdbscan.discover(evidence)
@@ -327,7 +342,7 @@ def test_hdbscan_and_centroid_use_different_grouping_logic_on_same_embeddings():
         (("a", "b"), ("key",))
     ]
     assert [(group.members, group.evidence_ids) for group in centroid_groups] == [
-        (("b", "c"), ("value",))
+        (("b", "c"), ("value", "key_value", "schema"))
     ]
 
 
