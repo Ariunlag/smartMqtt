@@ -13,6 +13,14 @@ vi.mock("../../services/classRecommendationApi", () => ({
   submitRecommendedClassFeedback: vi.fn(),
 }));
 
+vi.mock("./IndependentRecommendationReview", () => ({
+  default: ({ candidate }: any) => (
+    <div aria-label="Editable recommendation review">
+      {candidate.member_topics.join(",")}
+    </div>
+  ),
+}));
+
 const hdbscanStrategy = {
   strategy_id: "independent_hdbscan",
   label: "Independent evidence (HDBSCAN)",
@@ -165,22 +173,13 @@ it("requests the selected strategy without changing the evidence UI", async () =
   );
 });
 
-it("records topic membership feedback against the exact candidate and exposure", async () => {
+it("renders the editable review surface for a discovered candidate", async () => {
   render(<RecommendationsManager />);
   await screen.findByRole("heading", { name: "Recommended class #1" });
 
-  fireEvent.click(screen.getAllByRole("button", { name: "Belongs" })[0]);
-
-  await waitFor(() =>
-    expect(submitRecommendedClassFeedback).toHaveBeenCalledWith("candidate-1", {
-      action: "KEEP_TOPIC",
-      candidate_version: 3,
-      topic: "building/a",
-      shadow_run_id: "11111111-1111-1111-1111-111111111111",
-      live_run_id: "22222222-2222-2222-2222-222222222222",
-    }),
+  expect(screen.getByLabelText("Editable recommendation review")).toHaveTextContent(
+    "building/a,building/b",
   );
-  expect(await screen.findByText("Recorded feedback for building/a.")).toBeInTheDocument();
 });
 
 it("records candidate usefulness without mutating Saved Classes", async () => {
