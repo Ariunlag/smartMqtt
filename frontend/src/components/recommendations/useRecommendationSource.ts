@@ -316,7 +316,7 @@ export function useRecommendationSource(): RecommendationSource {
 
     const details: string[] = [
       `Discovery evidence available for ${set.available_topics.length} active topics.`,
-      "Each evidence channel discovers candidates on its own. Identical topic membership found by a different channel stays a separate candidate, so feedback keeps its evidence provenance.",
+      "Each evidence channel discovers candidates on its own. Exact topic memberships found by multiple channels are merged and keep all discovery reasons; memberships that differ by even one topic remain separate.",
       "Channel scores are per-evidence similarities. No learned weight fuses them into a single membership score.",
     ];
 
