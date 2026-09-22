@@ -52,6 +52,19 @@ export interface GroupProposal {
   detail: string;
 }
 
+export interface GroupDiscoveryEvidenceItem {
+  topic: string;
+  text: string | null;
+  similarity: number;
+  source: string | null;
+}
+
+export interface GroupDiscoveryEvidence {
+  channelId: string;
+  channelLabel: string;
+  items: GroupDiscoveryEvidenceItem[];
+}
+
 export interface RecommendationGroup {
   id: string;
   title: string;
@@ -59,6 +72,7 @@ export interface RecommendationGroup {
   members: GroupMember[];
   proposals: GroupProposal[];
   discoveryChannels: string[];
+  discoveryEvidence?: GroupDiscoveryEvidence[];
   savedClass: string | null;
   dismissed: boolean;
   canUndo: boolean;
