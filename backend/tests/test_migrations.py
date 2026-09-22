@@ -56,7 +56,7 @@ APP_TABLES = [
     "recommendation_live_observations",
 ]
 
-HEAD_REVISION = "0011_adaptive_recommendations"
+HEAD_REVISION = "0012_explicit_topic_add_feedback"
 
 
 def _make_config(url: str) -> Config:
