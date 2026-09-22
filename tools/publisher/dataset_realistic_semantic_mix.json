@@ -1,0 +1,275 @@
+[
+  {
+    "topic": "chicago/loop/office-tower-a/ahu-1/telemetry",
+    "tags": {
+      "municipality": "Chicago",
+      "equipment_class": "air handling unit",
+      "served_space": "office floors",
+      "operating_context": "commercial HVAC"
+    },
+    "fields": {
+      "supply_air_temperature_c": 16.8,
+      "duct_static_pressure_pa": 420.0
+    }
+  },
+  {
+    "topic": "chicago/river-north/hotel-b/ahu-7/telemetry",
+    "tags": {
+      "city_name": "Chicago",
+      "asset_type": "air handler",
+      "zone_role": "guest room ventilation",
+      "system_context": "hotel HVAC"
+    },
+    "fields": {
+      "discharge_air_temperature_c": 17.4,
+      "duct_pressure_pa": 405.0
+    }
+  },
+  {
+    "topic": "chicago/hyde-park/hospital-c/air-handler-3/telemetry",
+    "tags": {
+      "location_city": "Chicago",
+      "equipment_family": "air handling system",
+      "service_area": "patient wing",
+      "application": "healthcare HVAC"
+    },
+    "fields": {
+      "return_air_temperature_c": 23.1,
+      "airflow_cfm": 5400.0
+    }
+  },
+  {
+    "topic": "evanston/university-science/ahu-2/telemetry",
+    "tags": {
+      "municipality": "Evanston",
+      "climate_equipment": "air handler",
+      "conditioned_area": "lecture halls",
+      "building_use": "university"
+    },
+    "fields": {
+      "supply_air_temp_c": 17.0,
+      "supply_airflow_cfm": 6100.0
+    }
+  },
+  {
+    "topic": "naperville/public-library/rtu-4/telemetry",
+    "tags": {
+      "city_name": "Naperville",
+      "hvac_asset": "rooftop unit",
+      "served_zone": "reading rooms",
+      "facility_type": "public library"
+    },
+    "fields": {
+      "supply_temperature_c": 18.2,
+      "fan_power_kw": 4.7
+    }
+  },
+  {
+    "topic": "schaumburg/corporate-office/fcu-12/telemetry",
+    "tags": {
+      "location_city": "Schaumburg",
+      "terminal_equipment": "fan coil unit",
+      "thermal_zone": "east offices",
+      "site_function": "corporate office"
+    },
+    "fields": {
+      "discharge_temperature_c": 18.8,
+      "fan_speed_rpm": 980.0
+    }
+  },
+  {
+    "topic": "chicago/lincoln-park/outpatient-clinic/exam-12/environment",
+    "tags": {
+      "municipality": "Chicago",
+      "facility_kind": "outpatient clinic",
+      "room_category": "exam room",
+      "department": "family medicine"
+    },
+    "fields": {
+      "room_air_temperature_c": 22.4,
+      "relative_humidity_pct": 44.0
+    }
+  },
+  {
+    "topic": "oak-park/medical-center/patient-room-218/environment",
+    "tags": {
+      "city_name": "Oak Park",
+      "building_purpose": "medical center",
+      "space_type": "patient room",
+      "department_name": "inpatient care"
+    },
+    "fields": {
+      "ambient_temperature_c": 22.8,
+      "room_humidity_pct": 46.0
+    }
+  },
+  {
+    "topic": "evanston/urgent-care/treatment-room-5/environment",
+    "tags": {
+      "location_city": "Evanston",
+      "site_function": "urgent care clinic",
+      "room_use": "treatment room",
+      "service_line": "emergency care"
+    },
+    "fields": {
+      "room_temperature_c": 23.0,
+      "relative_humidity_pct": 45.0
+    }
+  },
+  {
+    "topic": "chicago/lakeview/public-school/classroom-204/iaq",
+    "tags": {
+      "municipality": "Chicago",
+      "facility_kind": "public school",
+      "room_category": "classroom",
+      "education_level": "middle school"
+    },
+    "fields": {
+      "carbon_dioxide_ppm": 720.0,
+      "room_temperature_c": 22.1
+    }
+  },
+  {
+    "topic": "evanston/university-engineering/lecture-room-301/iaq",
+    "tags": {
+      "city_name": "Evanston",
+      "building_purpose": "university",
+      "space_type": "lecture room",
+      "academic_area": "engineering"
+    },
+    "fields": {
+      "co2_concentration_ppm": 760.0,
+      "indoor_temperature_c": 21.8
+    }
+  },
+  {
+    "topic": "naperville/community-college/classroom-b14/iaq",
+    "tags": {
+      "location_city": "Naperville",
+      "site_function": "community college",
+      "room_use": "classroom",
+      "academic_program": "nursing"
+    },
+    "fields": {
+      "indoor_co2_ppm": 690.0,
+      "air_temperature_c": 22.3
+    }
+  },
+  {
+    "topic": "chicago/west-loop/office-tower-a/panel-3/power",
+    "tags": {
+      "municipality": "Chicago",
+      "meter_role": "electrical feeder",
+      "load_category": "office lighting",
+      "distribution_area": "tower west"
+    },
+    "fields": {
+      "active_power_kw": 84.0,
+      "power_factor": 0.96
+    }
+  },
+  {
+    "topic": "schaumburg/shopping-mall/tenant-feeder-8/power",
+    "tags": {
+      "city_name": "Schaumburg",
+      "electrical_asset": "tenant feeder",
+      "demand_type": "retail load",
+      "service_zone": "food court"
+    },
+    "fields": {
+      "real_power_kw": 76.0,
+      "power_factor": 0.94
+    }
+  },
+  {
+    "topic": "naperville/distribution-center/branch-circuit-17/power",
+    "tags": {
+      "location_city": "Naperville",
+      "power_meter": "branch circuit",
+      "load_type": "warehouse equipment",
+      "electrical_zone": "loading dock"
+    },
+    "fields": {
+      "electrical_demand_kw": 91.0,
+      "power_factor": 0.92
+    }
+  },
+  {
+    "topic": "chicago/south-side/pump-station/high-service-2/water",
+    "tags": {
+      "municipality": "Chicago",
+      "equipment_class": "centrifugal pump",
+      "utility_service": "potable water",
+      "process_area": "high service"
+    },
+    "fields": {
+      "discharge_pressure_kpa": 510.0,
+      "flow_rate_lpm": 1480.0
+    }
+  },
+  {
+    "topic": "aurora/water-treatment/filtration/pump-6/water",
+    "tags": {
+      "city_name": "Aurora",
+      "asset_type": "process pump",
+      "service_category": "drinking water",
+      "process_zone": "filtration"
+    },
+    "fields": {
+      "outlet_pressure_kpa": 495.0,
+      "water_flow_lpm": 1525.0
+    }
+  },
+  {
+    "topic": "joliet/wastewater/lift-station-4/pump-2/water",
+    "tags": {
+      "location_city": "Joliet",
+      "equipment_family": "lift pump",
+      "utility_type": "wastewater",
+      "treatment_area": "influent"
+    },
+    "fields": {
+      "pump_discharge_pressure_kpa": 430.0,
+      "flow_lpm": 1390.0
+    }
+  },
+  {
+    "topic": "chicago/ohare/distribution-warehouse/freezer-1/refrigeration",
+    "tags": {
+      "municipality": "Chicago",
+      "facility_kind": "distribution warehouse",
+      "storage_type": "refrigerated goods",
+      "logistics_area": "freezer"
+    },
+    "fields": {
+      "cold_room_temperature_c": -18.0,
+      "compressor_power_kw": 31.0
+    }
+  },
+  {
+    "topic": "milwaukee/cold-storage/freezer-4/refrigeration",
+    "tags": {
+      "city_name": "Milwaukee",
+      "building_purpose": "logistics warehouse",
+      "inventory_type": "frozen food",
+      "warehouse_zone": "freezer"
+    },
+    "fields": {
+      "storage_temperature_c": -19.0,
+      "refrigeration_power_kw": 34.0
+    }
+  },
+  {
+    "topic": "indianapolis/fulfillment-center/packing-line-2/environment",
+    "tags": {
+      "location_city": "Indianapolis",
+      "site_function": "fulfillment warehouse",
+      "inventory_category": "general merchandise",
+      "operations_zone": "packing"
+    },
+    "fields": {
+      "indoor_temperature_c": 21.5,
+      "conveyor_power_kw": 18.0
+    }
+  }
+]
