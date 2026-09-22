@@ -174,6 +174,14 @@ class TopicEvidenceMatcher:
                 right = reference.representation.identity
                 if left.source != right.source or left.datatype != right.datatype:
                     continue
+                # Independent key/value/key+value discovery is tag metadata only.
+                # Numeric telemetry fields belong to schema/stream evidence and must
+                # not leak into tag-value explanations or feedback snapshots.
+                if (
+                    evidence_id in {"key", "value", "key_value"}
+                    and (left.source != "tag" or right.source != "tag")
+                ):
+                    continue
 
                 left_vector = pair.vector_for(evidence_id)
                 right_vector = reference.vector_for(evidence_id)
