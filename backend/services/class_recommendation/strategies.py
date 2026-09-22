@@ -19,7 +19,8 @@ from .matching import centroid, cosine
 DistanceMatrix = tuple[tuple[float, ...], ...]
 ClusterLabels = Callable[[str, DistanceMatrix], Sequence[int]]
 DEFAULT_STRATEGY_ID = "independent_hdbscan"
-TAG_VALUE_CENTROID_STRATEGY_ID = "tag_value_centroid"
+INDEPENDENT_CENTROID_STRATEGY_ID = "independent_centroid"
+LEGACY_TAG_VALUE_CENTROID_STRATEGY_ID = "tag_value_centroid"
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,7 +84,7 @@ class HdbscanStrategyConfig:
 
 
 @dataclass(frozen=True, slots=True)
-class TagValueCentroidStrategyConfig:
+class CentroidStrategyConfig:
     threshold: float = 0.85
     min_topic_count: int = 2
 
@@ -409,44 +410,171 @@ class IndependentEvidenceHdbscanStrategy:
         ).fit_predict(matrix)
 
 
-class TagValueCentroidStrategy:
-    """Deterministic batch form of the original tag-value centroid baseline.
+class IndependentEvidenceCentroidStrategy:
+    """Discover groups with moving-centroid assignment in each evidence space.
 
-    Every tag pair contributes only its already-materialized `value` vector. Vectors
-    are processed in stable topic/pair order, assigned to the nearest current centroid
-    when the configured cosine threshold is met, and otherwise start a new centroid.
-    The strategy owns no vector persistence and creates no extra embeddings.
+    This strategy consumes the same evidence spaces as the independent HDBSCAN
+    strategy, but changes only the grouping algorithm. Tag key, tag value, and
+    tag key+value vectors are assigned at raw tag-item level. Schema is reduced
+    to one whole-topic structural vector, and stream context uses one whole-topic
+    vector. Each evidence channel forms moving centroids independently.
+
+    Exact topic memberships found by multiple evidence channels are merged and
+    retain every reason, just like the HDBSCAN strategy. The key experimental
+    difference is therefore centroid-threshold assignment versus density-based
+    HDBSCAN discovery, not a different evidence contract.
     """
 
     definition = RecommendationStrategyDefinition(
-        strategy_id=TAG_VALUE_CENTROID_STRATEGY_ID,
-        label="Tag value centroid",
+        strategy_id=INDEPENDENT_CENTROID_STRATEGY_ID,
+        label="Independent evidence (centroid)",
         description=(
-            "Uses only tag pair value embeddings and the original nearest-centroid "
-            "assignment idea. It is a baseline over the same stored evidence."
+            "Assigns key, value, key+value, schema, and stream evidence to "
+            "nearest moving centroids independently. Exact topic memberships "
+            "are merged across evidence types."
         ),
     )
 
-    def __init__(self, config: TagValueCentroidStrategyConfig) -> None:
+    def __init__(self, config: CentroidStrategyConfig) -> None:
         self.config = config
 
     def discover(
         self, evidence: RecommendationStrategyInput
     ) -> tuple[StrategyCandidateGroup, ...]:
+        discovered: dict[
+            tuple[str, ...],
+            dict[str, list[StrategySupportItem]],
+        ] = {}
+
+        for evidence_id in DISCOVERY_EVIDENCE_IDS:
+            if evidence_id == "schema":
+                items = self._schema_items(evidence)
+            elif evidence_id == "stream_context":
+                items = self._stream_items(evidence)
+            else:
+                items = self._pair_items(evidence, evidence_id)
+
+            for members, support_items in self._centroid_memberships(items):
+                per_evidence = discovered.setdefault(members, {})
+                per_evidence.setdefault(evidence_id, []).extend(support_items)
+
+        evidence_order = {
+            evidence_id: index
+            for index, evidence_id in enumerate(DISCOVERY_EVIDENCE_IDS)
+        }
+        groups = []
+        for members, support_by_evidence in discovered.items():
+            evidence_ids = tuple(
+                sorted(
+                    support_by_evidence,
+                    key=lambda evidence_id: evidence_order[evidence_id],
+                )
+            )
+            support = tuple(
+                StrategyEvidenceSupport(
+                    evidence_id=evidence_id,
+                    items=tuple(
+                        sorted(
+                            support_by_evidence[evidence_id],
+                            key=lambda item: (
+                                item.topic,
+                                item.text or "",
+                                -item.similarity,
+                                item.source or "",
+                            ),
+                        )
+                    ),
+                )
+                for evidence_id in evidence_ids
+            )
+            groups.append(
+                StrategyCandidateGroup(
+                    members=members,
+                    evidence_ids=evidence_ids,
+                    support=support,
+                )
+            )
+
+        groups.sort(
+            key=lambda group: (
+                evidence_order[group.evidence_ids[0]],
+                -len(group.members),
+                group.members,
+                group.evidence_ids,
+            )
+        )
+        return tuple(groups)
+
+    @staticmethod
+    def _pair_items(
+        evidence: RecommendationStrategyInput,
+        evidence_id: str,
+    ) -> list[tuple[str, tuple[float, ...], str | None, str | None]]:
         items = []
         for topic in evidence.topics:
             for record in evidence.pairs_by_topic.get(topic, ()):
                 identity = record.representation.identity
                 if identity.source != "tag":
                     continue
-                vector = record.vector_for("value")
+                vector = record.vector_for(evidence_id)
                 if vector is None:
                     continue
-                items.append((topic, identity, tuple(vector)))
-        items.sort(key=lambda item: (item[0], item[1]))
+                items.append(
+                    (
+                        topic,
+                        tuple(float(value) for value in vector),
+                        record.representation.text_for(evidence_id),
+                        identity.source,
+                    )
+                )
+        items.sort(key=lambda item: (item[0], item[2] or "", item[3] or ""))
+        return items
 
+    @staticmethod
+    def _schema_items(
+        evidence: RecommendationStrategyInput,
+    ) -> list[tuple[str, tuple[float, ...], str | None, str | None]]:
+        items = []
+        for topic in evidence.topics:
+            vectors = []
+            texts = []
+            for record in evidence.pairs_by_topic.get(topic, ()):
+                vector = record.vector_for("schema")
+                if vector is None:
+                    continue
+                vectors.append(tuple(float(value) for value in vector))
+                text = record.representation.text_for("schema")
+                if text:
+                    source = record.representation.identity.source
+                    texts.append(f"{source} {text}")
+            if vectors:
+                items.append(
+                    (
+                        topic,
+                        centroid(vectors),
+                        "; ".join(sorted(texts)),
+                        "schema",
+                    )
+                )
+        items.sort(key=lambda item: item[0])
+        return items
+
+    @staticmethod
+    def _stream_items(
+        evidence: RecommendationStrategyInput,
+    ) -> list[tuple[str, tuple[float, ...], str | None, str | None]]:
+        return [
+            (topic, tuple(float(value) for value in vector), None, "stream")
+            for topic in evidence.topics
+            if (vector := evidence.stream_vectors.get(topic)) is not None
+        ]
+
+    def _centroid_memberships(
+        self,
+        items: list[tuple[str, tuple[float, ...], str | None, str | None]],
+    ) -> list[tuple[tuple[str, ...], tuple[StrategySupportItem, ...]]]:
         groups: list[dict] = []
-        for topic, identity, vector in items:
+        for topic, vector, text, source in items:
             best_index = None
             best_score = -2.0
             for index, group in enumerate(groups):
@@ -455,22 +583,13 @@ class TagValueCentroidStrategy:
                     best_score = score
                     best_index = index
 
-            text = next(
-                (
-                    record.representation.text_for("value")
-                    for record in evidence.pairs_by_topic.get(topic, ())
-                    if record.representation.identity == identity
-                ),
-                None,
-            )
-
             if best_index is None or best_score < self.config.threshold:
                 groups.append(
                     {
                         "vectors": [vector],
                         "centroid": vector,
                         "topics": {topic},
-                        "items": [(topic, vector, text)],
+                        "items": [(topic, vector, text, source)],
                     }
                 )
                 continue
@@ -478,12 +597,12 @@ class TagValueCentroidStrategy:
             group = groups[best_index]
             group["vectors"].append(vector)
             group["topics"].add(topic)
-            group["items"].append((topic, vector, text))
+            group["items"].append((topic, vector, text, source))
             group["centroid"] = centroid(group["vectors"])
 
-        # Different value centroids can yield the same exact topic membership.
-        # Merge those reasons into one candidate, mirroring the membership identity
-        # rule used by the independent HDBSCAN strategy.
+        # More than one moving centroid in the same evidence space can project to
+        # the same exact set of topics. Membership is the identity, so merge those
+        # support items before returning the candidate reason.
         by_membership: dict[tuple[str, ...], list[StrategySupportItem]] = {}
         for group in groups:
             members = tuple(sorted(group["topics"]))
@@ -496,38 +615,37 @@ class TagValueCentroidStrategy:
                     topic=topic,
                     text=text,
                     similarity=cosine(vector, center),
-                    source="tag",
+                    source=source,
                 )
-                for topic, vector, text in group["items"]
+                for topic, vector, text, source in group["items"]
             )
 
-        return tuple(
-            StrategyCandidateGroup(
-                members=members,
-                evidence_ids=("value",),
-                support=(
-                    StrategyEvidenceSupport(
-                        evidence_id="value",
-                        items=tuple(
-                            sorted(
-                                support,
-                                key=lambda item: (
-                                    item.topic,
-                                    item.text or "",
-                                    -item.similarity,
-                                ),
-                            )
+        return [
+            (
+                members,
+                tuple(
+                    sorted(
+                        support,
+                        key=lambda item: (
+                            item.topic,
+                            item.text or "",
+                            -item.similarity,
+                            item.source or "",
                         ),
-                    ),
+                    )
                 ),
             )
             for members, support in sorted(by_membership.items())
-        )
+        ]
+
+
+# Backward-compatible import name while callers migrate to the broader strategy.
+TagValueCentroidStrategyConfig = CentroidStrategyConfig
 
 
 STRATEGY_DEFINITIONS: tuple[RecommendationStrategyDefinition, ...] = (
     IndependentEvidenceHdbscanStrategy.definition,
-    TagValueCentroidStrategy.definition,
+    IndependentEvidenceCentroidStrategy.definition,
 )
 
 
@@ -535,7 +653,7 @@ def build_strategy(
     strategy_id: str,
     *,
     hdbscan_config: HdbscanStrategyConfig,
-    centroid_config: TagValueCentroidStrategyConfig | None = None,
+    centroid_config: CentroidStrategyConfig | None = None,
     cluster_labels: ClusterLabels | None = None,
 ) -> RecommendationStrategy:
     if strategy_id == DEFAULT_STRATEGY_ID:
@@ -543,8 +661,11 @@ def build_strategy(
             hdbscan_config,
             cluster_labels=cluster_labels,
         )
-    if strategy_id == TAG_VALUE_CENTROID_STRATEGY_ID:
-        return TagValueCentroidStrategy(
-            centroid_config or TagValueCentroidStrategyConfig()
+    if strategy_id in {
+        INDEPENDENT_CENTROID_STRATEGY_ID,
+        LEGACY_TAG_VALUE_CENTROID_STRATEGY_ID,
+    }:
+        return IndependentEvidenceCentroidStrategy(
+            centroid_config or CentroidStrategyConfig()
         )
     raise ValueError(f"Unknown recommendation strategy: {strategy_id}")
