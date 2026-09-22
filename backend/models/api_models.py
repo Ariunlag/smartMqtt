@@ -122,6 +122,7 @@ class ClassRecommendationActionRequest(BaseModel):
 
 RecommendedClassFeedbackAction = Literal[
     "KEEP_TOPIC",
+    "ADD_TOPIC",
     "REMOVE_TOPIC",
     "ACCEPT_CANDIDATE",
     "DISMISS_CANDIDATE",
