@@ -234,6 +234,7 @@ export interface RecommendedClassCandidateSet {
 
 export type RecommendedClassFeedbackAction =
   | "KEEP_TOPIC"
+  | "ADD_TOPIC"
   | "REMOVE_TOPIC"
   | "ACCEPT_CANDIDATE"
   | "DISMISS_CANDIDATE";
