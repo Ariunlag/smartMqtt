@@ -1,0 +1,95 @@
+[
+  {
+    "topic": "ghcn/ACW00011604/TMAX-sensor/telemetry",
+    "tags": {
+      "element_code": "TMAX",
+      "quality_flag": "",
+      "source": "NOAA_GHCN_Daily"
+    },
+    "fields": {
+      "TMAX": 289
+    }
+  },
+  {
+    "topic": "ghcn/ACW00011604/TMIN-sensor/telemetry",
+    "tags": {
+      "element_code": "TMIN",
+      "quality_flag": "",
+      "source": "NOAA_GHCN_Daily"
+    },
+    "fields": {
+      "TMIN": 217
+    }
+  },
+  {
+    "topic": "ghcn/ACW00011604/PRCP-sensor/telemetry",
+    "tags": {
+      "element_code": "PRCP",
+      "quality_flag": "",
+      "source": "NOAA_GHCN_Daily"
+    },
+    "fields": {
+      "PRCP": 30
+    }
+  },
+  {
+    "topic": "meteostat/00FAY/temp-sensor/telemetry",
+    "tags": {
+      "source": "Meteostat",
+      "quantity": "temp"
+    },
+    "fields": {
+      "temp": 3.3
+    }
+  },
+  {
+    "topic": "meteostat/00FAY/dwpt-sensor/telemetry",
+    "tags": {
+      "source": "Meteostat",
+      "quantity": "dwpt"
+    },
+    "fields": {
+      "dwpt": 1.8
+    }
+  },
+  {
+    "topic": "meteostat/00FAY/rhum-sensor/telemetry",
+    "tags": {
+      "source": "Meteostat",
+      "quantity": "rhum"
+    },
+    "fields": {
+      "rhum": 90
+    }
+  },
+  {
+    "topic": "meteostat/00FAY/wdir-sensor/telemetry",
+    "tags": {
+      "source": "Meteostat",
+      "quantity": "wdir"
+    },
+    "fields": {
+      "wdir": 250
+    }
+  },
+  {
+    "topic": "meteostat/00FAY/wspd-sensor/telemetry",
+    "tags": {
+      "source": "Meteostat",
+      "quantity": "wspd"
+    },
+    "fields": {
+      "wspd": 14.8
+    }
+  },
+  {
+    "topic": "meteostat/00FAY/pres-sensor/telemetry",
+    "tags": {
+      "source": "Meteostat",
+      "quantity": "pres"
+    },
+    "fields": {
+      "pres": 1019.4
+    }
+  }
+]
