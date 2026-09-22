@@ -38,7 +38,9 @@ it("removes members immediately and undo restores server membership", async () =
   vi.mocked(editAdaptiveGroup).mockResolvedValueOnce({...group, revision: 2, members: ["lab/a"], can_undo: true, edited: true})
     .mockResolvedValueOnce({...group, revision: 3});
   render(<AdaptiveRecommendationsManager />);
-  fireEvent.click(await screen.findByRole("button", {name: "Remove lab/b"}));
+  fireEvent.click(await screen.findByRole("button", {name: "Review graph"}));
+  expect(screen.getByLabelText("Recommendation graph mock")).toHaveTextContent("lab/a,lab/b");
+  fireEvent.click(screen.getByRole("button", {name: "Remove lab/b"}));
   await screen.findByText("lab/b removed.");
   expect(screen.queryByRole("button", {name: "Remove lab/b"})).not.toBeInTheDocument();
   expect(screen.getByLabelText("Recommendation graph mock")).toHaveTextContent("lab/a");
