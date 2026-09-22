@@ -4,6 +4,7 @@ import SplitLayout from "../layout/SplitLayout";
 import RecommendationGraph from "./RecommendationGraph";
 import {
   actionNotice,
+  percentText,
   type EvidenceMatch,
   type GroupAction,
   type GroupActionValues,
@@ -143,62 +144,31 @@ export default function RecommendationsPanel({ source }: { source: Recommendatio
 }
 
 function DiscoveryEvidenceSummary({ group }: { group: RecommendationGroup }) {
-  const channels = new Map<
-    string,
-    {
-      label: string;
-      entries: Array<{
-        topic: string;
-        value: string;
-        matches: EvidenceMatch[];
-      }>;
-    }
-  >();
-
-  for (const member of group.members) {
-    for (const row of member.evidence) {
-      if (row.value === "N/A") continue;
-      const current = channels.get(row.channelId) ?? {
-        label: row.channelLabel,
-        entries: [],
-      };
-      current.entries.push({
-        topic: member.topic,
-        value: row.value,
-        matches: row.matches,
-      });
-      channels.set(row.channelId, current);
-    }
-  }
-
-  if (channels.size === 0) return null;
+  const channels = group.discoveryEvidence ?? [];
+  if (channels.length === 0) return null;
 
   return (
     <section aria-label="Matching discovery evidence">
       <h5 className="panel-header">Matching evidence</h5>
       <div className="rec-evidence">
-        {[...channels.entries()].map(([channelId, channel]) => (
-          <section key={channelId}>
+        {channels.map((channel) => (
+          <section key={channel.channelId}>
             <div className="rec-evidence__head">
-              <strong>{channel.label}</strong>
-              <span>{channel.entries.length} compared members</span>
+              <strong>{channel.channelLabel}</strong>
+              <span>{channel.items.length} clustered items</span>
             </div>
 
-            {channel.entries.map((entry) => (
-              <div className="rec-evidence__match" key={entry.topic}>
-                <p className="rec-member__topic">{entry.topic}</p>
-                {entry.matches.length > 0 ? (
-                  entry.matches.map((match, index) => (
-                    <div key={index}>
-                      <p>
-                        {match.left} ↔ {match.right}
-                      </p>
-                      {match.detail && <small>{match.detail}</small>}
-                    </div>
-                  ))
-                ) : (
-                  <small>{entry.value} similarity</small>
-                )}
+            {channel.items.map((item, index) => (
+              <div
+                className="rec-evidence__match"
+                key={`${item.topic}:${item.text ?? "stream"}:${index}`}
+              >
+                <p className="rec-member__topic">{item.topic}</p>
+                {item.text && <p>{item.text}</p>}
+                <small>
+                  {item.source ? `${item.source} · ` : ""}
+                  {percentText(item.similarity)} similarity to this evidence cluster
+                </small>
               </div>
             ))}
           </section>
