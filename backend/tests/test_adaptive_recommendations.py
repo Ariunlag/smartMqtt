@@ -234,18 +234,19 @@ def test_edit_remove_add_undo_refresh_and_saved_class_are_durable():
     assert svc.store.classes()[0]["topics"] == restored["members"]
 
 
-def test_manual_class_labels_leave_self_out_and_unselected_topics_unlabelled():
+def test_manual_class_persistence_does_not_create_learning_labels():
     svc = service()
     seed(svc)
     svc.manual_class("Sensors", ["a", "b"])
-    events = svc.store.events()
-    assert {e["topic"] for e in events} == {"a", "b"}
-    assert all(e["label"] == 1 and e["topic"] not in e["details"]["reference_topics"] for e in events)
+    assert svc.store.events() == []
+    assert svc.store.classes()[0]["topics"] == ["a", "b"]
+
     svc.manual_class("Sensors", ["a", "c"], update=True)
-    assert [(e["topic"], e["label"]) for e in svc.store.events()[2:]] == [("b", 0), ("c", 1)]
+    assert svc.store.events() == []
+    assert svc.store.classes()[0]["topics"] == ["a", "c"]
 
 
-def test_manual_update_records_the_current_representation_manifest():
+def test_manual_class_remains_non_training_state_across_model_manifest_changes():
     svc = service()
     seed(svc)
     svc.manual_class("Sensors", ["a", "b"])
@@ -253,8 +254,7 @@ def test_manual_update_records_the_current_representation_manifest():
     for topic in ("a", "b", "c"):
         svc.materialize(topic, {"sensor_type": "temperature"})
     svc.manual_class("Sensors", ["a", "c"], update=True)
-    events = effective_labels(svc.store.events(), svc.registry.manifest_id)
-    assert {(event["topic"], event["label"]) for event in events} == {("b", 0), ("c", 1)}
+    assert effective_labels(svc.store.events(), svc.registry.manifest_id) == []
 
 
 def test_dismissal_does_not_generate_negative_membership_and_can_undo_after_refresh():
