@@ -3,6 +3,7 @@ import axios from "axios";
 import { getAdaptiveRecommendations, editAdaptiveGroup } from "../../services/adaptiveRecommendationApi";
 import type { AdaptiveGroup, AdaptiveResponse, GroupAction } from "../../services/adaptiveRecommendationApi";
 import { useInfluxStore } from "../../store/useInfluxStore";
+import RecommendationGraph from "./RecommendationGraph";
 
 const errorText = (error: unknown) => axios.isAxiosError<{detail?: string}>(error)
   ? error.response?.data.detail ?? error.message : error instanceof Error ? error.message : "Request failed";
@@ -94,6 +95,7 @@ function GroupCard({group, result, onChange}: {group: AdaptiveGroup; result: Ada
       </div>
       {group.members.length > 8 && <button onClick={() => setAll(!all)}>{all ? "Show fewer topics" : `Show all ${group.members.length} topics`}</button>}
       {!!group.proposals.length && <details><summary>Suggested additions ({group.proposals.length})</summary>{group.proposals.map(proposal => <div className="adaptive__proposal" key={proposal.topic}><span className="adaptive__topic">{proposal.topic} · {similarity(proposal.score)}</span><button disabled={busy} onClick={() => void act("add", {topic: proposal.topic})}>Add</button></div>)}</details>}
+      <RecommendationGraph topics={group.members} />
       <footer className="adaptive__actions">
         <button disabled={busy || !available.length} onClick={() => {setAdding(!adding); setSaving(false);}}>Add topic</button>
         {!group.saved_class && <button disabled={busy || !group.members.length} onClick={() => {setSaving(!saving); setAdding(false);}}>Save as Class</button>}
