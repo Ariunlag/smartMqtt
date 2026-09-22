@@ -6,6 +6,7 @@ import type { AdaptiveGroup, AdaptiveResponse } from "../../services/adaptiveRec
 
 vi.mock("../../services/adaptiveRecommendationApi", () => ({getAdaptiveRecommendations: vi.fn(), editAdaptiveGroup: vi.fn()}));
 vi.mock("../../store/useInfluxStore", () => ({useInfluxStore: {getState: () => ({getClasses: vi.fn()})}}));
+vi.mock("./RecommendationGraph", () => ({default: ({topics}: {topics: string[]}) => <div aria-label="Recommendation graph mock">{topics.join(",")}</div>}));
 
 const group: AdaptiveGroup = {group_id: "g1", revision: 1, name: null, members: ["lab/a", "lab/b"],
   saved_class: null, dismissed: false, edited: false, can_undo: false, confirmed: [],
@@ -40,6 +41,7 @@ it("removes members immediately and undo restores server membership", async () =
   fireEvent.click(await screen.findByRole("button", {name: "Remove lab/b"}));
   await screen.findByText("lab/b removed.");
   expect(screen.queryByRole("button", {name: "Remove lab/b"})).not.toBeInTheDocument();
+  expect(screen.getByLabelText("Recommendation graph mock")).toHaveTextContent("lab/a");
   fireEvent.click(screen.getByRole("button", {name: "Undo last edit"}));
   expect(await screen.findByRole("button", {name: "Remove lab/b"})).toBeInTheDocument();
   expect(vi.mocked(editAdaptiveGroup).mock.calls[1][0].revision).toBe(2);
