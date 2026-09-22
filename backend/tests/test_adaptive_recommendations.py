@@ -181,6 +181,32 @@ def test_different_vector_dimensions_are_valid_in_separate_provider_spaces():
     assert result["topic_text"]["score"] == 1
 
 
+def test_pair_text_provider_keeps_only_strong_semantic_matches():
+    provider = TextProvider("tag_value", "Tag values", "pair", min_match_similarity=0.75)
+
+    left = [
+        {"embedding": [1.0, 0.0], "payload": {"text": "Chicago"}},
+        {"embedding": [0.0, 1.0], "payload": {"text": "lecture room"}},
+    ]
+    right = [
+        {"embedding": [1.0, 0.0], "payload": {"text": "Chicago"}},
+        {"embedding": [0.0, -1.0], "payload": {"text": "emergency care"}},
+    ]
+
+    result = provider.compare(left, right)
+
+    assert result["status"] == "available"
+    assert result["score"] == pytest.approx(1.0)
+    assert result["coverage"] == pytest.approx(0.5)
+    assert result["matches"] == [
+        {
+            "left": {"text": "Chicago"},
+            "right": {"text": "Chicago"},
+            "similarity": pytest.approx(1.0),
+        }
+    ]
+
+
 def test_model_change_masks_old_vectors_until_rematerialized():
     svc = service()
     svc.materialize("a", {"sensor": "temperature"})
