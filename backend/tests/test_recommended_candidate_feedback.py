@@ -109,7 +109,7 @@ class FakeDatabase:
 
 def test_candidate_identity_is_stable_across_evidence_versions_and_strategy_specific():
     first = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan", ("key",))
-    second = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan")
+    second = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan", ("key",))
     other_strategy = RecommendedClassDiscovery._candidate_id(("a", "b"), "tag_value_centroid", ("value",))
 
     assert first == second
@@ -119,7 +119,7 @@ def test_candidate_identity_is_stable_across_evidence_versions_and_strategy_spec
 def test_candidate_snapshot_version_only_increments_when_snapshot_changes():
     database = FakeDatabase()
     store = RecommendedCandidateStore(database)
-    candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan")
+    candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan", ("key",))
     snapshot = {
         "strategy_id": "independent_hdbscan",
         "member_topics": ["a", "b"],
@@ -160,7 +160,7 @@ def test_candidate_snapshot_version_only_increments_when_snapshot_changes():
 def test_feedback_without_exposure_run_remains_valid_and_unattributed():
     database = FakeDatabase()
     store = RecommendedCandidateStore(database)
-    candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "tag_value_centroid")
+    candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "tag_value_centroid", ("value",))
     store.persist_snapshot(
         candidate_id=candidate_id,
         strategy_id="tag_value_centroid",
@@ -197,7 +197,7 @@ def test_feedback_without_exposure_run_remains_valid_and_unattributed():
 def test_feedback_links_exact_shadow_and_live_run_observations():
     database = FakeDatabase()
     store = RecommendedCandidateStore(database)
-    candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan")
+    candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan", ("key",))
     store.persist_snapshot(
         candidate_id=candidate_id,
         strategy_id="independent_hdbscan",
@@ -243,7 +243,7 @@ def test_feedback_links_exact_shadow_and_live_run_observations():
 def test_unknown_exposure_run_does_not_block_or_misattribute_feedback():
     database = FakeDatabase()
     store = RecommendedCandidateStore(database)
-    candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan")
+    candidate_id = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan", ("key",))
     store.persist_snapshot(
         candidate_id=candidate_id,
         strategy_id="independent_hdbscan",
