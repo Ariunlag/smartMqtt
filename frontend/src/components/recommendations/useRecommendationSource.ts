@@ -45,11 +45,32 @@ function payloadText(payload: { text?: string }) {
   return payload.text ?? JSON.stringify(payload);
 }
 
+function channelLabel(evidenceId: string, fallback: string) {
+  return evidenceId === "topic_text" ? "Topic path" : fallback;
+}
+
+function availableWeightTotal(
+  response: AdaptiveResponse,
+  rows: Record<string, AdaptiveEvidence> | undefined,
+) {
+  return response.catalog.reduce((total, channel) => {
+    const row = rows?.[channel.evidence_id];
+    const weight = response.model.weights[channel.evidence_id] ?? 0;
+    return channel.active &&
+      weight > 0 &&
+      row?.status === "available" &&
+      row.score !== null
+      ? total + weight
+      : total;
+  }, 0);
+}
+
 function evidenceRows(
   response: AdaptiveResponse,
   rows: Record<string, AdaptiveEvidence> | undefined,
 ): EvidenceRow[] {
   const ranked: Array<{ row: EvidenceRow; contribution: number }> = [];
+  const availableWeight = availableWeightTotal(response, rows);
 
   for (const channel of response.catalog) {
     const row = rows?.[channel.evidence_id];
@@ -64,7 +85,8 @@ function evidenceRows(
       continue;
     }
 
-    const contribution = weight * row.score * row.coverage;
+    const effectiveWeight = availableWeight > 0 ? weight / availableWeight : 0;
+    const contribution = effectiveWeight * row.score * row.coverage;
     const matches: EvidenceMatch[] = (row.matches ?? []).map((match) => ({
       left: payloadText(match.left),
       right: payloadText(match.right),
@@ -76,10 +98,10 @@ function evidenceRows(
     ranked.push({
       row: {
         channelId: channel.evidence_id,
-        channelLabel: channel.label,
+        channelLabel: channelLabel(channel.evidence_id, channel.label),
         value: percentText(row.score),
         detail:
-          `Weight ${percentText(weight)} · coverage ${percentText(row.coverage)} · weighted support ${percentText(contribution)}`,
+          `Effective weight ${percentText(effectiveWeight)} · coverage ${percentText(row.coverage)} · weighted support ${percentText(contribution)}`,
         matches,
       },
       contribution,
@@ -97,30 +119,43 @@ function groupDiscoveryChannels(
   const ranked: Array<{ label: string; contribution: number }> = [];
 
   for (const channel of response.catalog) {
-    const weight = response.model.weights[channel.evidence_id] ?? 0;
-    if (!channel.active || weight <= 0) continue;
+    const rawWeight = response.model.weights[channel.evidence_id] ?? 0;
+    if (!channel.active || rawWeight <= 0) continue;
 
+    const effectiveWeights: number[] = [];
     const contributions: number[] = [];
+
     for (const topic of group.members) {
-      const row = group.evidence[topic]?.[channel.evidence_id];
+      const rows = group.evidence[topic];
+      const row = rows?.[channel.evidence_id];
+      const availableWeight = availableWeightTotal(response, rows);
       if (
+        availableWeight <= 0 ||
         row?.status !== "available" ||
         row.score === null ||
         row.coverage <= 0
       ) {
         continue;
       }
-      contributions.push(weight * row.score * row.coverage);
+
+      const effectiveWeight = rawWeight / availableWeight;
+      effectiveWeights.push(effectiveWeight);
+      contributions.push(effectiveWeight * row.score * row.coverage);
     }
 
     if (contributions.length === 0) continue;
-    const average =
+
+    const averageEffectiveWeight =
+      effectiveWeights.reduce((sum, value) => sum + value, 0) /
+      effectiveWeights.length;
+    const averageContribution =
       contributions.reduce((sum, value) => sum + value, 0) /
       contributions.length;
 
     ranked.push({
-      label: `${channel.label} · ${percentText(weight)} weight`,
-      contribution: average,
+      label:
+        `${channelLabel(channel.evidence_id, channel.label)} · ${percentText(averageEffectiveWeight)} effective weight`,
+      contribution: averageContribution,
     });
   }
 
@@ -279,9 +314,9 @@ export function useRecommendationSource(): RecommendationSource {
       ],
       channels: result.catalog.map((channel) => ({
         id: channel.evidence_id,
-        label: channel.label,
+        label: channelLabel(channel.evidence_id, channel.label),
         detail: channel.active
-          ? percentText(result.model.weights[channel.evidence_id] ?? 0)
+          ? `Model weight ${percentText(result.model.weights[channel.evidence_id] ?? 0)}`
           : "Shadow",
       })),
       details,
