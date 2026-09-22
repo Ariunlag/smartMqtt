@@ -106,10 +106,18 @@ class FakeDupeStore:
 
 
 def _labels(channel, matrix):
-    assert len(matrix) == 3
-    if channel in {"key", "schema", "stream_context"}:
+    # key/value/key_value cluster stable tag metadata only: one item per topic.
+    if channel == "key":
+        assert len(matrix) == 3
         return (0, 0, -1)
-    return (-1, -1, -1)
+    if channel == "schema":
+        # Schema sees both field and tag pairs: two items per topic.
+        assert len(matrix) == 6
+        return (0, 0, 0, 0, -1, -1)
+    if channel == "stream_context":
+        assert len(matrix) == 3
+        return (0, 0, -1)
+    return tuple(-1 for _ in matrix)
 
 
 def _discovery(*, aliases=(), pending=(), labels=_labels):
@@ -164,6 +172,36 @@ def test_system_candidates_merge_independent_channel_reasons_and_keep_pair_evide
     )
 
 
+def test_different_memberships_stay_separate_and_topics_can_overlap():
+    def overlapping_labels(channel, matrix):
+        if channel == "key":
+            # Tag-key evidence: a + b.
+            assert len(matrix) == 3
+            return (0, 0, -1)
+        if channel == "value":
+            # Tag-value evidence: b + c.
+            assert len(matrix) == 3
+            return (-1, 0, 0)
+        if channel == "stream_context":
+            # Whole-stream evidence: a + b + c.
+            assert len(matrix) == 3
+            return (0, 0, 0)
+        return tuple(-1 for _ in matrix)
+
+    result = _discovery(labels=overlapping_labels).discover()
+
+    memberships = {
+        candidate.member_topics: candidate.discovery_channels
+        for candidate in result.candidates
+    }
+    assert memberships == {
+        ("a", "b"): ("key",),
+        ("b", "c"): ("value",),
+        ("a", "b", "c"): ("stream_context",),
+    }
+    assert sum("b" in candidate.member_topics for candidate in result.candidates) == 3
+
+
 def test_tag_value_centroid_reuses_individual_tag_value_vectors():
     result = _discovery().discover("tag_value_centroid")
 
@@ -176,8 +214,10 @@ def test_tag_value_centroid_reuses_individual_tag_value_vectors():
 
 def test_confirmed_duplicate_alias_is_not_an_independent_candidate_member():
     def two_topic_labels(channel, matrix):
-        assert len(matrix) == 2
-        return (0, 0) if channel == "key" else (-1, -1)
+        if channel == "key":
+            assert len(matrix) == 2
+            return (0, 0)
+        return tuple(-1 for _ in matrix)
 
     result = _discovery(aliases=("b",), labels=two_topic_labels).discover()
 
