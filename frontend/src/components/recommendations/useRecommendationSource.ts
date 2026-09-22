@@ -91,7 +91,7 @@ function toGroup(
       );
       return {
         topic,
-        detail: discovered ? "Matches the shared evidence above" : "Added during review",
+        detail: discovered ? "" : "Added during review",
         confirmed: overlay?.confirmed.includes(topic) ?? false,
         evidence: [],
       };
@@ -294,24 +294,18 @@ export function useRecommendationSource(): RecommendationSource {
       };
     }
 
-    const details: string[] = [
-      `Discovery evidence available for ${set.available_topics.length} active topics.`,
-      "Each evidence channel discovers candidates on its own. Exact topic memberships found by multiple channels are merged and keep all discovery reasons; memberships that differ by even one topic remain separate.",
-      "Channel scores are per-evidence similarities. No learned weight fuses them into a single membership score.",
-    ];
+    const isCentroid = set.strategy.strategy_id === "tag_value_centroid";
+    const details: string[] = isCentroid
+      ? [
+          "Only tag-value embeddings participate in grouping. Values are assigned incrementally to the nearest moving centroid when they meet the centroid threshold.",
+        ]
+      : [
+          "Key, value, key + value, schema, and stream context discover groups independently. Exact topic memberships found by multiple evidence types are merged.",
+        ];
 
-    if (set.shadow_evaluation) {
-      details.push(
-        `Shadow evaluation ${set.shadow_evaluation.status} · ranking effect: ${set.shadow_evaluation.ranking_effect}. Baseline order ${
-          set.shadow_evaluation.baseline_order_preserved ? "preserved" : "changed"
-        }.`,
-      );
-    }
-    if (set.live_ranking) {
-      details.push(
-        `Live ranking ${set.live_ranking.status} · ranking effect: ${set.live_ranking.ranking_effect} · membership effect: ${set.live_ranking.membership_effect}.`,
-      );
-    }
+    const activeEvidenceIds = isCentroid
+      ? new Set(["value"])
+      : new Set(set.evidence_catalog.map((definition) => definition.evidence_id));
 
     return {
       loading,
@@ -325,14 +319,14 @@ export function useRecommendationSource(): RecommendationSource {
       stats: [
         { label: "Topics", value: String(set.available_topics.length) },
         { label: "Groups", value: String(set.candidates.length) },
-        { label: "Shadow", value: set.shadow_evaluation?.status ?? "Off" },
-        { label: "Live", value: set.live_ranking?.status ?? "Off" },
       ],
-      channels: set.evidence_catalog.map((definition) => ({
-        id: definition.evidence_id,
-        label: definition.label,
-        detail: definition.scope === "pair" ? "Pair evidence" : "Stream evidence",
-      })),
+      channels: set.evidence_catalog
+        .filter((definition) => activeEvidenceIds.has(definition.evidence_id))
+        .map((definition) => ({
+          id: definition.evidence_id,
+          label: discoveryLabel(definition.evidence_id, definition.label),
+          detail: isCentroid ? "Centroid input" : "Independent evidence",
+        })),
       details,
       groups: set.candidates.map((candidate) =>
         toGroup(set, candidate, overlays[candidate.candidate_id]),
