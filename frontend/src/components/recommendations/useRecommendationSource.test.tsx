@@ -78,6 +78,29 @@ const candidateSet: RecommendedClassCandidateSet = {
       anchor_topic: "building/a",
       member_topics: ["building/a", "building/b"],
       discovery_channels: ["key", "schema", "stream_context"],
+      discovery_support: [
+        {
+          evidence_id: "key",
+          items: [
+            { topic: "building/a", text: "unit", similarity: 0.99, source: "tag" },
+            { topic: "building/b", text: "unit", similarity: 0.98, source: "tag" },
+          ],
+        },
+        {
+          evidence_id: "schema",
+          items: [
+            { topic: "building/a", text: "temperature: numeric", similarity: 0.97, source: "field" },
+            { topic: "building/b", text: "temp: numeric", similarity: 0.96, source: "field" },
+          ],
+        },
+        {
+          evidence_id: "stream_context",
+          items: [
+            { topic: "building/a", text: null, similarity: 0.94, source: "stream" },
+            { topic: "building/b", text: null, similarity: 0.93, source: "stream" },
+          ],
+        },
+      ],
       evidence: [
         {
           topic: "building/b",
@@ -189,26 +212,31 @@ it("requests the selected strategy without changing the evidence UI", async () =
   );
 });
 
-it("shows tag, field, coverage, and catalog-driven pair evidence without a fused score", async () => {
+it("shows only the evidence channels that actually discovered the group", async () => {
   render(<RecommendationsManager />);
   await screen.findByRole("heading", { name: "Recommended class #1", level: 4 });
 
+  const summary = screen.getByRole("region", { name: "Matching discovery evidence" });
+  expect(within(summary).getByText("Similar keys")).toBeInTheDocument();
+  expect(within(summary).getByText("Similar structure")).toBeInTheDocument();
+  expect(within(summary).getByText("Similar whole-stream context")).toBeInTheDocument();
+  expect(within(summary).queryByText("Similar values")).not.toBeInTheDocument();
+  expect(within(summary).getAllByText("unit").length).toBe(2);
+  expect(within(summary).getByText("98.0% similarity to this evidence cluster")).toBeInTheDocument();
+
   const row = memberRow("building/b");
-  expect(within(row).getByText("Matched 2 / 3 candidate pairs")).toBeInTheDocument();
+  expect(
+    within(row).getByText("Matched on this recommendation's discovery evidence"),
+  ).toBeInTheDocument();
   fireEvent.click(within(row).getByRole("button", { name: "Why?" }));
 
   expect(within(row).getByText("Similar keys")).toBeInTheDocument();
-  // Each pair-scope channel scores the same matched pairs independently, so a
-  // pair shows up once per channel rather than behind one fused number.
-  expect(within(row).getAllByText("unit:string ↔ unit:string").length).toBe(4);
-  expect(within(row).getAllByText("temp:numeric ↔ temperature:numeric").length).toBe(4);
-  expect(within(row).getAllByText(/Tag evidence ·/).length).toBe(4);
-  expect(within(row).getAllByText(/Field evidence ·/).length).toBe(4);
-  // The anchor is what every other member is compared against, so its rows
-  // say so rather than borrowing another topic's scores or claiming data is
-  // missing.
-  fireEvent.click(within(memberRow("building/a")).getByRole("button", { name: "Why?" }));
-  expect(within(memberRow("building/a")).getAllByText("reference").length).toBe(5);
+  expect(within(row).getByText("Similar structure")).toBeInTheDocument();
+  expect(within(row).getByText("Similar whole-stream context")).toBeInTheDocument();
+  expect(within(row).queryByText("Similar values")).not.toBeInTheDocument();
+
+  // The reference member has no synthetic cross-topic explanation button.
+  expect(within(memberRow("building/a")).queryByRole("button", { name: "Why?" })).not.toBeInTheDocument();
 });
 
 it("records membership edits against the candidate version and undoes them", async () => {
