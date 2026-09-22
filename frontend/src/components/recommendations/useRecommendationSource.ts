@@ -80,10 +80,14 @@ function evidenceRows(
     return {
       channelId: definition.evidence_id,
       channelLabel: definition.label,
-      value: topicEvidence && score !== null ? percentText(score) : "missing",
-      detail: topicEvidence
-        ? `${definition.scope === "pair" ? "Pair evidence" : "Stream evidence"} · matched ${topicEvidence.coverage.matched_pair_count} / ${topicEvidence.coverage.candidate_pair_count} candidate pairs`
-        : null,
+      // No evidence row means the topic is the anchor every other member is
+      // compared against, not that a score went missing.
+      value: !topicEvidence ? "reference" : score === null ? "missing" : percentText(score),
+      detail: !topicEvidence
+        ? null
+        : definition.scope === "pair"
+          ? `Pair evidence · matched ${topicEvidence.coverage.matched_pair_count} of ${topicEvidence.coverage.candidate_pair_count} candidate pairs`
+          : "Stream evidence · one embedding per stream",
       matches,
     };
   });

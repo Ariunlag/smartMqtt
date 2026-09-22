@@ -10,18 +10,23 @@ export default function RecommendationGraph({ topics }: { topics: string[] }) {
   const [series, setSeries] = useState<TimeseriesData[]>([]);
   const [error, setError] = useState<string | null>(null);
 
+  // Key the fetch on the membership itself rather than the array identity, so
+  // a caller that rebuilds the list every render does not reload in a loop.
+  const topicKey = JSON.stringify(topics);
+
   useEffect(() => {
     let cancelled = false;
+    const names: string[] = JSON.parse(topicKey);
 
     const load = async () => {
-      if (topics.length === 0) {
+      if (names.length === 0) {
         setSeries([]);
         setError(null);
         return;
       }
 
       try {
-        const response = await dataApi.getTimeseries(topics);
+        const response = await dataApi.getTimeseries(names);
         if (!cancelled) {
           setSeries(
             response.map((measurement) => ({
@@ -46,7 +51,7 @@ export default function RecommendationGraph({ topics }: { topics: string[] }) {
     return () => {
       cancelled = true;
     };
-  }, [topics]);
+  }, [topicKey]);
 
   if (topics.length === 0) {
     return <p className="empty-note">Add at least one topic to preview the graph.</p>;
@@ -60,14 +65,19 @@ export default function RecommendationGraph({ topics }: { topics: string[] }) {
 
       {error && <p className="empty-note">{error}</p>}
 
-      {topics.length > 1 && series.length > 1 && (
-        <GraphGrid rowHeight={220}>
-          {series.map((item) => (
-            <GraphBox key={item.measurement} title={item.measurement}>
-              <RealtimeGraph topics={[item.measurement]} initialData={[item]} />
-            </GraphBox>
-          ))}
-        </GraphGrid>
+      {/* One chart by default: the per-topic breakdown repeats what the
+          combined chart and the member list already show. */}
+      {series.length > 1 && (
+        <details className="rec-details">
+          <summary>Individual topic graphs ({series.length})</summary>
+          <GraphGrid rowHeight={220}>
+            {series.map((item) => (
+              <GraphBox key={item.measurement} title={item.measurement}>
+                <RealtimeGraph topics={[item.measurement]} initialData={[item]} />
+              </GraphBox>
+            ))}
+          </GraphGrid>
+        </details>
       )}
     </section>
   );

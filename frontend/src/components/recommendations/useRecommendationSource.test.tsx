@@ -204,10 +204,11 @@ it("shows tag, field, coverage, and catalog-driven pair evidence without a fused
   expect(within(row).getAllByText("temp:numeric ↔ temperature:numeric").length).toBe(4);
   expect(within(row).getAllByText(/Tag evidence ·/).length).toBe(4);
   expect(within(row).getAllByText(/Field evidence ·/).length).toBe(4);
-  // The anchor carries no cross-topic evidence and must say so rather than
-  // borrow another topic's scores.
+  // The anchor is what every other member is compared against, so its rows
+  // say so rather than borrowing another topic's scores or claiming data is
+  // missing.
   fireEvent.click(within(memberRow("building/a")).getByRole("button", { name: "Why?" }));
-  expect(within(memberRow("building/a")).getAllByText("missing").length).toBe(5);
+  expect(within(memberRow("building/a")).getAllByText("reference").length).toBe(5);
 });
 
 it("records membership edits against the candidate version and undoes them", async () => {

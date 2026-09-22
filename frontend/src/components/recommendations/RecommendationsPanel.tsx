@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 import SplitLayout from "../layout/SplitLayout";
 import RecommendationGraph from "./RecommendationGraph";
@@ -78,8 +78,7 @@ export default function RecommendationsPanel({ source }: { source: Recommendatio
 
           {groups.length === 0 ? (
             <p className="empty-note">
-              No groups yet. Receive tagged MQTT messages or create a Class to start
-              reviewing recommendations.
+              No candidate groups in the current evidence snapshot.
             </p>
           ) : (
             <ul className="panel-list" aria-label="Recommended groups">
@@ -180,7 +179,12 @@ function GroupDetail({
   };
 
   const members = showAll ? group.members : group.members.slice(0, MEMBER_PREVIEW);
-  const memberTopics = group.members.map((member) => member.topic);
+  // Stable identity: the graph keys its fetch effect on this array, so a fresh
+  // one on every render would reload in a loop.
+  const memberTopics = useMemo(
+    () => group.members.map((member) => member.topic),
+    [group.members],
+  );
   const available = availableTopics.filter((item) => !memberTopics.includes(item));
 
   return (
