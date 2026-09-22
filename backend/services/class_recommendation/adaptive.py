@@ -405,7 +405,6 @@ class AdaptiveRecommendations:
         if not name.strip() or not topics:
             raise ValueError("A Class needs a name and at least one topic")
         with self._lock:
-            material = self._load()
             identities = self.identity_store.resolve_many(topics)
             topics = sorted({identities.get(t, t) for t in topics})
             with self.store.transaction() as conn:
