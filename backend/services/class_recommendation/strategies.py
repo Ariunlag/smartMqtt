@@ -41,9 +41,24 @@ class RecommendationStrategyInput:
 
 
 @dataclass(frozen=True, slots=True)
+class StrategySupportItem:
+    topic: str
+    text: str | None
+    similarity: float
+    source: str | None = None
+
+
+@dataclass(frozen=True, slots=True)
+class StrategyEvidenceSupport:
+    evidence_id: str
+    items: tuple[StrategySupportItem, ...]
+
+
+@dataclass(frozen=True, slots=True)
 class StrategyCandidateGroup:
     members: tuple[str, ...]
     evidence_ids: tuple[str, ...]
+    support: tuple[StrategyEvidenceSupport, ...] = ()
 
 
 class RecommendationStrategy(Protocol):
@@ -113,35 +128,60 @@ class IndependentEvidenceHdbscanStrategy:
     def discover(
         self, evidence: RecommendationStrategyInput
     ) -> tuple[StrategyCandidateGroup, ...]:
-        # Map exact topic membership -> evidence spaces that independently found it.
-        # This deliberately allows one topic to appear in several recommendations.
-        discovered: dict[tuple[str, ...], set[str]] = {}
+        # Exact topic membership is the merge key. Each evidence space keeps its own
+        # concrete supporting metadata/stream items inside that merged recommendation.
+        discovered: dict[
+            tuple[str, ...],
+            dict[str, list[StrategySupportItem]],
+        ] = {}
 
         for evidence_id in DISCOVERY_EVIDENCE_IDS:
             if evidence_id == "stream_context":
-                memberships = self._stream_memberships(evidence, evidence_id)
+                clusters = self._stream_memberships(evidence, evidence_id)
             else:
-                memberships = self._pair_memberships(evidence, evidence_id)
+                clusters = self._pair_memberships(evidence, evidence_id)
 
-            for members in memberships:
-                discovered.setdefault(members, set()).add(evidence_id)
+            for members, support_items in clusters:
+                per_evidence = discovered.setdefault(members, {})
+                per_evidence.setdefault(evidence_id, []).extend(support_items)
 
         evidence_order = {
             evidence_id: index
             for index, evidence_id in enumerate(DISCOVERY_EVIDENCE_IDS)
         }
-        groups = [
-            StrategyCandidateGroup(
-                members=members,
-                evidence_ids=tuple(
-                    sorted(
-                        evidence_ids,
-                        key=lambda evidence_id: evidence_order[evidence_id],
-                    )
-                ),
+        groups = []
+        for members, support_by_evidence in discovered.items():
+            evidence_ids = tuple(
+                sorted(
+                    support_by_evidence,
+                    key=lambda evidence_id: evidence_order[evidence_id],
+                )
             )
-            for members, evidence_ids in discovered.items()
-        ]
+            support = tuple(
+                StrategyEvidenceSupport(
+                    evidence_id=evidence_id,
+                    items=tuple(
+                        sorted(
+                            support_by_evidence[evidence_id],
+                            key=lambda item: (
+                                item.topic,
+                                item.text or "",
+                                -item.similarity,
+                                item.source or "",
+                            ),
+                        )
+                    ),
+                )
+                for evidence_id in evidence_ids
+            )
+            groups.append(
+                StrategyCandidateGroup(
+                    members=members,
+                    evidence_ids=evidence_ids,
+                    support=support,
+                )
+            )
+
         groups.sort(
             key=lambda group: (
                 evidence_order[group.evidence_ids[0]],
@@ -156,15 +196,12 @@ class IndependentEvidenceHdbscanStrategy:
         self,
         evidence: RecommendationStrategyInput,
         evidence_id: str,
-    ) -> set[tuple[str, ...]]:
-        """Cluster raw pair vectors, then project each pair cluster to topic membership.
+    ) -> list[tuple[tuple[str, ...], tuple[StrategySupportItem, ...]]]:
+        """Cluster raw metadata vectors and retain the exact items that formed them."""
 
-        Key/value/key+value discovery is intentionally tag-focused: telemetry fields
-        change with readings, while tags carry stable descriptive metadata. Schema
-        discovery uses both tag and field pairs.
-        """
-
-        items: list[tuple[str, object, tuple[float, ...]]] = []
+        items: list[
+            tuple[str, object, tuple[float, ...], str | None, str | None]
+        ] = []
         for topic in evidence.topics:
             for record in evidence.pairs_by_topic.get(topic, ()):
                 identity = record.representation.identity
@@ -178,57 +215,83 @@ class IndependentEvidenceHdbscanStrategy:
                         topic,
                         identity,
                         tuple(float(value) for value in vector),
+                        record.representation.text_for(evidence_id),
+                        identity.source,
                     )
                 )
 
         items.sort(key=lambda item: (item[0], item[1]))
         if len(items) < self.config.min_cluster_size:
-            return set()
+            return []
 
         labels = self._labels_for_vectors(
             evidence_id,
             tuple(item[2] for item in items),
         )
-        by_label: dict[int, set[str]] = {}
-        for (topic, _identity, _vector), label in zip(items, labels, strict=True):
+        by_label: dict[int, list[tuple[str, object, tuple[float, ...], str | None, str | None]]] = {}
+        for item, label in zip(items, labels, strict=True):
             if label < 0:
                 continue
-            by_label.setdefault(label, set()).add(topic)
+            by_label.setdefault(label, []).append(item)
 
-        return {
-            tuple(sorted(topics))
-            for topics in by_label.values()
-            if len(topics) >= self.config.min_cluster_size
-        }
+        clusters = []
+        for cluster_items in by_label.values():
+            members = tuple(sorted({item[0] for item in cluster_items}))
+            if len(members) < self.config.min_cluster_size:
+                continue
+            center = centroid([item[2] for item in cluster_items])
+            support = tuple(
+                StrategySupportItem(
+                    topic=topic,
+                    text=text,
+                    similarity=cosine(vector, center),
+                    source=source,
+                )
+                for topic, _identity, vector, text, source in cluster_items
+            )
+            clusters.append((members, support))
+        return clusters
 
     def _stream_memberships(
         self,
         evidence: RecommendationStrategyInput,
         evidence_id: str,
-    ) -> set[tuple[str, ...]]:
+    ) -> list[tuple[tuple[str, ...], tuple[StrategySupportItem, ...]]]:
         items = [
             (topic, tuple(float(value) for value in vector))
             for topic in evidence.topics
             if (vector := evidence.stream_vectors.get(topic)) is not None
         ]
         if len(items) < self.config.min_cluster_size:
-            return set()
+            return []
 
         labels = self._labels_for_vectors(
             evidence_id,
             tuple(vector for _topic, vector in items),
         )
-        by_label: dict[int, set[str]] = {}
-        for (topic, _vector), label in zip(items, labels, strict=True):
+        by_label: dict[int, list[tuple[str, tuple[float, ...]]]] = {}
+        for item, label in zip(items, labels, strict=True):
             if label < 0:
                 continue
-            by_label.setdefault(label, set()).add(topic)
+            by_label.setdefault(label, []).append(item)
 
-        return {
-            tuple(sorted(topics))
-            for topics in by_label.values()
-            if len(topics) >= self.config.min_cluster_size
-        }
+        clusters = []
+        for cluster_items in by_label.values():
+            members = tuple(sorted(topic for topic, _vector in cluster_items))
+            if len(members) < self.config.min_cluster_size:
+                continue
+            center = centroid([vector for _topic, vector in cluster_items])
+            support = tuple(
+                StrategySupportItem(
+                    topic=topic,
+                    text=None,
+                    similarity=cosine(vector, center),
+                    source="stream",
+                )
+                for topic, vector in cluster_items
+            )
+            clusters.append((members, support))
+        return clusters
 
     def _labels_for_vectors(
         self,
