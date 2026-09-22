@@ -81,11 +81,50 @@ it("publishes the environment, weights, and catalog-defined evidence", async () 
   ).toBeInTheDocument();
 
   const row = memberRow("lab/a");
-  fireEvent.click(within(row).getByRole("button", { name: "Why?" }));
+  fireEvent.click(within(row).getByRole("button", { name: "Evidence" }));
   expect(within(row).getByText("lab a ↔ lab b")).toBeInTheDocument();
   expect(within(row).getByText("90.0% semantic similarity")).toBeInTheDocument();
   expect(within(row).queryByText("Series shape")).not.toBeInTheDocument();
   expect(within(row).queryByText("missing")).not.toBeInTheDocument();
+});
+
+it("normalizes displayed weights over currently available evidence", async () => {
+  const result = structuredClone(response);
+  result.catalog = [
+    { evidence_id: "topic_text", label: "Topic meaning", scope: "stream", active: true, kind: "embedding" },
+    { evidence_id: "tag_key", label: "Tag keys", scope: "pair", active: true, kind: "embedding" },
+    { evidence_id: "tag_value", label: "Tag values", scope: "pair", active: true, kind: "embedding" },
+    { evidence_id: "tag_key_value", label: "Tag key + value", scope: "pair", active: true, kind: "embedding" },
+    { evidence_id: "series_shape", label: "Time-series shape", scope: "series_window", active: true, kind: "direct_similarity" },
+  ];
+  result.model.weights = {
+    topic_text: 0.2,
+    tag_key: 0.2,
+    tag_value: 0.2,
+    tag_key_value: 0.2,
+    series_shape: 0.2,
+  };
+  result.groups[0].evidence["lab/a"] = {
+    topic_text: { score: 0.9, status: "available", coverage: 1, matches: [] },
+    tag_key: { score: 0.88, status: "available", coverage: 1, matches: [] },
+    tag_value: { score: 0.92, status: "available", coverage: 1, matches: [] },
+    tag_key_value: { score: 0.9, status: "available", coverage: 1, matches: [] },
+    series_shape: { score: null, status: "warming", coverage: 0, matches: [] },
+  };
+  vi.mocked(getAdaptiveRecommendations).mockResolvedValue(result);
+
+  render(<RecommendationsManager />);
+
+  const reasons = await screen.findByRole("region", { name: "Recommendation reasons" });
+  expect(within(reasons).getByText("Topic path · 25.0%")).toBeInTheDocument();
+  expect(within(reasons).getByText("Tag keys · 25.0%")).toBeInTheDocument();
+  expect(within(reasons).getByText("Tag values · 25.0%")).toBeInTheDocument();
+  expect(within(reasons).getByText("Tag key + value · 25.0%")).toBeInTheDocument();
+  expect(within(reasons).queryByText(/Time-series shape/)).not.toBeInTheDocument();
+
+  const row = memberRow("lab/a");
+  fireEvent.click(within(row).getByRole("button", { name: "Evidence" }));
+  expect(within(row).getAllByText("Effective weight 25.0%")).toHaveLength(4);
 });
 
 it("removes members immediately and undo restores server membership", async () => {
@@ -165,7 +204,7 @@ it("shows missing-sample shape charts and the approximate-search limitation", as
   render(<RecommendationsManager />);
 
   await screen.findByText("Lab");
-  fireEvent.click(within(memberRow("lab/a")).getByRole("button", { name: "Why?" }));
+  fireEvent.click(within(memberRow("lab/a")).getByRole("button", { name: "Evidence" }));
   expect(screen.getByRole("img", { name: /Time-series shape comparison/ })).toBeInTheDocument();
 
   fireEvent.click(screen.getByText("Method details"));
