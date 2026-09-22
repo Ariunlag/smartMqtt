@@ -185,7 +185,7 @@ def test_feedback_without_exposure_run_remains_valid_and_unattributed():
     assert "candidate_evidence" in database.feedback[0][-3]
     assert database.feedback[0][-2:] == (None, None)
 
-    with pytest.raises(ValueError, match="member"):
+    with pytest.raises(ValueError, match="server-computed evidence"):
         store.record_feedback(
             candidate_id=candidate_id,
             candidate_version=1,
@@ -276,3 +276,40 @@ def test_candidate_level_feedback_rejects_topic_payload():
             action_type="ACCEPT_CANDIDATE",
             topic="a",
         )
+
+
+def test_explicit_add_topic_feedback_can_carry_server_computed_evidence():
+    database = FakeDatabase()
+    store = RecommendedCandidateStore(database)
+    candidate_id = RecommendedClassDiscovery._candidate_id(
+        ("a", "b"), "independent_hdbscan", ("key",)
+    )
+    store.persist_snapshot(
+        candidate_id=candidate_id,
+        strategy_id="independent_hdbscan",
+        member_topics=("a", "b"),
+        discovery_evidence=("key",),
+        evidence_snapshot={
+            "anchor_topic": "a",
+            "topic_evidence": [{"topic": "b"}],
+        },
+    )
+
+    result = store.record_feedback(
+        candidate_id=candidate_id,
+        candidate_version=1,
+        action_type="ADD_TOPIC",
+        topic="c",
+        topic_evidence={
+            "topic": "c",
+            "channel_scores": {"items": [{"evidence_id": "key", "score": 0.9}]},
+            "coverage": {"candidate_coverage": 1.0, "prototype_coverage": 1.0},
+            "matched_pairs": [],
+            "duplicate_pending": False,
+        },
+    )
+
+    assert result["action_type"] == "ADD_TOPIC"
+    assert result["topic"] == "c"
+    stored_snapshot = database.feedback[0][-3]
+    assert "\"topic\":\"c\"" in stored_snapshot
