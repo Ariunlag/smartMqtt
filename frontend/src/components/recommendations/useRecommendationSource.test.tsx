@@ -140,6 +140,8 @@ it("retains membership when an edit fails", async () => {
 
 it("shows missing-sample shape charts and the approximate-search limitation", async () => {
   const result = structuredClone(response);
+  result.catalog[1].active = true;
+  result.model.weights = { topic_text: 0.5, series_shape: 0.5 };
   result.discovery = {
     mode: "approximate",
     algorithm: "projection",
