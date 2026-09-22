@@ -193,10 +193,10 @@ it("names the discovery channels that produced the candidate", async () => {
   await screen.findByRole("heading", { name: "Recommended class #1", level: 4 });
 
   const reasons = screen.getByRole("region", { name: "Recommendation reasons" });
-  expect(within(reasons).getByText("Similar keys")).toBeInTheDocument();
+  expect(within(reasons).getByText("Similar key")).toBeInTheDocument();
   expect(within(reasons).getByText("Similar structure")).toBeInTheDocument();
-  expect(within(reasons).getByText("Similar whole-stream context")).toBeInTheDocument();
-  expect(within(reasons).queryByText("Similar values")).not.toBeInTheDocument();
+  expect(within(reasons).getByText("Similar stream context")).toBeInTheDocument();
+  expect(within(reasons).queryByText("Shared value")).not.toBeInTheDocument();
 });
 
 it("requests the selected strategy without changing the evidence UI", async () => {
@@ -212,31 +212,30 @@ it("requests the selected strategy without changing the evidence UI", async () =
   );
 });
 
-it("shows only the evidence channels that actually discovered the group", async () => {
+it("shows compact shared evidence without cluster jargon or per-member Why panels", async () => {
   render(<RecommendationsManager />);
   await screen.findByRole("heading", { name: "Recommended class #1", level: 4 });
 
-  const summary = screen.getByRole("region", { name: "Matching discovery evidence" });
-  expect(within(summary).getByText("Similar keys")).toBeInTheDocument();
-  expect(within(summary).getByText("Similar structure")).toBeInTheDocument();
-  expect(within(summary).getByText("Similar whole-stream context")).toBeInTheDocument();
-  expect(within(summary).queryByText("Similar values")).not.toBeInTheDocument();
-  expect(within(summary).getAllByText("unit").length).toBe(2);
-  expect(within(summary).getByText("98.0% similarity to this evidence cluster")).toBeInTheDocument();
+  const reasons = screen.getByRole("region", { name: "Recommendation reasons" });
+  expect(within(reasons).getByText("Similar key")).toBeInTheDocument();
+  expect(within(reasons).getByText("Similar structure")).toBeInTheDocument();
+  expect(within(reasons).getByText("Similar stream context")).toBeInTheDocument();
+  expect(within(reasons).queryByText("Shared value")).not.toBeInTheDocument();
 
-  const row = memberRow("building/b");
-  expect(
-    within(row).getByText("Matched on this recommendation's discovery evidence"),
-  ).toBeInTheDocument();
-  fireEvent.click(within(row).getByRole("button", { name: "Why?" }));
+  // Repeated identical evidence is shown once at group level.
+  expect(within(reasons).getAllByText("unit")).toHaveLength(1);
+  expect(within(reasons).getByText("Exact shared match")).toBeInTheDocument();
+  expect(within(reasons).getByText("Similar tag and field structure across these topics.")).toBeInTheDocument();
+  expect(within(reasons).getByText("Similar whole-stream context across these topics.")).toBeInTheDocument();
 
-  expect(within(row).getByText("Similar keys")).toBeInTheDocument();
-  expect(within(row).getByText("Similar structure")).toBeInTheDocument();
-  expect(within(row).getByText("Similar whole-stream context")).toBeInTheDocument();
-  expect(within(row).queryByText("Similar values")).not.toBeInTheDocument();
+  expect(screen.queryByText(/discovery cluster/i)).not.toBeInTheDocument();
+  expect(screen.queryByText(/cluster member/i)).not.toBeInTheDocument();
 
-  // The reference member has no synthetic cross-topic explanation button.
-  expect(within(memberRow("building/a")).queryByRole("button", { name: "Why?" })).not.toBeInTheDocument();
+  for (const topic of ["building/a", "building/b"]) {
+    const row = memberRow(topic);
+    expect(within(row).getByText("Matches the shared evidence above")).toBeInTheDocument();
+    expect(within(row).queryByRole("button", { name: "Why?" })).not.toBeInTheDocument();
+  }
 });
 
 it("records membership edits against the candidate version and undoes them", async () => {
