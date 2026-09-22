@@ -37,7 +37,7 @@ from .strategies import (
     RecommendationStrategyDefinition,
     RecommendationStrategyInput,
     StrategyEvidenceSupport,
-    TagValueCentroidStrategyConfig,
+    CentroidStrategyConfig,
     build_strategy,
 )
 
@@ -248,7 +248,7 @@ class RecommendedClassDiscovery:
         identity_store,
         dupe_store,
         config: RecommendedClassDiscoveryConfig | None = None,
-        centroid_config: TagValueCentroidStrategyConfig | None = None,
+        centroid_config: CentroidStrategyConfig | None = None,
         cluster_labels: ClusterLabels | None = None,
         strategy_id: str = DEFAULT_STRATEGY_ID,
         candidate_store=None,
@@ -259,7 +259,7 @@ class RecommendedClassDiscovery:
         self.identity_store = identity_store
         self.dupe_store = dupe_store
         self.config = config or RecommendedClassDiscoveryConfig()
-        self.centroid_config = centroid_config or TagValueCentroidStrategyConfig()
+        self.centroid_config = centroid_config or CentroidStrategyConfig()
         self.cluster_labels = cluster_labels
         self.strategy_id = strategy_id
         self.candidate_store = candidate_store
