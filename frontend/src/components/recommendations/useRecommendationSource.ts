@@ -63,6 +63,8 @@ function evidenceRows(
   topicEvidence: RecommendedClassTopicEvidence | undefined,
   allowedEvidenceIds: Set<string>,
 ): EvidenceRow[] {
+  if (!topicEvidence) return [];
+
   return catalog
     .filter((definition) => allowedEvidenceIds.has(definition.evidence_id))
     .map((definition) => {
@@ -83,10 +85,9 @@ function evidenceRows(
       return {
         channelId: definition.evidence_id,
         channelLabel: definition.label,
-        value: !topicEvidence ? "reference" : score === null ? "N/A" : percentText(score),
-        detail: !topicEvidence
-          ? null
-          : definition.scope === "pair"
+        value: score === null ? "N/A" : percentText(score),
+        detail:
+          definition.scope === "pair"
             ? `${matches.length} similar metadata pair${matches.length === 1 ? "" : "s"}`
             : "Whole-stream similarity",
         matches,
