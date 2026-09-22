@@ -44,7 +44,7 @@ export default function IndependentRecommendationReview({
     setClassName("");
     setNotice(null);
     setError(null);
-  }, [candidate.candidate_id, candidate.candidate_version, candidate.member_topics]);
+  }, [candidate.candidate_id, candidate.candidate_version]);
 
   const submit = async (action: RecommendedClassFeedbackAction, topic?: string) =>
     submitRecommendedClassFeedback(candidate.candidate_id, {
