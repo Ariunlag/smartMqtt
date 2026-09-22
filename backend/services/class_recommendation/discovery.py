@@ -2,9 +2,10 @@
 
 Saved Classes are deliberately not consulted here. The discovery service prepares one
 immutable evidence snapshot, then delegates candidate formation to a registered
-strategy. Embedding generation and persistence remain independent of that strategy so
-HDBSCAN, centroid/prototype, weighted, and learned approaches can be evaluated over
-the same evidence without rematerializing vectors.
+strategy. Independent discovery happens before any cross-topic explanation matching,
+so pair-matching averages cannot change candidate membership. Exact topic memberships
+found by multiple evidence spaces may be merged by the strategy while near-matches
+remain separate.
 """
 
 from __future__ import annotations
@@ -77,12 +78,12 @@ class RecommendedClassCandidateSet:
 
 
 class TopicEvidenceMatcher:
-    """Compare two topics without collapsing registered evidence channels.
+    """Build post-discovery explanations between two topics.
 
     Pair identity stays intact. Candidate pairs only compete against reference pairs
     with the same source and datatype. A scalar compatibility is used only to make the
-    one-to-one assignment deterministic; it is not returned as a recommendation
-    confidence score.
+    one-to-one assignment deterministic. This matcher runs after candidate membership
+    has already been discovered, so its cross-evidence average cannot affect grouping.
     """
 
     @classmethod
@@ -242,40 +243,14 @@ class RecommendedClassDiscovery:
                 strategy=strategy.definition,
             )
 
-        comparisons: dict[tuple[str, str], TopicComparisonEvidence] = {}
-        symmetric_scores: dict[tuple[str, str], dict[str, float | None]] = {}
-        for left_index, left in enumerate(topics):
-            for right in topics[left_index + 1 :]:
-                forward = TopicEvidenceMatcher.compare(
-                    candidate_topic=left,
-                    candidate_pairs=pairs_by_topic[left],
-                    candidate_stream=streams[left],
-                    reference_topic=right,
-                    reference_pairs=pairs_by_topic[right],
-                    reference_stream=streams[right],
-                    duplicate_pending=left in pending_topics,
-                )
-                reverse = TopicEvidenceMatcher.compare(
-                    candidate_topic=right,
-                    candidate_pairs=pairs_by_topic[right],
-                    candidate_stream=streams[right],
-                    reference_topic=left,
-                    reference_pairs=pairs_by_topic[left],
-                    reference_stream=streams[left],
-                    duplicate_pending=right in pending_topics,
-                )
-                comparisons[(left, right)] = forward
-                comparisons[(right, left)] = reverse
-                symmetric_scores[(left, right)] = self._symmetric_channels(
-                    forward.channel_scores, reverse.channel_scores
-                )
-
+        # Candidate membership is discovered directly from the raw evidence spaces.
+        # No topic-level score averaging or pair alignment participates in grouping.
         strategy_input = RecommendationStrategyInput(
             topics=topics,
             versions=versions,
             pairs_by_topic=pairs_by_topic,
             stream_vectors=streams,
-            symmetric_scores=symmetric_scores,
+            symmetric_scores={},
         )
         groups = strategy.discover(strategy_input)
 
@@ -283,10 +258,19 @@ class RecommendedClassDiscovery:
         for group in groups:
             members = group.members
             anchor = members[0]
+
+            # Explanations are calculated only after membership is fixed. The anchor
+            # is a display/reference device, not a clustering center or winner.
             evidence = tuple(
-                comparisons[(topic, anchor)]
-                if (topic, anchor) in comparisons
-                else comparisons[(anchor, topic)]
+                TopicEvidenceMatcher.compare(
+                    candidate_topic=topic,
+                    candidate_pairs=pairs_by_topic[topic],
+                    candidate_stream=streams[topic],
+                    reference_topic=anchor,
+                    reference_pairs=pairs_by_topic[anchor],
+                    reference_stream=streams[anchor],
+                    duplicate_pending=topic in pending_topics,
+                )
                 for topic in members
                 if topic != anchor
             )
@@ -474,9 +458,9 @@ class RecommendedClassDiscovery:
     ) -> str:
         """Stable identity for one strategy/evidence/member set.
 
-        Identical memberships discovered independently from ``key`` and ``value`` are
-        intentionally different candidates so their feedback histories and learned
-        usefulness can remain independent.
+        The independent strategy merges only exact topic memberships and records every
+        evidence space that found that membership. If one topic differs, the membership
+        tuple differs and therefore remains a separate candidate.
         """
         payload = {
             "strategy": strategy_id,
