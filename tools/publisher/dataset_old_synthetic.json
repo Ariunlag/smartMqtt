@@ -1,0 +1,200 @@
+[
+  {
+    "topic": "campus-west/room-214/env-sensor-7/telemetry",
+    "tags": {
+      "metric": "air_temperature",
+      "uom": "celsius",
+      "space": "room-214"
+    },
+    "fields": {
+      "temperature_c": 22.1,
+      "battery_v": 3.9
+    }
+  },
+  {
+    "topic": "hotel-b2/suite-508/probe-a/readings",
+    "tags": {
+      "observed_property": "room heat",
+      "unit_name": "degC",
+      "zone_name": "suite-508",
+      "maker": "Siemens"
+    },
+    "fields": {
+      "ambient_temp": 23.0,
+      "battery_v": 3.7
+    }
+  },
+  {
+    "topic": "factory-7/line-3/iaq/node-12/data",
+    "tags": {
+      "signal": "relative_humidity",
+      "units": "percent",
+      "area": "line-3"
+    },
+    "fields": {
+      "humidity_pct": 46.5,
+      "quality": 0.98
+    }
+  },
+  {
+    "topic": "north-clinic/floor1/ward-c/hygro-4",
+    "tags": {
+      "measured_property": "air moisture",
+      "engineering_unit": "%RH",
+      "location": "ward-c",
+      "protocol": "bacnet"
+    },
+    "fields": {
+      "rh": 49.2,
+      "quality": 0.96
+    }
+  },
+  {
+    "topic": "school-east/classroom-4/airq/telemetry",
+    "tags": {
+      "quantity": "carbon dioxide",
+      "scale": "ppm",
+      "room": "classroom-4"
+    },
+    "fields": {
+      "co2_ppm": 730.0,
+      "status_code": 1
+    }
+  },
+  {
+    "topic": "warehouse-2/gateway9/channel-17",
+    "tags": {
+      "description": "indoor CO2 level",
+      "measure_unit": "parts_per_million",
+      "deployment": "packing-zone",
+      "vendor": "ABB"
+    },
+    "fields": {
+      "carbon_dioxide": 810.0,
+      "status_code": 1
+    }
+  },
+  {
+    "topic": "plant-a/panel-3/meter-11/live",
+    "tags": {
+      "measurement": "active_power",
+      "unit": "kW",
+      "asset": "panel-3"
+    },
+    "fields": {
+      "power_kw": 14.8,
+      "power_factor": 0.95
+    }
+  },
+  {
+    "topic": "mall-north/electrical/feed-b/sensor5",
+    "tags": {
+      "metric_name": "real electrical demand",
+      "uom_text": "kilowatt",
+      "location_name": "feed-b",
+      "protocol": "modbus"
+    },
+    "fields": {
+      "active_power": 16.1,
+      "power_factor": 0.93
+    }
+  },
+  {
+    "topic": "diag-a/device-11/ch-1",
+    "tags": {
+      "supply_air_temperature": "channel-a",
+      "asset_type": "terminal",
+      "site_code": "s1"
+    },
+    "fields": {
+      "reading": 19.5,
+      "quality": 0.97
+    }
+  },
+  {
+    "topic": "diag-b/device-92/input-x",
+    "tags": {
+      "discharge_air_temp": "channel-b",
+      "equipment_family": "terminal",
+      "facility": "s2",
+      "vendor": "Honeywell"
+    },
+    "fields": {
+      "reading": 25.2,
+      "quality": 0.95
+    }
+  },
+  {
+    "topic": "edge17/x3/gas-monitor",
+    "tags": {
+      "x17": "methane gas leak",
+      "m2": "natural gas pipe"
+    },
+    "fields": {
+      "channel_1": 1.2
+    }
+  },
+  {
+    "topic": "utility-north/node44/stream",
+    "tags": {
+      "register_name": "escaping methane",
+      "asset_note": "gas supply pipeline",
+      "vendor": "Siemens"
+    },
+    "fields": {
+      "concentration": 1.5
+    }
+  },
+  {
+    "topic": "mobile/forklift-8/power/status",
+    "tags": {
+      "charge_state": "low",
+      "asset": "forklift"
+    },
+    "fields": {
+      "battery_voltage_v": 21.0,
+      "load_current_a": 2.4
+    }
+  },
+  {
+    "topic": "cleaning-bot/zone3/controller",
+    "tags": {
+      "cell_status": "recharge_required",
+      "device_family": "robot",
+      "site": "hotel"
+    },
+    "fields": {
+      "battery_voltage_v": 19.7,
+      "load_current_a": 2.0
+    }
+  },
+  {
+    "topic": "compressor-yard/c31/telemetry",
+    "tags": {
+      "asset": "compressor",
+      "area": "yard-a"
+    },
+    "fields": {
+      "motor_speed_rpm": 1320,
+      "bearing_temperature_c": 58.0,
+      "vibration_rms_mm_s": 2.4,
+      "alarm_active": false,
+      "operating_mode": "auto"
+    }
+  },
+  {
+    "topic": "pump-house/p9/live",
+    "tags": {
+      "equipment": "pump",
+      "location": "pump-room",
+      "protocol": "modbus"
+    },
+    "fields": {
+      "motor_speed_rpm": 1490,
+      "bearing_temperature_c": 63.0,
+      "vibration_rms_mm_s": 3.1,
+      "alarm_active": true,
+      "operating_mode": "manual"
+    }
+  }
+]
