@@ -37,10 +37,10 @@ const hdbscanStrategy = {
 };
 
 const centroidStrategy = {
-  strategy_id: "tag_value_centroid",
-  label: "Tag value centroid",
+  strategy_id: "independent_centroid",
+  label: "Independent evidence (centroid)",
   description:
-    "Uses only tag pair value embeddings and the original nearest-centroid assignment idea. It is a baseline over the same stored evidence.",
+    "Assigns key, value, key+value, schema, and stream evidence to nearest moving centroids independently. Exact topic memberships are merged across evidence types.",
 };
 
 const candidateSet: RecommendedClassCandidateSet = {
@@ -168,13 +168,27 @@ const centroidSet: RecommendedClassCandidateSet = {
       rank: 1,
       anchor_topic: "building/a",
       member_topics: ["building/a", "building/c"],
-      discovery_channels: ["value"],
+      discovery_channels: ["key", "value", "stream_context"],
       discovery_support: [
+        {
+          evidence_id: "key",
+          items: [
+            { topic: "building/a", text: "location", similarity: 0.95, source: "tag" },
+            { topic: "building/c", text: "site", similarity: 0.93, source: "tag" },
+          ],
+        },
         {
           evidence_id: "value",
           items: [
             { topic: "building/a", text: "Chicago", similarity: 0.96, source: "tag" },
             { topic: "building/c", text: "Chicagoland", similarity: 0.94, source: "tag" },
+          ],
+        },
+        {
+          evidence_id: "stream_context",
+          items: [
+            { topic: "building/a", text: null, similarity: 0.91, source: "stream" },
+            { topic: "building/c", text: null, similarity: 0.9, source: "stream" },
           ],
         },
       ],
@@ -209,7 +223,7 @@ it("keeps one recommendation surface and exposes registered methods", async () =
   const selector = screen.getByRole("combobox", { name: "Recommendation method" });
   expect(selector).toHaveValue("independent_hdbscan");
   expect(screen.getByRole("option", { name: "Independent evidence (HDBSCAN)" })).toBeInTheDocument();
-  expect(screen.getByRole("option", { name: "Tag value centroid" })).toBeInTheDocument();
+  expect(screen.getByRole("option", { name: "Independent evidence (centroid)" })).toBeInTheDocument();
   expect(screen.getAllByText("Duplicate review pending").length).toBe(1);
   expect(screen.queryByText(/Overall similarity/i)).not.toBeInTheDocument();
 });
@@ -235,22 +249,22 @@ it("switches to the distinct centroid method and shows only value evidence", asy
   await screen.findByRole("heading", { name: "Recommended class #1", level: 4 });
 
   fireEvent.change(screen.getByRole("combobox", { name: "Recommendation method" }), {
-    target: { value: "tag_value_centroid" },
+    target: { value: "independent_centroid" },
   });
 
   await waitFor(() =>
-    expect(getRecommendedClassCandidates).toHaveBeenCalledWith("tag_value_centroid"),
+    expect(getRecommendedClassCandidates).toHaveBeenCalledWith("independent_centroid"),
   );
 
   const reasons = await screen.findByRole("region", { name: "Recommendation reasons" });
+  expect(within(reasons).getByText("Similar key")).toBeInTheDocument();
   expect(within(reasons).getByText("Shared value")).toBeInTheDocument();
+  expect(within(reasons).getByText("Similar stream context")).toBeInTheDocument();
   expect(within(reasons).getByText("Chicago")).toBeInTheDocument();
   expect(within(reasons).getByText("Chicagoland")).toBeInTheDocument();
-  expect(within(reasons).queryByText("Similar key")).not.toBeInTheDocument();
 
   fireEvent.click(screen.getByText("Method details"));
-  expect(screen.getByText("Centroid input")).toBeInTheDocument();
-  expect(screen.queryByText("Independent evidence")).not.toBeInTheDocument();
+  expect(screen.getAllByText("Centroid input").length).toBeGreaterThan(1);
 });
 
 it("shows compact shared evidence without cluster jargon or per-member Why panels", async () => {
