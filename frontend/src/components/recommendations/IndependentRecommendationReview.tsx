@@ -29,7 +29,7 @@ export default function IndependentRecommendationReview({
 }) {
   const originalMembers = useMemo(
     () => new Set(candidate.member_topics),
-    [candidate.candidate_id, candidate.candidate_version],
+    [candidate.member_topics],
   );
   const [topics, setTopics] = useState<string[]>(candidate.member_topics);
   const [topicToAdd, setTopicToAdd] = useState("");
