@@ -38,6 +38,7 @@ export default function RecommendationsManager() {
   const [availableTopicCount, setAvailableTopicCount] = useState(0);
   const [shadowRunId, setShadowRunId] = useState<string | null>(null);
   const [liveRunId, setLiveRunId] = useState<string | null>(null);
+  const [selectedCandidateId, setSelectedCandidateId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -49,6 +50,11 @@ export default function RecommendationsManager() {
         strategyId ?? activeStrategy?.strategy_id,
       );
       setCandidates(result.candidates);
+      setSelectedCandidateId((current) =>
+        current && result.candidates.some((candidate) => candidate.candidate_id === current)
+          ? current
+          : null,
+      );
       setEvidenceCatalog(result.evidence_catalog);
       setStrategyCatalog(result.strategy_catalog);
       setActiveStrategy(result.strategy);
@@ -129,6 +135,12 @@ export default function RecommendationsManager() {
             evidenceCatalog={evidenceCatalog}
             shadowRunId={shadowRunId}
             liveRunId={liveRunId}
+            selected={selectedCandidateId === candidate.candidate_id}
+            onSelect={() =>
+              setSelectedCandidateId((current) =>
+                current === candidate.candidate_id ? null : candidate.candidate_id,
+              )
+            }
           />
         ))}
       </div>
@@ -142,12 +154,16 @@ function RecommendedClassCard({
   evidenceCatalog,
   shadowRunId,
   liveRunId,
+  selected,
+  onSelect,
 }: {
   candidate: RecommendedClassCandidate;
   availableTopics: string[];
   evidenceCatalog: EvidenceDefinition[];
   shadowRunId: string | null;
   liveRunId: string | null;
+  selected: boolean;
+  onSelect: () => void;
 }) {
   const [expanded, setExpanded] = useState(false);
   const [feedbackKey, setFeedbackKey] = useState<string | null>(null);
@@ -216,12 +232,22 @@ function RecommendedClassCard({
         </div>
       </section>
 
-      <IndependentRecommendationReview
-        candidate={candidate}
-        availableTopics={availableTopics}
-        shadowRunId={shadowRunId}
-        liveRunId={liveRunId}
-      />
+      <button
+        type="button"
+        aria-expanded={selected}
+        onClick={onSelect}
+      >
+        {selected ? "Close graph & review" : "Review graph & edit group"}
+      </button>
+
+      {selected && (
+        <IndependentRecommendationReview
+          candidate={candidate}
+          availableTopics={availableTopics}
+          shadowRunId={shadowRunId}
+          liveRunId={liveRunId}
+        />
+      )}
 
       <section aria-label="Recommendation feedback">
         <strong>Is this group useful?</strong>{" "}
