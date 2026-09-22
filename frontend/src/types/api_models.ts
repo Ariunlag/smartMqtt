@@ -190,6 +190,18 @@ export interface RecommendedClassTopicEvidence {
   duplicate_pending: boolean;
 }
 
+export interface RecommendedClassDiscoverySupportItem {
+  topic: string;
+  text: string | null;
+  similarity: number;
+  source: string | null;
+}
+
+export interface RecommendedClassDiscoverySupport {
+  evidence_id: string;
+  items: RecommendedClassDiscoverySupportItem[];
+}
+
 export interface RecommendedClassCandidate {
   candidate_id: string;
   candidate_version: number;
@@ -197,6 +209,7 @@ export interface RecommendedClassCandidate {
   anchor_topic: string;
   member_topics: string[];
   discovery_channels: string[];
+  discovery_support: RecommendedClassDiscoverySupport[];
   evidence: RecommendedClassTopicEvidence[];
 }
 
