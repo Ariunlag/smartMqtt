@@ -230,15 +230,17 @@ function GroupDetail({
                       <span className="score">{member.detail}</span>
                     </div>
                     <div className="rec-actions">
-                      <button
-                        type="button"
-                        aria-expanded={openTopic === member.topic}
-                        onClick={() =>
-                          setOpenTopic(openTopic === member.topic ? null : member.topic)
-                        }
-                      >
-                        Why?
-                      </button>
+                      {member.evidence.length > 0 && (
+                        <button
+                          type="button"
+                          aria-expanded={openTopic === member.topic}
+                          onClick={() =>
+                            setOpenTopic(openTopic === member.topic ? null : member.topic)
+                          }
+                        >
+                          Evidence
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="success"
@@ -259,7 +261,7 @@ function GroupDetail({
                     </div>
                   </div>
 
-                  {openTopic === member.topic && (
+                  {openTopic === member.topic && member.evidence.length > 0 && (
                     <div className="rec-evidence">
                       {member.evidence.map((row) => (
                         <section key={row.channelId}>
