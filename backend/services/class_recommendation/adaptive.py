@@ -191,7 +191,14 @@ class AdaptiveRecommendations:
                                if row[key].get("status") not in (None, "missing")), "missing")
                 evidence[key] = {"score": None, "status": status, "coverage": 0., "matches": []}
                 continue
-            best_ref, best = max(available, key=lambda item: item[1]["score"])
+            best_ref, best = max(
+                available,
+                key=lambda item: (
+                    item[1]["score"] * item[1].get("coverage", 1.0),
+                    item[1]["score"],
+                    item[0],
+                ),
+            )
             coverage = float(np.mean([r.get("coverage", 1.) for _, r in available]))
             contribution = float(np.mean([r["score"] * r.get("coverage", 1.) for _, r in available]))
             evidence[key] = {"score": contribution / coverage if coverage else 0.,
