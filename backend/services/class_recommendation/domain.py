@@ -128,6 +128,8 @@ class MatchedPairEvidence:
     prototype_id: str
     scores: EvidenceScores
     compatibility_score: float
+    candidate_text: str | None = None
+    prototype_text: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
