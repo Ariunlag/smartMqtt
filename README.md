@@ -34,6 +34,14 @@ tag value      -> centroid -> baseline candidates
 
 No learned weight is used to create these memberships.
 
+## Recommendation surface
+
+The dashboard surface is shared with every other recommendation experiment so the branches stay comparable. `frontend/src/components/recommendations/` holds one presentational panel (`RecommendationsPanel`) driven by one view model (`recommendationModel.ts`). The only branch-local file is `useRecommendationSource.ts`, which maps this branch's API onto that model.
+
+Because candidates are immutable, the adapter keeps the reviewed membership in a local overlay and records every change as explicit feedback against the candidate version it was shown for. Undo is a recorded inverse action, not a silent revert.
+
+Keep changes to the panel, the model, and `index.css` identical across experiment branches. Algorithm-specific wording belongs in the adapter, not the panel.
+
 ## Learning
 
 Candidate generation stays unsupervised and deterministic for a fixed evidence snapshot and configuration.

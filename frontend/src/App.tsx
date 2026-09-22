@@ -37,13 +37,13 @@ export default function App() {
     return <div className="loading">{error || "Waiting for backend…"}</div>
   }
 
-  const panel = (id: TabId, children: React.ReactNode, scroll = false) => (
+  const panel = (id: TabId, children: React.ReactNode) => (
     <div
       key={id}
       id={`panel-${id}`}
       role="tabpanel"
       aria-labelledby={`tab-${id}`}
-      className={`workspace__panel${scroll ? " workspace__panel--scroll" : ""}`}
+      className="workspace__panel"
       hidden={activeTab !== id}
     >
       {children}
@@ -88,7 +88,7 @@ export default function App() {
         {panel("duplicates", <DuplicateManager />)}
         {panel("builder", <ClassBuilder />)}
         {panel("classes", <SavedClasses />)}
-        {panel("recommendations", <RecommendationsManager />, true)}
+        {panel("recommendations", <RecommendationsManager />)}
       </main>
     </div>
   );

@@ -388,16 +388,6 @@ label {
   display: none;
 }
 
-/* Panels that stack several cards scroll internally instead of growing */
-.workspace__panel--scroll {
-  overflow-y: auto;
-  padding-right: 0.25rem;
-}
-/* Cards keep their natural height; the panel scrolls instead of squashing them */
-.workspace__panel--scroll > * {
-  flex: 0 0 auto;
-}
-
 .loading {
   height: 100%;
   display: grid;
@@ -695,146 +685,281 @@ label {
 }
 
 /* ================================
-   Class recommendations
+   Recommendations
+
+   Shared by every recommendation experiment branch. The algorithm changes
+   behind the adapter; this surface must not.
    ================================ */
 
-.recommendations {
-  padding: 0.9rem;
-  background: var(--box-bg);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow-md);
-}
-
-.recommendations__header,
-.recommendation-card__heading {
+.rec-sidebar,
+.rec-detail {
   display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-height: 0;
 }
 
-.recommendations__header p,
-.recommendation-card p {
+.rec-error {
+  margin: 0.25rem 0;
+  color: var(--danger);
+  font-size: 0.83rem;
+}
+
+/* ---- Sidebar ---- */
+
+.rec-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(96px, 1fr));
+  gap: 0.35rem;
+  margin: 0;
+}
+
+.rec-stats div {
+  padding: 0.35rem 0.45rem;
+  background: var(--primary-bg);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xs);
+}
+
+.rec-stats dt {
+  color: var(--muted-text);
+  font-size: 0.68rem;
+}
+
+.rec-stats dd {
+  margin: 0;
+  font-size: 0.83rem;
+  font-weight: 600;
+}
+
+.rec-group-item {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.2rem;
+  padding: 0.45rem 0.55rem;
+  cursor: pointer;
+}
+
+/* .list-item clips its first child to one line; group rows stack instead. */
+.rec-group-item > div {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.rec-group-item__title {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+/* ---- Shared disclosure ---- */
+
+.rec-details summary {
+  padding: 0.3rem 0;
   color: var(--muted-text);
   font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
 }
 
-.recommendations__class-controls {
-  display: grid;
-  grid-template-columns: minmax(180px, 0.4fr) minmax(280px, 1fr);
-  gap: 0.7rem;
-  margin: 0.8rem 0;
-}
-
-.recommendations__manual,
-.recommendations__member,
-.recommendation-card__actions {
-  display: flex;
-  gap: 0.4rem;
-}
-
-.recommendations__manual input {
-  flex: 1;
-}
-
-.recommendations__members {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  margin-bottom: 0.8rem;
-}
-
-.recommendations__member {
-  align-items: center;
-  padding: 0.25rem 0.35rem 0.25rem 0.55rem;
-  background: var(--surface-sunken);
-  border-radius: 999px;
+.rec-details p {
+  color: var(--muted-text);
   font-size: 0.78rem;
 }
 
-.recommendations__member button {
-  padding: 0.1rem 0.35rem;
-  border: none;
-  background: transparent;
-  color: var(--danger);
-  font-size: 0.7rem;
-}
-
-.recommendations__list {
+.rec-channels {
   display: grid;
-  gap: 0.65rem;
+  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 0.35rem;
+  margin: 0.4rem 0;
 }
 
-.recommendations__error {
-  color: var(--danger);
+.rec-channels div {
+  display: grid;
+  gap: 0.1rem;
+  padding: 0.35rem 0.45rem;
+  background: var(--surface-sunken);
+  border-radius: var(--radius-xs);
+  font-size: 0.76rem;
 }
 
-.recommendation-card {
-  padding: 0.75rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-sm);
-  background: var(--sidebar-bg);
+.rec-channels span {
+  color: var(--muted-text);
 }
 
-.recommendation-card__pending {
+/* ---- Detail pane ---- */
+
+.rec-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
+.rec-group__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 0.6rem;
+}
+
+.rec-group__header h4 {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.rec-group__header p {
+  margin: 0;
+}
+
+.rec-group__badges {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 0.35rem;
+}
+
+.rec-badge {
   padding: 0.15rem 0.5rem;
   border-radius: 999px;
-  background: var(--warning-soft);
-  color: var(--warning);
+  background: var(--surface-sunken);
+  color: var(--muted-text);
   font-size: 0.7rem;
   font-weight: 600;
   white-space: nowrap;
 }
 
-.recommendation-card__channels {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-  gap: 0.45rem;
-  margin: 0.65rem 0;
+.rec-badge--pending {
+  background: var(--warning-soft);
+  color: var(--warning);
 }
 
-.recommendation-card__channels div {
-  padding: 0.35rem 0.45rem;
-  border-radius: var(--radius-xs);
+.rec-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+}
+
+.rec-chip {
+  padding: 0.2rem 0.55rem;
+  border-radius: 999px;
+  background: var(--accent-soft);
+  color: var(--accent-dark);
+  font-size: 0.76rem;
+  font-weight: 500;
+}
+
+.rec-member {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.35rem;
+  padding: 0.45rem 0.55rem;
+}
+
+.rec-member:hover {
   background: var(--primary-bg);
 }
 
-.recommendation-card__channels dt {
-  color: var(--muted-text);
-  font-size: 0.68rem;
-}
-
-.recommendation-card__channels dd {
-  margin: 0;
-  font-weight: 600;
-}
-
-.recommendation-card__evidence-toggle {
-  margin-bottom: 0.55rem;
-}
-
-.recommendation-card__evidence {
-  display: grid;
+.rec-member__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.4rem;
-  margin-bottom: 0.65rem;
 }
 
-.recommendation-card__evidence > div {
+.rec-member__row > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+}
+
+.rec-member__topic {
+  overflow-wrap: anywhere;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.rec-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+/* ---- Evidence ---- */
+
+.rec-evidence {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-  gap: 0.3rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 0.4rem;
+}
+
+.rec-evidence section {
+  min-width: 0;
   padding: 0.45rem;
-  border: 1px solid var(--border-color);
+  background: var(--surface-sunken);
   border-radius: var(--radius-xs);
-  background: var(--primary-bg);
   font-size: 0.76rem;
 }
 
-.recommendation-card__evidence small {
-  grid-column: 1 / -1;
+.rec-evidence__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.4rem;
+}
+
+.rec-evidence small {
   color: var(--muted-text);
+}
+
+.rec-evidence__match p {
+  margin: 0.25rem 0 0;
+  overflow-wrap: anywhere;
+}
+
+.rec-shape {
+  margin: 0.4rem 0 0;
+}
+
+.rec-shape svg {
+  width: 100%;
+  max-width: 320px;
+  height: 80px;
+}
+
+.rec-proposal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.4rem;
+  padding: 0.3rem 0;
+}
+
+.rec-form {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 0.6rem;
+}
+
+.rec-form label {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 0.25rem;
+}
+
+.rec-form input,
+.rec-form select {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* ================================
@@ -872,43 +997,14 @@ label {
   .split-layout .right {
     max-height: 70vh;
   }
-  .recommendations__class-controls {
-    grid-template-columns: 1fr;
+  .rec-evidence {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
 /* ================================
    Print
    ================================ */
-
-.adaptive { display: grid; gap: 1rem; }
-.adaptive__header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: start; gap: .75rem; }
-.adaptive__header h2, .adaptive__header h3 { margin: 0 0 .35rem; }
-.adaptive__header p, .adaptive__status { margin: 0; color: var(--muted-text); }
-.adaptive__learning { border-bottom: 1px solid var(--border-color); padding-bottom: 1rem; }
-.adaptive summary { cursor: pointer; padding: .45rem 0; }
-.adaptive__weights { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: .75rem; }
-.adaptive__weights > div { display: grid; gap: .25rem; background: var(--surface-sunken); padding: .75rem; border-radius: var(--radius-sm); }
-.adaptive__groups { display: grid; gap: 1rem; }
-.adaptive__card { min-width: 0; border: 1px solid var(--border-color); border-radius: var(--radius-sm); padding: 1rem; background: var(--sidebar-bg); }
-.adaptive__members { display: grid; margin: .75rem 0; }
-.adaptive__member { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: .75rem; align-items: center; padding: .75rem 0; border-bottom: 1px solid var(--border-color); }
-.adaptive__member small { display: block; margin-top: .25rem; color: var(--muted-text); }
-.adaptive__topic { overflow-wrap: anywhere; min-width: 0; }
-.adaptive__actions { display: flex; flex-wrap: wrap; align-items: center; gap: .45rem; }
-.adaptive footer { margin-top: 1rem; }
-.adaptive__form { display: flex; flex-wrap: wrap; align-items: end; gap: .75rem; margin: 1rem 0; }
-.adaptive__form label { display: grid; flex: 1; min-width: 0; gap: .4rem; }
-.adaptive__form input, .adaptive__form select { width: 100%; min-width: 0; box-sizing: border-box; }
-.adaptive__evidence { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: .75rem; }
-.adaptive__evidence section { min-width: 0; padding: .75rem; background: var(--surface-sunken); border-radius: var(--radius-sm); }
-.adaptive__evidence span { float: right; }
-.adaptive__evidence p { overflow-wrap: anywhere; font-size: .85rem; }
-.adaptive__proposal { display: flex; justify-content: space-between; gap: .75rem; padding: .4rem 0; }
-@media (max-width: 680px) {
-  .adaptive__member { grid-template-columns: minmax(0, 1fr); }
-  .adaptive__evidence { grid-template-columns: minmax(0, 1fr); }
-}
 
 @media print {
   :root {
