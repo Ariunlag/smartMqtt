@@ -33,7 +33,7 @@ export default function AdaptiveRecommendationsManager() {
     {result && <>
       <p className="adaptive__status">Environment: <strong>{result.environment_id}</strong> · {result.available_topics.length} topics · {result.model.status === "learned" ? "Using learned weights" : "Using baseline weights"}</p>
       <details className="adaptive__learning"><summary>Learning details</summary>
-        <p>{result.feedback_count} distinct membership labels. Updates run in the background when there is enough diverse positive and negative feedback.</p>
+        <p>{result.feedback_count} distinct membership labels. Learning uses explicit recommendation review actions (add, remove, confirm, or save); simply viewing a graph or creating a Class elsewhere does not train the model. Updates run in the background when there is enough diverse positive and negative feedback.</p>
         <div className="adaptive__weights">{result.catalog.map(channel => <div key={channel.evidence_id}>
           <span>{channel.label}</span><strong>{channel.active ? `${((result.model.weights[channel.evidence_id] ?? 0) * 100).toFixed(1)}%` : "Shadow"}</strong><small>{channel.kind}</small>
         </div>)}</div>
