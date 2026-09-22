@@ -104,6 +104,7 @@ class RecommendationLiveRanker:
                 member_topics=candidate.member_topics,
                 discovery_channels=candidate.discovery_channels,
                 evidence=candidate.evidence,
+                discovery_support=candidate.discovery_support,
             )
             for index, (candidate, _score) in enumerate(scored, 1)
         )
