@@ -97,9 +97,11 @@ class TagValueCentroidStrategyConfig:
 class IndependentEvidenceHdbscanStrategy:
     """Discover topic groups from each evidence space independently.
 
-    Pair-level evidence is clustered at the raw pair-vector level. A single shared tag
-    key or value can therefore create a topic recommendation even when the topics have
-    otherwise unrelated metadata. Stream context is clustered directly at topic level.
+    Tag key/value/key+value evidence is clustered at the raw tag-pair vector level,
+    so one meaningful shared attribute can create a recommendation even when the
+    streams differ elsewhere. Schema is aggregated per topic before clustering so
+    generic datatypes such as "numeric" cannot create a group by themselves. Stream
+    context is also clustered directly at topic level.
 
     Topic membership is the recommendation identity: exact memberships discovered by
     multiple evidence spaces are merged and retain every discovery reason. If even one
@@ -138,6 +140,8 @@ class IndependentEvidenceHdbscanStrategy:
         for evidence_id in DISCOVERY_EVIDENCE_IDS:
             if evidence_id == "stream_context":
                 clusters = self._stream_memberships(evidence, evidence_id)
+            elif evidence_id == "schema":
+                clusters = self._schema_memberships(evidence, evidence_id)
             else:
                 clusters = self._pair_memberships(evidence, evidence_id)
 
@@ -248,6 +252,75 @@ class IndependentEvidenceHdbscanStrategy:
                     source=source,
                 )
                 for topic, _identity, vector, text, source in cluster_items
+            )
+            clusters.append((members, support))
+        return clusters
+
+    def _schema_memberships(
+        self,
+        evidence: RecommendationStrategyInput,
+        evidence_id: str,
+    ) -> list[tuple[tuple[str, ...], tuple[StrategySupportItem, ...]]]:
+        """Cluster whole-topic structural signatures, not individual datatypes.
+
+        Each topic gets one schema vector: the centroid of its registered schema
+        pair vectors. The support text lists the concrete tag/field schema entries.
+        This keeps schema as a stream-shape signal instead of letting every numeric
+        sensor field collapse into one recommendation.
+        """
+
+        items: list[tuple[str, tuple[float, ...], str]] = []
+        for topic in evidence.topics:
+            records = []
+            texts = []
+            for record in evidence.pairs_by_topic.get(topic, ()):
+                vector = record.vector_for(evidence_id)
+                if vector is None:
+                    continue
+                records.append(tuple(float(value) for value in vector))
+                text = record.representation.text_for(evidence_id)
+                if text:
+                    source = record.representation.identity.source
+                    texts.append(f"{source} {text}")
+
+            if not records:
+                continue
+
+            items.append(
+                (
+                    topic,
+                    centroid(records),
+                    "; ".join(sorted(texts)),
+                )
+            )
+
+        if len(items) < self.config.min_cluster_size:
+            return []
+
+        labels = self._labels_for_vectors(
+            evidence_id,
+            tuple(vector for _topic, vector, _text in items),
+        )
+        by_label: dict[int, list[tuple[str, tuple[float, ...], str]]] = {}
+        for item, label in zip(items, labels, strict=True):
+            if label < 0:
+                continue
+            by_label.setdefault(label, []).append(item)
+
+        clusters = []
+        for cluster_items in by_label.values():
+            members = tuple(sorted(topic for topic, _vector, _text in cluster_items))
+            if len(members) < self.config.min_cluster_size:
+                continue
+            center = centroid([vector for _topic, vector, _text in cluster_items])
+            support = tuple(
+                StrategySupportItem(
+                    topic=topic,
+                    text=text,
+                    similarity=cosine(vector, center),
+                    source="schema",
+                )
+                for topic, vector, text in cluster_items
             )
             clusters.append((members, support))
         return clusters
