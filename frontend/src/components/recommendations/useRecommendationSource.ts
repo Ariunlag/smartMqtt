@@ -141,7 +141,7 @@ function toGroup(
     discoveryChannels: candidate.discovery_channels.map(
       (evidenceId) => labels.get(evidenceId) ?? evidenceId,
     ),
-    discoveryEvidence: candidate.discovery_support.map((support) => ({
+    discoveryEvidence: (candidate.discovery_support ?? []).map((support) => ({
       channelId: support.evidence_id,
       channelLabel: labels.get(support.evidence_id) ?? support.evidence_id,
       items: support.items.map((item) => ({
