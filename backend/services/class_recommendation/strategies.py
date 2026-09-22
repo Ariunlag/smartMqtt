@@ -80,21 +80,24 @@ class TagValueCentroidStrategyConfig:
 
 
 class IndependentEvidenceHdbscanStrategy:
-    """Cluster every registered evidence channel independently, without fusion.
+    """Discover topic groups from each evidence space independently.
 
-    A membership discovered from ``key`` is intentionally a different recommendation
-    from the same membership discovered from ``value``. Keeping source evidence in the
-    candidate identity lets feedback and later ranking learn which discovery spaces are
-    useful without allowing learned weights to change cluster membership.
+    Pair-level evidence is clustered at the raw pair-vector level. A single shared tag
+    key or value can therefore create a topic recommendation even when the topics have
+    otherwise unrelated metadata. Stream context is clustered directly at topic level.
+
+    Topic membership is the recommendation identity: exact memberships discovered by
+    multiple evidence spaces are merged and retain every discovery reason. If even one
+    topic differs, the memberships remain separate recommendations.
     """
 
     definition = RecommendationStrategyDefinition(
         strategy_id=DEFAULT_STRATEGY_ID,
         label="Independent evidence (HDBSCAN)",
         description=(
-            "Runs HDBSCAN separately for each evidence type and keeps every evidence "
-            "result as its own candidate. No cross-evidence weighting or membership "
-            "fusion is applied."
+            "Clusters raw key, value, key+value, schema, and stream evidence "
+            "independently. Exact topic memberships are merged across evidence types; "
+            "memberships that differ by even one topic remain separate."
         ),
     )
 
@@ -110,71 +113,149 @@ class IndependentEvidenceHdbscanStrategy:
     def discover(
         self, evidence: RecommendationStrategyInput
     ) -> tuple[StrategyCandidateGroup, ...]:
-        groups: list[StrategyCandidateGroup] = []
+        # Map exact topic membership -> evidence spaces that independently found it.
+        # This deliberately allows one topic to appear in several recommendations.
+        discovered: dict[tuple[str, ...], set[str]] = {}
+
         for evidence_id in DISCOVERY_EVIDENCE_IDS:
-            matrix = self._distance_matrix(
-                evidence.topics,
-                evidence.symmetric_scores,
-                evidence_id,
-            )
-            labels = tuple(
-                int(value) for value in self._cluster_labels(evidence_id, matrix)
-            )
-            if len(labels) != len(evidence.topics):
-                raise ValueError("Discovery label count must match topic count")
+            if evidence_id == "stream_context":
+                memberships = self._stream_memberships(evidence, evidence_id)
+            else:
+                memberships = self._pair_memberships(evidence, evidence_id)
 
-            by_label: dict[int, list[str]] = {}
-            for topic, label in zip(evidence.topics, labels, strict=True):
-                if label < 0:
-                    continue
-                by_label.setdefault(label, []).append(topic)
-
-            evidence_groups = {
-                tuple(sorted(members))
-                for members in by_label.values()
-                if len(members) >= self.config.min_cluster_size
-            }
-            groups.extend(
-                StrategyCandidateGroup(
-                    members=members,
-                    evidence_ids=(evidence_id,),
-                )
-                for members in sorted(evidence_groups)
-            )
+            for members in memberships:
+                discovered.setdefault(members, set()).add(evidence_id)
 
         evidence_order = {
             evidence_id: index
             for index, evidence_id in enumerate(DISCOVERY_EVIDENCE_IDS)
         }
+        groups = [
+            StrategyCandidateGroup(
+                members=members,
+                evidence_ids=tuple(
+                    sorted(
+                        evidence_ids,
+                        key=lambda evidence_id: evidence_order[evidence_id],
+                    )
+                ),
+            )
+            for members, evidence_ids in discovered.items()
+        ]
         groups.sort(
             key=lambda group: (
                 evidence_order[group.evidence_ids[0]],
                 -len(group.members),
                 group.members,
+                group.evidence_ids,
             )
         )
         return tuple(groups)
 
-    @staticmethod
-    def _distance_matrix(
-        topics: tuple[str, ...],
-        scores: dict[tuple[str, str], dict[str, float | None]],
+    def _pair_memberships(
+        self,
+        evidence: RecommendationStrategyInput,
         evidence_id: str,
+    ) -> set[tuple[str, ...]]:
+        """Cluster raw pair vectors, then project each pair cluster to topic membership.
+
+        Key/value/key+value discovery is intentionally tag-focused: telemetry fields
+        change with readings, while tags carry stable descriptive metadata. Schema
+        discovery uses both tag and field pairs.
+        """
+
+        items: list[tuple[str, object, tuple[float, ...]]] = []
+        for topic in evidence.topics:
+            for record in evidence.pairs_by_topic.get(topic, ()):
+                identity = record.representation.identity
+                if evidence_id in {"key", "value", "key_value"} and identity.source != "tag":
+                    continue
+                vector = record.vector_for(evidence_id)
+                if vector is None:
+                    continue
+                items.append(
+                    (
+                        topic,
+                        identity,
+                        tuple(float(value) for value in vector),
+                    )
+                )
+
+        items.sort(key=lambda item: (item[0], item[1]))
+        if len(items) < self.config.min_cluster_size:
+            return set()
+
+        labels = self._labels_for_vectors(
+            evidence_id,
+            tuple(item[2] for item in items),
+        )
+        by_label: dict[int, set[str]] = {}
+        for (topic, _identity, _vector), label in zip(items, labels, strict=True):
+            if label < 0:
+                continue
+            by_label.setdefault(label, set()).add(topic)
+
+        return {
+            tuple(sorted(topics))
+            for topics in by_label.values()
+            if len(topics) >= self.config.min_cluster_size
+        }
+
+    def _stream_memberships(
+        self,
+        evidence: RecommendationStrategyInput,
+        evidence_id: str,
+    ) -> set[tuple[str, ...]]:
+        items = [
+            (topic, tuple(float(value) for value in vector))
+            for topic in evidence.topics
+            if (vector := evidence.stream_vectors.get(topic)) is not None
+        ]
+        if len(items) < self.config.min_cluster_size:
+            return set()
+
+        labels = self._labels_for_vectors(
+            evidence_id,
+            tuple(vector for _topic, vector in items),
+        )
+        by_label: dict[int, set[str]] = {}
+        for (topic, _vector), label in zip(items, labels, strict=True):
+            if label < 0:
+                continue
+            by_label.setdefault(label, set()).add(topic)
+
+        return {
+            tuple(sorted(topics))
+            for topics in by_label.values()
+            if len(topics) >= self.config.min_cluster_size
+        }
+
+    def _labels_for_vectors(
+        self,
+        evidence_id: str,
+        vectors: tuple[tuple[float, ...], ...],
+    ) -> tuple[int, ...]:
+        matrix = self._vector_distance_matrix(vectors)
+        labels = tuple(
+            int(value) for value in self._cluster_labels(evidence_id, matrix)
+        )
+        if len(labels) != len(vectors):
+            raise ValueError("Discovery label count must match evidence item count")
+        return labels
+
+    @staticmethod
+    def _vector_distance_matrix(
+        vectors: tuple[tuple[float, ...], ...],
     ) -> DistanceMatrix:
         rows = []
-        for left in topics:
+        for left_index, left in enumerate(vectors):
             row = []
-            for right in topics:
-                if left == right:
+            for right_index, right in enumerate(vectors):
+                if left_index == right_index:
                     row.append(0.0)
                     continue
-                key = tuple(sorted((left, right)))
-                value = scores[key].get(evidence_id)
-                if value is None:
-                    row.append(2.0)
-                else:
-                    similarity = max(-1.0, min(1.0, float(value)))
-                    row.append(1.0 - similarity)
+                similarity = max(-1.0, min(1.0, float(cosine(left, right))))
+                row.append(1.0 - similarity)
             rows.append(tuple(row))
         return tuple(rows)
 
