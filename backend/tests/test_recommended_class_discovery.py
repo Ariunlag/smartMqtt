@@ -260,6 +260,84 @@ def test_independent_centroid_uses_all_independent_evidence_spaces():
     } == {"a", "b"}
 
 
+def test_centroid_keeps_key_value_and_stream_spaces_separate():
+    from services.class_recommendation.strategies import (
+        CentroidStrategyConfig,
+        IndependentEvidenceCentroidStrategy,
+        RecommendationStrategyInput,
+    )
+
+    pairs = {
+        "a": (
+            _record_with_vectors(
+                "a",
+                "tag",
+                "location",
+                "string",
+                {
+                    "key": (1.0, 0.0),
+                    "value": (1.0, 0.0),
+                    "key_value": (1.0, 0.0),
+                    "schema": (1.0, 0.0),
+                },
+            ),
+        ),
+        "b": (
+            _record_with_vectors(
+                "b",
+                "tag",
+                "municipality",
+                "string",
+                {
+                    "key": (1.0, 0.0),
+                    "value": (0.0, 1.0),
+                    "key_value": (0.0, 1.0),
+                    "schema": (0.0, 1.0),
+                },
+            ),
+        ),
+        "c": (
+            _record_with_vectors(
+                "c",
+                "tag",
+                "city",
+                "string",
+                {
+                    "key": (-1.0, 0.0),
+                    "value": (0.0, 1.0),
+                    "key_value": (-1.0, 0.0),
+                    "schema": (-1.0, 0.0),
+                },
+            ),
+        ),
+    }
+    evidence = RecommendationStrategyInput(
+        topics=("a", "b", "c"),
+        versions={"a": 1, "b": 1, "c": 1},
+        pairs_by_topic=pairs,
+        stream_vectors={
+            "a": (1.0, 0.0),
+            "b": (0.0, 1.0),
+            "c": (1.0, 0.0),
+        },
+        symmetric_scores={},
+    )
+    strategy = IndependentEvidenceCentroidStrategy(
+        CentroidStrategyConfig(threshold=0.85, min_topic_count=2)
+    )
+
+    groups = {
+        group.members: group.evidence_ids
+        for group in strategy.discover(evidence)
+    }
+
+    assert groups == {
+        ("a", "b"): ("key",),
+        ("b", "c"): ("value",),
+        ("a", "c"): ("stream_context",),
+    }
+
+
 def test_hdbscan_and_centroid_use_different_grouping_logic_on_same_embeddings():
     from services.class_recommendation.strategies import (
         HdbscanStrategyConfig,
