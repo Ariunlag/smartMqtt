@@ -138,7 +138,7 @@ class RecommendedClassFeedbackRequest(BaseModel):
 
     @model_validator(mode="after")
     def validate_action_scope(self):
-        topic_actions = {"KEEP_TOPIC", "REMOVE_TOPIC"}
+        topic_actions = {"KEEP_TOPIC", "ADD_TOPIC", "REMOVE_TOPIC"}
         if self.candidate_version < 1:
             raise ValueError("candidate_version must be at least 1")
         if self.action in topic_actions and not self.topic:
