@@ -1,5 +1,9 @@
 # SmartMQTT · Influx Hub
 
+> Architecture and future extension guide: [PROJECT_ARCHITECTURE.md](PROJECT_ARCHITECTURE.md).
+> Update that document when adding recommendation strategies, learners, evidence providers,
+> embedding models, or experiment branches.
+
 A local IoT application for MQTT telemetry, live charts, duplicate-topic review,
 and editable semantic Class recommendations. The stack runs FastAPI, React,
 Mosquitto, InfluxDB and PostgreSQL with pgvector.
