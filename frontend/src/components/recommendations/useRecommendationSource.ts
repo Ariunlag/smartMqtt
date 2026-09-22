@@ -294,18 +294,18 @@ export function useRecommendationSource(): RecommendationSource {
       };
     }
 
-    const isCentroid = set.strategy.strategy_id === "tag_value_centroid";
+    const isCentroid = set.strategy.strategy_id === "independent_centroid";
     const details: string[] = isCentroid
       ? [
-          "Only tag-value embeddings participate in grouping. Values are assigned incrementally to the nearest moving centroid when they meet the centroid threshold.",
+          "Key, value, key + value, schema, and stream context use moving-centroid assignment independently. Exact topic memberships found by multiple evidence types are merged.",
         ]
       : [
           "Key, value, key + value, schema, and stream context discover groups independently. Exact topic memberships found by multiple evidence types are merged.",
         ];
 
-    const activeEvidenceIds = isCentroid
-      ? new Set(["value"])
-      : new Set(set.evidence_catalog.map((definition) => definition.evidence_id));
+    const activeEvidenceIds = new Set(
+      set.evidence_catalog.map((definition) => definition.evidence_id),
+    );
 
     return {
       loading,
