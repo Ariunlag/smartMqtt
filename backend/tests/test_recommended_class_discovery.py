@@ -111,9 +111,9 @@ def _labels(channel, matrix):
         assert len(matrix) == 3
         return (0, 0, -1)
     if channel == "schema":
-        # Schema sees both field and tag pairs: two items per topic.
-        assert len(matrix) == 6
-        return (0, 0, 0, 0, -1, -1)
+        # Schema is one whole-topic structural signature per topic.
+        assert len(matrix) == 3
+        return (0, 0, -1)
     if channel == "stream_context":
         assert len(matrix) == 3
         return (0, 0, -1)
