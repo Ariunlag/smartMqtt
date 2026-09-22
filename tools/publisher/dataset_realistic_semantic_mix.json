@@ -5,11 +5,13 @@
       "municipality": "Chicago",
       "equipment_class": "air handling unit",
       "served_space": "office floors",
-      "operating_context": "commercial HVAC"
+      "operating_context": "commercial HVAC",
+      "state_name": "Illinois",
+      "metro_area": "Chicago metropolitan area"
     },
     "fields": {
       "supply_air_temperature_c": 16.8,
-      "duct_static_pressure_pa": 420.0
+      "duct_static_pressure_pa": 420
     }
   },
   {
@@ -18,11 +20,13 @@
       "city_name": "Chicago",
       "asset_type": "air handler",
       "zone_role": "guest room ventilation",
-      "system_context": "hotel HVAC"
+      "system_context": "hotel HVAC",
+      "state_code": "IL",
+      "market_region": "Chicagoland"
     },
     "fields": {
       "discharge_air_temperature_c": 17.4,
-      "duct_pressure_pa": 405.0
+      "duct_pressure_pa": 405
     }
   },
   {
@@ -31,11 +35,13 @@
       "location_city": "Chicago",
       "equipment_family": "air handling system",
       "service_area": "patient wing",
-      "application": "healthcare HVAC"
+      "application": "healthcare HVAC",
+      "administrative_region": "State of Illinois",
+      "regional_area": "Greater Chicago"
     },
     "fields": {
       "return_air_temperature_c": 23.1,
-      "airflow_cfm": 5400.0
+      "airflow_cfm": 5400
     }
   },
   {
@@ -47,8 +53,8 @@
       "building_use": "university"
     },
     "fields": {
-      "supply_air_temp_c": 17.0,
-      "supply_airflow_cfm": 6100.0
+      "supply_air_temp_c": 17,
+      "supply_airflow_cfm": 6100
     }
   },
   {
@@ -74,7 +80,7 @@
     },
     "fields": {
       "discharge_temperature_c": 18.8,
-      "fan_speed_rpm": 980.0
+      "fan_speed_rpm": 980
     }
   },
   {
@@ -87,7 +93,7 @@
     },
     "fields": {
       "room_air_temperature_c": 22.4,
-      "relative_humidity_pct": 44.0
+      "relative_humidity_pct": 44
     }
   },
   {
@@ -100,7 +106,7 @@
     },
     "fields": {
       "ambient_temperature_c": 22.8,
-      "room_humidity_pct": 46.0
+      "room_humidity_pct": 46
     }
   },
   {
@@ -112,8 +118,8 @@
       "service_line": "emergency care"
     },
     "fields": {
-      "room_temperature_c": 23.0,
-      "relative_humidity_pct": 45.0
+      "room_temperature_c": 23,
+      "relative_humidity_pct": 45
     }
   },
   {
@@ -125,7 +131,7 @@
       "education_level": "middle school"
     },
     "fields": {
-      "carbon_dioxide_ppm": 720.0,
+      "carbon_dioxide_ppm": 720,
       "room_temperature_c": 22.1
     }
   },
@@ -138,7 +144,7 @@
       "academic_area": "engineering"
     },
     "fields": {
-      "co2_concentration_ppm": 760.0,
+      "co2_concentration_ppm": 760,
       "indoor_temperature_c": 21.8
     }
   },
@@ -151,7 +157,7 @@
       "academic_program": "nursing"
     },
     "fields": {
-      "indoor_co2_ppm": 690.0,
+      "indoor_co2_ppm": 690,
       "air_temperature_c": 22.3
     }
   },
@@ -164,7 +170,7 @@
       "distribution_area": "tower west"
     },
     "fields": {
-      "active_power_kw": 84.0,
+      "active_power_kw": 84,
       "power_factor": 0.96
     }
   },
@@ -177,7 +183,7 @@
       "service_zone": "food court"
     },
     "fields": {
-      "real_power_kw": 76.0,
+      "real_power_kw": 76,
       "power_factor": 0.94
     }
   },
@@ -190,7 +196,7 @@
       "electrical_zone": "loading dock"
     },
     "fields": {
-      "electrical_demand_kw": 91.0,
+      "electrical_demand_kw": 91,
       "power_factor": 0.92
     }
   },
@@ -203,8 +209,8 @@
       "process_area": "high service"
     },
     "fields": {
-      "discharge_pressure_kpa": 510.0,
-      "flow_rate_lpm": 1480.0
+      "discharge_pressure_kpa": 510,
+      "flow_rate_lpm": 1480
     }
   },
   {
@@ -216,8 +222,8 @@
       "process_zone": "filtration"
     },
     "fields": {
-      "outlet_pressure_kpa": 495.0,
-      "water_flow_lpm": 1525.0
+      "outlet_pressure_kpa": 495,
+      "water_flow_lpm": 1525
     }
   },
   {
@@ -229,8 +235,8 @@
       "treatment_area": "influent"
     },
     "fields": {
-      "pump_discharge_pressure_kpa": 430.0,
-      "flow_lpm": 1390.0
+      "pump_discharge_pressure_kpa": 430,
+      "flow_lpm": 1390
     }
   },
   {
@@ -242,8 +248,8 @@
       "logistics_area": "freezer"
     },
     "fields": {
-      "cold_room_temperature_c": -18.0,
-      "compressor_power_kw": 31.0
+      "cold_room_temperature_c": -18,
+      "compressor_power_kw": 31
     }
   },
   {
@@ -255,8 +261,8 @@
       "warehouse_zone": "freezer"
     },
     "fields": {
-      "storage_temperature_c": -19.0,
-      "refrigeration_power_kw": 34.0
+      "storage_temperature_c": -19,
+      "refrigeration_power_kw": 34
     }
   },
   {
@@ -269,7 +275,7 @@
     },
     "fields": {
       "indoor_temperature_c": 21.5,
-      "conveyor_power_kw": 18.0
+      "conveyor_power_kw": 18
     }
   }
 ]
