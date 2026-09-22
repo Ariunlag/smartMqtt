@@ -127,7 +127,7 @@ class RecommendationFeedbackDatasetBuilder:
             action = row["action_type"]
             candidate_id = str(row["candidate_id"])
             version = int(row["candidate_version"])
-            if action in {"KEEP_TOPIC", "REMOVE_TOPIC"}:
+            if action in {"KEEP_TOPIC", "ADD_TOPIC", "REMOVE_TOPIC"}:
                 topic = row.get("topic")
                 if topic:
                     latest_membership[(candidate_id, version, topic)] = row
@@ -243,7 +243,7 @@ class RecommendationFeedbackDatasetBuilder:
                 ),
                 objective="membership",
                 target=str(topic),
-                label=1 if action == "KEEP_TOPIC" else 0,
+                label=0 if action == "REMOVE_TOPIC" else 1,
                 features=tuple(values),
                 evaluation_group=cls._member_group(members, str(row["candidate_id"])),
             ),
