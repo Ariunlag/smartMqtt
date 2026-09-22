@@ -116,10 +116,6 @@ export default function RecommendationsPanel({ source }: { source: Recommendatio
             {details.map((paragraph) => (
               <p key={paragraph}>{paragraph}</p>
             ))}
-            <p>
-              Viewing a graph does not train the model. Add, remove, confirm, save, and
-              usefulness actions are explicit feedback.
-            </p>
           </details>
         </div>
       }
@@ -300,7 +296,7 @@ function GroupDetail({
                   <div className="rec-member__row">
                     <div>
                       <span className="rec-member__topic">{member.topic}</span>
-                      <span className="score">{member.detail}</span>
+                      {member.detail && <span className="score">{member.detail}</span>}
                     </div>
                     <div className="rec-actions">
                       <button
