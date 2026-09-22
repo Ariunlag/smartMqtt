@@ -417,15 +417,11 @@ class AdaptiveRecommendations:
                 class_id = str(old["class_id"]) if old else str(uuid.uuid4())
                 state = next((g for g in self.store.groups(conn) if g.get("saved_class") == name), None)
                 state = state or self._new_group("class:" + class_id, old["topics"] if old else [], name)
-                # Manual choices have freshly computed evidence, not an old UI exposure.
+                # Saved Classes are user-owned state, not training labels. Learning
+                # only uses explicit review actions performed on recommendation cards
+                # (add/remove/confirm/save), never ordinary Class Builder persistence.
                 state.update(manifest_id=self.registry.manifest_id,
                              model_version=self.current_model()["version"])
-                previous = set(state["members"])
-                for topic in sorted(set(topics) ^ previous):
-                    label = int(topic in topics)
-                    refs = [t for t in (topics if label else state["members"]) if t != topic]
-                    self.store.event(conn, self._event(state, "MANUAL_ADD" if label else "MANUAL_REMOVE",
-                                                      topic, label, self._evidence(topic, refs, material), refs))
                 state.update(members=topics, saved_class=name, class_id=class_id, edited=True,
                              history=[], revision=state["revision"] + 1, dismissed=False,
                              confirmed=topics, manifest_id=self.registry.manifest_id)
