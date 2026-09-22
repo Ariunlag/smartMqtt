@@ -157,6 +157,34 @@ const candidateSet: RecommendedClassCandidateSet = {
   ],
 };
 
+
+const centroidSet: RecommendedClassCandidateSet = {
+  ...candidateSet,
+  strategy: centroidStrategy,
+  shadow_evaluation: undefined,
+  live_ranking: undefined,
+  candidates: [
+    {
+      candidate_id: "centroid-1",
+      candidate_version: 1,
+      rank: 1,
+      anchor_topic: "building/a",
+      member_topics: ["building/a", "building/c"],
+      discovery_channels: ["value"],
+      discovery_support: [
+        {
+          evidence_id: "value",
+          items: [
+            { topic: "building/a", text: "Chicago", similarity: 0.96, source: "tag" },
+            { topic: "building/c", text: "Chicagoland", similarity: 0.94, source: "tag" },
+          ],
+        },
+      ],
+      evidence: [],
+    },
+  ],
+};
+
 const memberRow = (topic: string) =>
   within(screen.getByRole("list", { name: "Suggested members" }))
     .getByText(topic)
@@ -199,7 +227,12 @@ it("names the discovery channels that produced the candidate", async () => {
   expect(within(reasons).queryByText("Shared value")).not.toBeInTheDocument();
 });
 
-it("requests the selected strategy without changing the evidence UI", async () => {
+it("switches to the distinct centroid method and shows only value evidence", async () => {
+  vi.mocked(getRecommendedClassCandidates).mockReset();
+  vi.mocked(getRecommendedClassCandidates)
+    .mockResolvedValueOnce(structuredClone(candidateSet))
+    .mockResolvedValueOnce(structuredClone(centroidSet));
+
   render(<RecommendationsManager />);
   await screen.findByRole("heading", { name: "Recommended class #1", level: 4 });
 
@@ -210,6 +243,16 @@ it("requests the selected strategy without changing the evidence UI", async () =
   await waitFor(() =>
     expect(getRecommendedClassCandidates).toHaveBeenCalledWith("tag_value_centroid"),
   );
+
+  const reasons = await screen.findByRole("region", { name: "Recommendation reasons" });
+  expect(within(reasons).getByText("Shared value")).toBeInTheDocument();
+  expect(within(reasons).getByText("Chicago")).toBeInTheDocument();
+  expect(within(reasons).getByText("Chicagoland")).toBeInTheDocument();
+  expect(within(reasons).queryByText("Similar key")).not.toBeInTheDocument();
+
+  fireEvent.click(screen.getByText("Method details"));
+  expect(screen.getByText("Centroid input")).toBeInTheDocument();
+  expect(screen.queryByText("Independent evidence")).not.toBeInTheDocument();
 });
 
 it("shows compact shared evidence without cluster jargon or per-member Why panels", async () => {
@@ -233,7 +276,7 @@ it("shows compact shared evidence without cluster jargon or per-member Why panel
 
   for (const topic of ["building/a", "building/b"]) {
     const row = memberRow(topic);
-    expect(within(row).getByText("Matches the shared evidence above")).toBeInTheDocument();
+    expect(within(row).queryByText("Matches the shared evidence above")).not.toBeInTheDocument();
     expect(within(row).queryByRole("button", { name: "Why?" })).not.toBeInTheDocument();
   }
 });
