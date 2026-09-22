@@ -123,6 +123,8 @@ export interface MatchedPairEvidence {
   prototype_id: string;
   scores: EvidenceScores;
   compatibility_score: number;
+  candidate_text?: string | null;
+  prototype_text?: string | null;
 }
 
 export interface PairCoverage {
