@@ -7,12 +7,9 @@ import {
 } from "../../services/classRecommendationApi";
 import { useInfluxStore } from "../../store/useInfluxStore";
 import type {
-  EvidenceDefinition,
-  EvidenceScores,
   RecommendedClassCandidate,
   RecommendedClassCandidateSet,
   RecommendedClassFeedbackAction,
-  RecommendedClassTopicEvidence,
 } from "../../types/api_models";
 import { percentText } from "./recommendationModel";
 import type {
@@ -51,12 +48,6 @@ function errorText(error: unknown) {
   }
   return error instanceof Error ? error.message : "Request failed";
 }
-
-const scoreFor = (scores: EvidenceScores, evidenceId: string) =>
-  scores.items.find((item) => item.evidence_id === evidenceId)?.score ?? null;
-
-const pairText = (pair: { normalized_key: string; datatype: string }) =>
-  `${pair.normalized_key}:${pair.datatype}`;
 
 function discoveryEvidenceRows(
   candidate: RecommendedClassCandidate,
