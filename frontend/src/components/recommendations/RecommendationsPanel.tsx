@@ -5,7 +5,6 @@ import RecommendationGraph from "./RecommendationGraph";
 import {
   actionNotice,
   percentText,
-  type EvidenceMatch,
   type GroupAction,
   type GroupActionValues,
   type RecommendationGroup,
@@ -145,34 +144,84 @@ export default function RecommendationsPanel({ source }: { source: Recommendatio
 
 function DiscoveryEvidenceSummary({ group }: { group: RecommendationGroup }) {
   const channels = group.discoveryEvidence ?? [];
-  if (channels.length === 0) return null;
+
+  if (channels.length === 0) {
+    if (group.discoveryChannels.length === 0) return null;
+    return (
+      <section aria-label="Recommendation reasons">
+        <h5 className="panel-header">Recommended because</h5>
+        <div className="rec-chips">
+          {group.discoveryChannels.map((label) => (
+            <span className="rec-chip" key={label}>
+              {label}
+            </span>
+          ))}
+        </div>
+      </section>
+    );
+  }
 
   return (
-    <section aria-label="Matching discovery evidence">
-      <h5 className="panel-header">Matching evidence</h5>
+    <section aria-label="Recommendation reasons">
+      <h5 className="panel-header">Recommended because</h5>
       <div className="rec-evidence">
-        {channels.map((channel) => (
-          <section key={channel.channelId}>
-            <div className="rec-evidence__head">
-              <strong>{channel.channelLabel}</strong>
-              <span>{channel.items.length} clustered items</span>
-            </div>
+        {channels.map((channel) => {
+          const topicCount = new Set(channel.items.map((item) => item.topic)).size;
+          const texts = Array.from(
+            new Set(
+              channel.items
+                .map((item) => item.text?.trim())
+                .filter((text): text is string => Boolean(text)),
+            ),
+          );
+          const similarities = channel.items.map((item) => item.similarity);
+          const low = Math.min(...similarities);
+          const high = Math.max(...similarities);
+          const exactSharedText =
+            texts.length === 1 && similarities.every((value) => value >= 0.999);
+          const similarity =
+            exactSharedText
+              ? "Exact shared match"
+              : low === high
+                ? `Similarity ${percentText(low)}`
+                : `Similarity ${percentText(low)}–${percentText(high)}`;
 
-            {channel.items.map((item, index) => (
-              <div
-                className="rec-evidence__match"
-                key={`${item.topic}:${item.text ?? "stream"}:${index}`}
-              >
-                <p className="rec-member__topic">{item.topic}</p>
-                {item.text && <p>{item.text}</p>}
-                <small>
-                  {item.source ? `${item.source} · ` : ""}
-                  {percentText(item.similarity)} similarity to this evidence cluster
-                </small>
+          return (
+            <section key={channel.channelId}>
+              <div className="rec-evidence__head">
+                <strong>{channel.channelLabel}</strong>
+                <span>{topicCount} topics</span>
               </div>
-            ))}
-          </section>
-        ))}
+
+              {["key", "value", "key_value"].includes(channel.channelId) && texts.length > 0 && (
+                <div className="rec-chips">
+                  {texts.slice(0, 6).map((text) => (
+                    <span className="rec-chip" key={text}>
+                      {text}
+                    </span>
+                  ))}
+                  {texts.length > 6 && (
+                    <span className="rec-chip">+{texts.length - 6} more</span>
+                  )}
+                </div>
+              )}
+
+              {channel.channelId === "schema" && (
+                <p className="empty-note">
+                  Similar tag and field structure across these topics.
+                </p>
+              )}
+
+              {channel.channelId === "stream_context" && (
+                <p className="empty-note">
+                  Similar whole-stream context across these topics.
+                </p>
+              )}
+
+              <small>{similarity}</small>
+            </section>
+          );
+        })}
       </div>
     </section>
   );
@@ -195,7 +244,6 @@ function GroupDetail({
   const [saving, setSaving] = useState(false);
   const [topic, setTopic] = useState("");
   const [name, setName] = useState("");
-  const [openTopic, setOpenTopic] = useState<string | null>(null);
 
   const act = async (action: GroupAction, values: GroupActionValues = {}) => {
     setBusy(true);
@@ -240,19 +288,6 @@ function GroupDetail({
         </div>
       </header>
 
-      {group.discoveryChannels.length > 0 && (
-        <section aria-label="Recommendation reasons">
-          <h5 className="panel-header">Recommended because</h5>
-          <div className="rec-chips">
-            {group.discoveryChannels.map((label) => (
-              <span className="rec-chip" key={label}>
-                {label}
-              </span>
-            ))}
-          </div>
-        </section>
-      )}
-
       <DiscoveryEvidenceSummary group={group} />
 
       {!group.dismissed && (
@@ -268,17 +303,6 @@ function GroupDetail({
                       <span className="score">{member.detail}</span>
                     </div>
                     <div className="rec-actions">
-                      {member.evidence.length > 0 && (
-                        <button
-                          type="button"
-                          aria-expanded={openTopic === member.topic}
-                          onClick={() =>
-                            setOpenTopic(openTopic === member.topic ? null : member.topic)
-                          }
-                        >
-                          Why?
-                        </button>
-                      )}
                       <button
                         type="button"
                         className="success"
@@ -299,28 +323,6 @@ function GroupDetail({
                     </div>
                   </div>
 
-                  {openTopic === member.topic && member.evidence.length > 0 && (
-                    <div className="rec-evidence">
-                      {member.evidence.map((row) => (
-                        <section key={row.channelId}>
-                          <div className="rec-evidence__head">
-                            <strong>{row.channelLabel}</strong>
-                            <span>{row.value}</span>
-                          </div>
-                          {row.detail && <small>{row.detail}</small>}
-                          {row.matches.map((match, index) => (
-                            <div className="rec-evidence__match" key={index}>
-                              <p>
-                                {match.left} ↔ {match.right}
-                              </p>
-                              {match.detail && <small>{match.detail}</small>}
-                              <ShapePreview match={match} />
-                            </div>
-                          ))}
-                        </section>
-                      ))}
-                    </div>
-                  )}
                 </li>
               ))}
             </ul>
@@ -475,58 +477,3 @@ function GroupDetail({
   );
 }
 
-/* Only the series-shape channel supplies raw windows; every other channel
- * leaves the values null and renders no chart. */
-function ShapePreview({ match }: { match: EvidenceMatch }) {
-  if (!match.leftValues || !match.rightValues) return null;
-
-  const paths = (values: (number | null)[]) => {
-    const finite = values.filter((v): v is number => v !== null && Number.isFinite(v));
-    if (finite.length === 0) return [];
-    const low = Math.min(...finite);
-    const range = Math.max(...finite) - low || 1;
-    const segments: string[] = [];
-    let segment = "";
-    values.forEach((value, index) => {
-      if (value === null || !Number.isFinite(value)) {
-        if (segment) segments.push(segment);
-        segment = "";
-      } else {
-        const x = (index / Math.max(1, values.length - 1)) * 200;
-        segment += `${x},${46 - ((value - low) / range) * 42} `;
-      }
-    });
-    if (segment) segments.push(segment);
-    return segments;
-  };
-
-  return (
-    <figure className="rec-shape">
-      <svg
-        role="img"
-        aria-label="Time-series shape comparison, each trace scaled independently; gaps are missing samples"
-        viewBox="0 0 200 50"
-      >
-        {paths(match.leftValues).map((points, index) => (
-          <polyline key={`l${index}`} points={points} fill="none" stroke="var(--accent)" strokeWidth="1.5" />
-        ))}
-        {paths(match.rightValues).map((points, index) => (
-          <polyline
-            key={`r${index}`}
-            points={points}
-            fill="none"
-            stroke="var(--warning)"
-            strokeWidth="1.5"
-            strokeDasharray="3 2"
-          />
-        ))}
-      </svg>
-      <figcaption>
-        <small>
-          Compared shapes · solid: member, dashed: reference · each trace scaled
-          independently
-        </small>
-      </figcaption>
-    </figure>
-  );
-}
