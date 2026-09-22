@@ -54,32 +54,34 @@ function discoveryEvidenceRows(
   labels: Map<string, string>,
   topic: string,
 ): EvidenceRow[] {
-  return (candidate.discovery_support ?? [])
-    .map((support) => {
-      const items = support.items.filter((item) => item.topic === topic);
-      if (items.length === 0) return null;
+  const rows: EvidenceRow[] = [];
 
-      const average =
-        items.reduce((sum, item) => sum + item.similarity, 0) / items.length;
+  for (const support of candidate.discovery_support ?? []) {
+    const items = support.items.filter((item) => item.topic === topic);
+    if (items.length === 0) continue;
 
-      return {
-        channelId: support.evidence_id,
-        channelLabel: labels.get(support.evidence_id) ?? support.evidence_id,
-        value: percentText(average),
-        detail:
-          items.length === 1
-            ? "1 exact item from the discovery cluster"
-            : `${items.length} exact items from the discovery cluster`,
-        matches: items.map((item) => ({
-          left: item.text ?? topic,
-          right: "discovery cluster",
-          detail: `${item.source ?? "evidence"} · ${percentText(item.similarity)} cluster similarity`,
-          leftValues: null,
-          rightValues: null,
-        })),
-      } satisfies EvidenceRow;
-    })
-    .filter((row): row is EvidenceRow => row !== null);
+    const average =
+      items.reduce((sum, item) => sum + item.similarity, 0) / items.length;
+
+    rows.push({
+      channelId: support.evidence_id,
+      channelLabel: labels.get(support.evidence_id) ?? support.evidence_id,
+      value: percentText(average),
+      detail:
+        items.length === 1
+          ? "1 exact item from the discovery cluster"
+          : `${items.length} exact items from the discovery cluster`,
+      matches: items.map((item) => ({
+        left: item.text ?? topic,
+        right: "discovery cluster",
+        detail: `${item.source ?? "evidence"} · ${percentText(item.similarity)} cluster similarity`,
+        leftValues: null,
+        rightValues: null,
+      })),
+    });
+  }
+
+  return rows;
 }
 
 function toGroup(
