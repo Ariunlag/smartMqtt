@@ -141,6 +141,16 @@ function toGroup(
     discoveryChannels: candidate.discovery_channels.map(
       (evidenceId) => labels.get(evidenceId) ?? evidenceId,
     ),
+    discoveryEvidence: candidate.discovery_support.map((support) => ({
+      channelId: support.evidence_id,
+      channelLabel: labels.get(support.evidence_id) ?? support.evidence_id,
+      items: support.items.map((item) => ({
+        topic: item.topic,
+        text: item.text,
+        similarity: item.similarity,
+        source: item.source,
+      })),
+    })),
     savedClass: overlay?.savedClass ?? null,
     dismissed: overlay?.dismissed ?? false,
     canUndo: overlay?.lastEdit != null,
