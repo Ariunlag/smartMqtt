@@ -13,6 +13,7 @@ export default function AdaptiveRecommendationsManager() {
   const [result, setResult] = useState<AdaptiveResponse | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [selectedGroupId, setSelectedGroupId] = useState<string | null>(null);
   const refresh = async () => {
     setBusy(true); setError(null);
     try { setResult(await getAdaptiveRecommendations()); }
@@ -45,12 +46,12 @@ export default function AdaptiveRecommendationsManager() {
         {result.series?.enabled && <p>Time-series compares synchronized changes in shape, independent of scale or units. {result.series.error ? "Window refresh unavailable; stale windows are excluded." : result.series.window_end ? `Window ending ${new Date(result.series.window_end * 1000).toLocaleString()}.` : "Waiting for numeric windows."}</p>}
       </details>
       {!result.groups.length && <p className="empty-note">No groups yet. Receive tagged MQTT messages or create a Class to start reviewing recommendations.</p>}
-      <div className="adaptive__groups">{result.groups.map(group => <GroupCard key={group.group_id} group={group} result={result} onChange={changed} />)}</div>
+      <div className="adaptive__groups">{result.groups.map(group => <GroupCard key={group.group_id} group={group} result={result} onChange={changed} selected={selectedGroupId === group.group_id} onSelect={() => setSelectedGroupId(current => current === group.group_id ? null : group.group_id)} />)}</div>
     </>}
   </section>;
 }
 
-function GroupCard({group, result, onChange}: {group: AdaptiveGroup; result: AdaptiveResponse; onChange: (group: AdaptiveGroup) => void}) {
+function GroupCard({group, result, onChange, selected, onSelect}: {group: AdaptiveGroup; result: AdaptiveResponse; onChange: (group: AdaptiveGroup) => void; selected: boolean; onSelect: () => void}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -72,7 +73,7 @@ function GroupCard({group, result, onChange}: {group: AdaptiveGroup; result: Ada
   const members = all ? group.members : group.members.slice(0, 8);
   const available = result.available_topics.filter(t => !group.members.includes(t));
   return <article className="adaptive__card" aria-label={group.name ?? "Suggested group"}>
-    <header className="adaptive__header"><div><h3>{group.name ?? "Suggested group"}</h3><p>{group.members.length} topics · {group.saved_class ? "Saved Class" : group.edited ? "Your edited group" : "System suggestion"}</p></div>{group.dismissed && <span>Dismissed</span>}</header>
+    <header className="adaptive__header"><div><h3>{group.name ?? "Suggested group"}</h3><p>{group.members.length} topics · {group.saved_class ? "Saved Class" : group.edited ? "Your edited group" : "System suggestion"}</p></div><div>{group.dismissed && <span>Dismissed</span>} {!group.dismissed && <button type="button" aria-expanded={selected} onClick={onSelect}>{selected ? "Close graph" : "Review graph"}</button>}</div></header>
     {!group.dismissed && <>
       <div className="adaptive__members" role="list" aria-label="Group members">
         {members.map(member => <div className="adaptive__member" role="listitem" key={member}>
@@ -95,7 +96,7 @@ function GroupCard({group, result, onChange}: {group: AdaptiveGroup; result: Ada
       </div>
       {group.members.length > 8 && <button onClick={() => setAll(!all)}>{all ? "Show fewer topics" : `Show all ${group.members.length} topics`}</button>}
       {!!group.proposals.length && <details><summary>Suggested additions ({group.proposals.length})</summary>{group.proposals.map(proposal => <div className="adaptive__proposal" key={proposal.topic}><span className="adaptive__topic">{proposal.topic} · {similarity(proposal.score)}</span><button disabled={busy} onClick={() => void act("add", {topic: proposal.topic})}>Add</button></div>)}</details>}
-      <RecommendationGraph topics={group.members} />
+      {selected && <RecommendationGraph topics={group.members} />}
       <footer className="adaptive__actions">
         <button disabled={busy || !available.length} onClick={() => {setAdding(!adding); setSaving(false);}}>Add topic</button>
         {!group.saved_class && <button disabled={busy || !group.members.length} onClick={() => {setSaving(!saving); setAdding(false);}}>Save as Class</button>}
