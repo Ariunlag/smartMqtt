@@ -78,12 +78,13 @@ class RecommendedClassCandidateSet:
 
 
 class TopicEvidenceMatcher:
-    """Build post-discovery explanations between two topics.
+    """Build post-discovery explanations for only the evidence that found a group.
 
-    Pair identity stays intact. Candidate pairs only compete against reference pairs
-    with the same source and datatype. A scalar compatibility is used only to make the
-    one-to-one assignment deterministic. This matcher runs after candidate membership
-    has already been discovered, so its cross-evidence average cannot affect grouping.
+    Pair evidence is aligned independently per discovery channel. A value-discovered
+    group therefore explains only value matches, a key-discovered group only key
+    matches, and so on. Exact memberships merged across multiple discovery channels
+    keep a separate explanation for each channel. These explanations never change
+    candidate membership.
     """
 
     @classmethod
@@ -97,59 +98,52 @@ class TopicEvidenceMatcher:
         reference_pairs: tuple[PairEmbeddingRecord, ...],
         reference_stream: tuple[float, ...] | None,
         duplicate_pending: bool,
+        evidence_ids: tuple[str, ...] | None = None,
     ) -> TopicComparisonEvidence:
-        candidates = []
-        for pair in candidate_pairs:
-            for reference in reference_pairs:
-                left = pair.representation.identity
-                right = reference.representation.identity
-                if left.source != right.source or left.datatype != right.datatype:
-                    continue
-                scores = cls._scores(pair, reference)
-                valid = scores.valid()
-                compatibility = sum(value for _, value in valid) / len(valid)
-                candidates.append((compatibility, pair, reference, scores))
-
-        candidates.sort(
-            key=lambda row: (
-                -row[0],
-                row[1].representation.identity,
-                row[2].representation.identity,
+        selected = tuple(evidence_ids or DISCOVERY_EVIDENCE_IDS)
+        unknown = set(selected) - set(DISCOVERY_EVIDENCE_IDS)
+        if unknown:
+            raise ValueError(
+                "Unknown discovery evidence ids: " + ", ".join(sorted(unknown))
             )
-        )
-        used_candidate = set()
-        used_reference = set()
-        matches = []
-        for compatibility, pair, reference, scores in candidates:
-            candidate_identity = pair.representation.identity
-            reference_identity = reference.representation.identity
-            if (
-                candidate_identity in used_candidate
-                or reference_identity in used_reference
-            ):
-                continue
-            used_candidate.add(candidate_identity)
-            used_reference.add(reference_identity)
-            matches.append(
-                MatchedPairEvidence(
-                    candidate=candidate_identity,
-                    prototype=reference_identity,
-                    prototype_id=f"{reference_topic}:{reference_identity.value}",
-                    scores=scores,
-                    compatibility_score=compatibility,
+
+        matches: list[MatchedPairEvidence] = []
+        channel_values: dict[str, float | None] = {}
+        matched_counts: list[int] = []
+
+        for evidence_id in selected:
+            if evidence_id == "stream_context":
+                channel_values[evidence_id] = (
+                    cosine(candidate_stream, reference_stream)
+                    if candidate_stream is not None and reference_stream is not None
+                    else None
                 )
+                continue
+
+            channel_matches = cls._match_channel(
+                evidence_id=evidence_id,
+                candidate_pairs=candidate_pairs,
+                reference_topic=reference_topic,
+                reference_pairs=reference_pairs,
+            )
+            matches.extend(channel_matches)
+            matched_counts.append(len(channel_matches))
+            scores = [
+                score
+                for match in channel_matches
+                if (score := match.scores.get(evidence_id)) is not None
+            ]
+            channel_values[evidence_id] = (
+                sum(scores) / len(scores) if scores else None
             )
 
-        matches.sort(
-            key=lambda item: (item.candidate, item.prototype, item.prototype_id)
-        )
         pair_count = len(candidate_pairs)
         reference_count = len(reference_pairs)
-        matched_count = len(matches)
-        channels = cls._channel_scores(matches, candidate_stream, reference_stream)
+        matched_count = max(matched_counts, default=0)
+
         return TopicComparisonEvidence(
             topic=candidate_topic,
-            channel_scores=channels,
+            channel_scores=EvidenceScores.from_values(channel_values),
             coverage=Coverage(
                 candidate_pair_count=pair_count,
                 class_prototype_count=reference_count,
@@ -164,36 +158,72 @@ class TopicEvidenceMatcher:
         )
 
     @staticmethod
-    def _scores(
-        pair: PairEmbeddingRecord, reference: PairEmbeddingRecord
-    ) -> EvidenceScores:
-        values = {}
-        for evidence_id in PAIR_EVIDENCE_IDS:
-            left = pair.vector_for(evidence_id)
-            right = reference.vector_for(evidence_id)
-            if left is None or right is None:
-                raise ValueError(
-                    f"Pair evidence is missing required view '{evidence_id}'"
+    def _match_channel(
+        *,
+        evidence_id: str,
+        candidate_pairs: tuple[PairEmbeddingRecord, ...],
+        reference_topic: str,
+        reference_pairs: tuple[PairEmbeddingRecord, ...],
+    ) -> list[MatchedPairEvidence]:
+        candidates = []
+        for pair in candidate_pairs:
+            for reference in reference_pairs:
+                left = pair.representation.identity
+                right = reference.representation.identity
+                if left.source != right.source or left.datatype != right.datatype:
+                    continue
+
+                left_vector = pair.vector_for(evidence_id)
+                right_vector = reference.vector_for(evidence_id)
+                if left_vector is None or right_vector is None:
+                    continue
+
+                score = cosine(left_vector, right_vector)
+                candidates.append((score, pair, reference))
+
+        candidates.sort(
+            key=lambda row: (
+                -row[0],
+                row[1].representation.identity,
+                row[2].representation.identity,
+            )
+        )
+
+        used_candidate = set()
+        used_reference = set()
+        matches: list[MatchedPairEvidence] = []
+        for score, pair, reference in candidates:
+            candidate_identity = pair.representation.identity
+            reference_identity = reference.representation.identity
+            if (
+                candidate_identity in used_candidate
+                or reference_identity in used_reference
+            ):
+                continue
+
+            used_candidate.add(candidate_identity)
+            used_reference.add(reference_identity)
+            matches.append(
+                MatchedPairEvidence(
+                    candidate=candidate_identity,
+                    prototype=reference_identity,
+                    prototype_id=f"{reference_topic}:{reference_identity.value}",
+                    scores=EvidenceScores.from_values({evidence_id: score}),
+                    compatibility_score=score,
+                    candidate_text=pair.representation.text_for(evidence_id),
+                    prototype_text=reference.representation.text_for(evidence_id),
                 )
-            values[evidence_id] = cosine(left, right)
-        return EvidenceScores.from_values(values)
+            )
 
-    @staticmethod
-    def _channel_scores(matches, candidate_stream, reference_stream) -> EvidenceScores:
-        def mean(evidence_id: str) -> float | None:
-            values = [
-                value
-                for match in matches
-                if (value := match.scores.get(evidence_id)) is not None
-            ]
-            return sum(values) / len(values) if values else None
-
-        values = {evidence_id: mean(evidence_id) for evidence_id in PAIR_EVIDENCE_IDS}
-        context = None
-        if candidate_stream is not None and reference_stream is not None:
-            context = cosine(candidate_stream, reference_stream)
-        values["stream_context"] = context
-        return EvidenceScores.from_values(values)
+        matches.sort(
+            key=lambda item: (
+                -item.compatibility_score,
+                item.candidate,
+                item.prototype,
+                item.prototype_id,
+            )
+        )
+        return matches
 
 
 class RecommendedClassDiscovery:
@@ -270,6 +300,7 @@ class RecommendedClassDiscovery:
                     reference_pairs=pairs_by_topic[anchor],
                     reference_stream=streams[anchor],
                     duplicate_pending=topic in pending_topics,
+                    evidence_ids=group.evidence_ids,
                 )
                 for topic in members
                 if topic != anchor
