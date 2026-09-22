@@ -108,9 +108,9 @@ class FakeDatabase:
 
 
 def test_candidate_identity_is_stable_across_evidence_versions_and_strategy_specific():
-    first = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan")
+    first = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan", ("key",))
     second = RecommendedClassDiscovery._candidate_id(("a", "b"), "independent_hdbscan")
-    other_strategy = RecommendedClassDiscovery._candidate_id(("a", "b"), "tag_value_centroid")
+    other_strategy = RecommendedClassDiscovery._candidate_id(("a", "b"), "tag_value_centroid", ("value",))
 
     assert first == second
     assert first != other_strategy
