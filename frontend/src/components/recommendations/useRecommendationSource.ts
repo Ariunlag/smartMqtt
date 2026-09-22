@@ -11,9 +11,7 @@ import type {
   RecommendedClassCandidateSet,
   RecommendedClassFeedbackAction,
 } from "../../types/api_models";
-import { percentText } from "./recommendationModel";
 import type {
-  EvidenceRow,
   GroupAction,
   GroupActionValues,
   RecommendationGroup,
@@ -49,39 +47,21 @@ function errorText(error: unknown) {
   return error instanceof Error ? error.message : "Request failed";
 }
 
-function discoveryEvidenceRows(
-  candidate: RecommendedClassCandidate,
-  labels: Map<string, string>,
-  topic: string,
-): EvidenceRow[] {
-  const rows: EvidenceRow[] = [];
-
-  for (const support of candidate.discovery_support ?? []) {
-    const items = support.items.filter((item) => item.topic === topic);
-    if (items.length === 0) continue;
-
-    const average =
-      items.reduce((sum, item) => sum + item.similarity, 0) / items.length;
-
-    rows.push({
-      channelId: support.evidence_id,
-      channelLabel: labels.get(support.evidence_id) ?? support.evidence_id,
-      value: percentText(average),
-      detail:
-        items.length === 1
-          ? "1 exact item from the discovery cluster"
-          : `${items.length} exact items from the discovery cluster`,
-      matches: items.map((item) => ({
-        left: item.text ?? topic,
-        right: "discovery cluster",
-        detail: `${item.source ?? "evidence"} · ${percentText(item.similarity)} cluster similarity`,
-        leftValues: null,
-        rightValues: null,
-      })),
-    });
+function discoveryLabel(evidenceId: string, fallback: string) {
+  switch (evidenceId) {
+    case "key":
+      return "Similar key";
+    case "value":
+      return "Shared value";
+    case "key_value":
+      return "Similar key + value";
+    case "schema":
+      return "Similar structure";
+    case "stream_context":
+      return "Similar stream context";
+    default:
+      return fallback;
   }
-
-  return rows;
 }
 
 function toGroup(
@@ -93,7 +73,6 @@ function toGroup(
   const labels = new Map(
     set.evidence_catalog.map((definition) => [definition.evidence_id, definition.label]),
   );
-  const byTopic = new Map(candidate.evidence.map((item) => [item.topic, item]));
   const edited = overlay
     ? overlay.topics.join("\u0000") !== candidate.member_topics.join("\u0000")
     : false;
@@ -107,30 +86,28 @@ function toGroup(
         ? "Your edited group"
         : "System suggestion",
     members: topics.map((topic) => {
-      const topicEvidence = byTopic.get(topic);
+      const discovered = (candidate.discovery_support ?? []).some((support) =>
+        support.items.some((item) => item.topic === topic),
+      );
       return {
         topic,
-        detail:
-          (candidate.discovery_support ?? []).some((support) =>
-            support.items.some((item) => item.topic === topic),
-          )
-            ? "Matched on this recommendation's exact discovery evidence"
-            : topicEvidence
-              ? "Cluster member"
-              : "Added during review",
+        detail: discovered ? "Matches the shared evidence above" : "Added during review",
         confirmed: overlay?.confirmed.includes(topic) ?? false,
-        evidence: discoveryEvidenceRows(candidate, labels, topic),
+        evidence: [],
       };
     }),
     // Discovery is unsupervised here: this method scores no topics outside a
     // candidate, so additions come from the Add topic control instead.
     proposals: [],
-    discoveryChannels: candidate.discovery_channels.map(
-      (evidenceId) => labels.get(evidenceId) ?? evidenceId,
+    discoveryChannels: candidate.discovery_channels.map((evidenceId) =>
+      discoveryLabel(evidenceId, labels.get(evidenceId) ?? evidenceId),
     ),
     discoveryEvidence: (candidate.discovery_support ?? []).map((support) => ({
       channelId: support.evidence_id,
-      channelLabel: labels.get(support.evidence_id) ?? support.evidence_id,
+      channelLabel: discoveryLabel(
+        support.evidence_id,
+        labels.get(support.evidence_id) ?? support.evidence_id,
+      ),
       items: support.items.map((item) => ({
         topic: item.topic,
         text: item.text,
