@@ -14,6 +14,7 @@ import type {
   RecommendedClassFeedbackAction,
   RecommendedClassTopicEvidence,
 } from "../../types/api_models";
+import IndependentRecommendationReview from "./IndependentRecommendationReview";
 
 const percent = (value: number | null) =>
   value === null ? "N/A" : `${(value * 100).toFixed(1)}%`;
@@ -33,6 +34,7 @@ export default function RecommendationsManager() {
   const [evidenceCatalog, setEvidenceCatalog] = useState<EvidenceDefinition[]>([]);
   const [strategyCatalog, setStrategyCatalog] = useState<RecommendationStrategyDefinition[]>([]);
   const [activeStrategy, setActiveStrategy] = useState<RecommendationStrategyDefinition | null>(null);
+  const [availableTopics, setAvailableTopics] = useState<string[]>([]);
   const [availableTopicCount, setAvailableTopicCount] = useState(0);
   const [shadowRunId, setShadowRunId] = useState<string | null>(null);
   const [liveRunId, setLiveRunId] = useState<string | null>(null);
@@ -50,6 +52,7 @@ export default function RecommendationsManager() {
       setEvidenceCatalog(result.evidence_catalog);
       setStrategyCatalog(result.strategy_catalog);
       setActiveStrategy(result.strategy);
+      setAvailableTopics(result.available_topics);
       setAvailableTopicCount(result.available_topics.length);
       setShadowRunId(
         result.shadow_evaluation?.persistence?.status === "stored"
@@ -122,6 +125,7 @@ export default function RecommendationsManager() {
           <RecommendedClassCard
             key={candidate.candidate_id}
             candidate={candidate}
+            availableTopics={availableTopics}
             evidenceCatalog={evidenceCatalog}
             shadowRunId={shadowRunId}
             liveRunId={liveRunId}
@@ -134,11 +138,13 @@ export default function RecommendationsManager() {
 
 function RecommendedClassCard({
   candidate,
+  availableTopics,
   evidenceCatalog,
   shadowRunId,
   liveRunId,
 }: {
   candidate: RecommendedClassCandidate;
+  availableTopics: string[];
   evidenceCatalog: EvidenceDefinition[];
   shadowRunId: string | null;
   liveRunId: string | null;
@@ -210,28 +216,12 @@ function RecommendedClassCard({
         </div>
       </section>
 
-      <section className="recommendations__members" aria-label="Suggested members">
-        <strong>Suggested members</strong>
-        {candidate.member_topics.map((topic) => (
-          <div key={topic}>
-            <span>{topic}</span>{" "}
-            <button
-              type="button"
-              disabled={feedbackKey !== null}
-              onClick={() => void sendFeedback("KEEP_TOPIC", topic)}
-            >
-              Belongs
-            </button>{" "}
-            <button
-              type="button"
-              disabled={feedbackKey !== null}
-              onClick={() => void sendFeedback("REMOVE_TOPIC", topic)}
-            >
-              Doesn't belong
-            </button>
-          </div>
-        ))}
-      </section>
+      <IndependentRecommendationReview
+        candidate={candidate}
+        availableTopics={availableTopics}
+        shadowRunId={shadowRunId}
+        liveRunId={liveRunId}
+      />
 
       <section aria-label="Recommendation feedback">
         <strong>Is this group useful?</strong>{" "}
