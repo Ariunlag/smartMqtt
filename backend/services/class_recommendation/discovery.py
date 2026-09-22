@@ -36,6 +36,7 @@ from .strategies import (
     HdbscanStrategyConfig,
     RecommendationStrategyDefinition,
     RecommendationStrategyInput,
+    StrategyEvidenceSupport,
     TagValueCentroidStrategyConfig,
     build_strategy,
 )
@@ -63,6 +64,7 @@ class RecommendedClassCandidate:
     anchor_topic: str
     member_topics: tuple[str, ...]
     discovery_channels: tuple[str, ...]
+    discovery_support: tuple[StrategyEvidenceSupport, ...]
     evidence: tuple[TopicComparisonEvidence, ...]
 
 
@@ -314,6 +316,7 @@ class RecommendedClassDiscovery:
                 anchor=anchor,
                 members=members,
                 discovery_channels=group.evidence_ids,
+                discovery_support=group.support,
                 evidence=evidence,
                 versions=versions,
                 strategy_id=strategy.definition.strategy_id,
@@ -335,6 +338,7 @@ class RecommendedClassDiscovery:
                     anchor_topic=anchor,
                     member_topics=members,
                     discovery_channels=group.evidence_ids,
+                    discovery_support=group.support,
                     evidence=evidence,
                 )
             )
@@ -465,6 +469,7 @@ class RecommendedClassDiscovery:
         anchor: str,
         members: tuple[str, ...],
         discovery_channels: tuple[str, ...],
+        discovery_support: tuple[StrategyEvidenceSupport, ...],
         evidence: tuple[TopicComparisonEvidence, ...],
         versions: dict[str, int],
         strategy_id: str,
@@ -478,6 +483,7 @@ class RecommendedClassDiscovery:
                 topic: versions[topic] for topic in members
             },
             "discovery_evidence": list(discovery_channels),
+            "discovery_support": [asdict(item) for item in discovery_support],
             "topic_evidence": [asdict(item) for item in evidence],
         }
 
