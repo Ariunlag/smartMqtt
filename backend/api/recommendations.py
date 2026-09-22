@@ -24,7 +24,7 @@ from services.class_recommendation.live_ranking import recommendation_live_ranke
 from services.class_recommendation.shadow import recommendation_shadow_scorer
 from services.class_recommendation.strategies import (
     DEFAULT_STRATEGY_ID,
-    TagValueCentroidStrategyConfig,
+    CentroidStrategyConfig,
 )
 
 logger = logging.getLogger(__name__)
@@ -108,9 +108,9 @@ async def recommended_class_candidates(
             min_samples=config.SYSTEM_RECOMMENDATION_MIN_SAMPLES,
             allow_single_cluster=config.SYSTEM_RECOMMENDATION_ALLOW_SINGLE_CLUSTER,
         ),
-        centroid_config=TagValueCentroidStrategyConfig(
-            threshold=config.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_THRESHOLD,
-            min_topic_count=config.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS,
+        centroid_config=CentroidStrategyConfig(
+            threshold=config.SYSTEM_RECOMMENDATION_CENTROID_THRESHOLD,
+            min_topic_count=config.SYSTEM_RECOMMENDATION_CENTROID_MIN_TOPICS,
         ),
         strategy_id=strategy,
         candidate_store=recommended_candidate_store,
