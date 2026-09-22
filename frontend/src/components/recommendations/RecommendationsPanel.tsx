@@ -142,6 +142,72 @@ export default function RecommendationsPanel({ source }: { source: Recommendatio
   );
 }
 
+function DiscoveryEvidenceSummary({ group }: { group: RecommendationGroup }) {
+  const channels = new Map<
+    string,
+    {
+      label: string;
+      entries: Array<{
+        topic: string;
+        value: string;
+        matches: EvidenceMatch[];
+      }>;
+    }
+  >();
+
+  for (const member of group.members) {
+    for (const row of member.evidence) {
+      if (row.value === "N/A") continue;
+      const current = channels.get(row.channelId) ?? {
+        label: row.channelLabel,
+        entries: [],
+      };
+      current.entries.push({
+        topic: member.topic,
+        value: row.value,
+        matches: row.matches,
+      });
+      channels.set(row.channelId, current);
+    }
+  }
+
+  if (channels.size === 0) return null;
+
+  return (
+    <section aria-label="Matching discovery evidence">
+      <h5 className="panel-header">Matching evidence</h5>
+      <div className="rec-evidence">
+        {[...channels.entries()].map(([channelId, channel]) => (
+          <section key={channelId}>
+            <div className="rec-evidence__head">
+              <strong>{channel.label}</strong>
+              <span>{channel.entries.length} compared members</span>
+            </div>
+
+            {channel.entries.map((entry) => (
+              <div className="rec-evidence__match" key={entry.topic}>
+                <p className="rec-member__topic">{entry.topic}</p>
+                {entry.matches.length > 0 ? (
+                  entry.matches.map((match, index) => (
+                    <div key={index}>
+                      <p>
+                        {match.left} ↔ {match.right}
+                      </p>
+                      {match.detail && <small>{match.detail}</small>}
+                    </div>
+                  ))
+                ) : (
+                  <small>{entry.value} similarity</small>
+                )}
+              </div>
+            ))}
+          </section>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function GroupDetail({
   group,
   availableTopics,
@@ -217,6 +283,8 @@ function GroupDetail({
         </section>
       )}
 
+      <DiscoveryEvidenceSummary group={group} />
+
       {!group.dismissed && (
         <>
           <section aria-label="Group members">
@@ -230,15 +298,17 @@ function GroupDetail({
                       <span className="score">{member.detail}</span>
                     </div>
                     <div className="rec-actions">
-                      <button
-                        type="button"
-                        aria-expanded={openTopic === member.topic}
-                        onClick={() =>
-                          setOpenTopic(openTopic === member.topic ? null : member.topic)
-                        }
-                      >
-                        Why?
-                      </button>
+                      {member.evidence.length > 0 && (
+                        <button
+                          type="button"
+                          aria-expanded={openTopic === member.topic}
+                          onClick={() =>
+                            setOpenTopic(openTopic === member.topic ? null : member.topic)
+                          }
+                        >
+                          Why?
+                        </button>
+                      )}
                       <button
                         type="button"
                         className="success"
@@ -259,7 +329,7 @@ function GroupDetail({
                     </div>
                   </div>
 
-                  {openTopic === member.topic && (
+                  {openTopic === member.topic && member.evidence.length > 0 && (
                     <div className="rec-evidence">
                       {member.evidence.map((row) => (
                         <section key={row.channelId}>
