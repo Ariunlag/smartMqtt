@@ -62,8 +62,20 @@ def cosine_matrix(left, right):
 
 
 class TextProvider:
-    def __init__(self, evidence_id, label, scope):
-        self.definition = ProviderDefinition(evidence_id, label, scope, active=True)
+    def __init__(self, evidence_id, label, scope, *, min_match_similarity=0.75):
+        comparator = (
+            "cosine-v1" if scope == "stream" else "strong-aligned-cosine-v2"
+        )
+        self.definition = ProviderDefinition(
+            evidence_id,
+            label,
+            scope,
+            active=True,
+            comparator=comparator,
+        )
+        self.min_match_similarity = float(min_match_similarity)
+        if not 0.0 <= self.min_match_similarity <= 1.0:
+            raise ValueError("min_match_similarity must be between 0 and 1")
 
     def text_records(self, topic, tags):
         if self.definition.scope == "stream":
@@ -87,17 +99,51 @@ class TextProvider:
     def compare(self, left, right):
         if not left or not right:
             return {"score": None, "status": "missing", "coverage": 0., "matches": []}
-        matrix = cosine_matrix([r["embedding"] for r in left], [r["embedding"] for r in right])
-        # Each channel chooses its own alignment. Strict ablations therefore do not
-        # inherit matches selected using another channel's evidence.
+
+        matrix = cosine_matrix(
+            [r["embedding"] for r in left],
+            [r["embedding"] for r in right],
+        )
+
+        # Each channel chooses its own one-to-one alignment, but pair channels keep
+        # only semantically strong matches. Forced low-similarity assignments are not
+        # evidence: they are omitted from the score and exposed only through reduced
+        # coverage. This lets one real common tag (for example Chicago) contribute
+        # without averaging it together with unrelated metadata.
         rows, cols = linear_sum_assignment(matrix, maximize=True)
-        scores = matrix[rows, cols]
-        coverage = len(rows) / max(len(left), len(right))
-        return {"score": float(np.mean((scores + 1.) / 2.)), "status": "available",
-                "coverage": coverage,
-                "matches": [{"left": left[i]["payload"], "right": right[j]["payload"],
-                             "similarity": float((matrix[i, j] + 1.) / 2.)}
-                            for i, j in zip(rows.tolist(), cols.tolist(), strict=True)]}
+        aligned = [
+            (
+                int(i),
+                int(j),
+                float((matrix[i, j] + 1.0) / 2.0),
+            )
+            for i, j in zip(rows.tolist(), cols.tolist(), strict=True)
+        ]
+
+        if self.definition.scope == "stream":
+            kept = aligned
+        else:
+            kept = [
+                item
+                for item in aligned
+                if item[2] >= self.min_match_similarity
+            ]
+
+        coverage = len(kept) / max(len(left), len(right))
+        score = float(np.mean([item[2] for item in kept])) if kept else 0.0
+        return {
+            "score": score,
+            "status": "available",
+            "coverage": coverage,
+            "matches": [
+                {
+                    "left": left[i]["payload"],
+                    "right": right[j]["payload"],
+                    "similarity": similarity,
+                }
+                for i, j, similarity in kept
+            ],
+        }
 
 
 class ProviderRegistry:
