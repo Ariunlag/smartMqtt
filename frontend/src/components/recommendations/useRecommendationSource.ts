@@ -100,8 +100,7 @@ function evidenceRows(
         channelId: channel.evidence_id,
         channelLabel: channelLabel(channel.evidence_id, channel.label),
         value: percentText(row.score),
-        detail:
-          `Effective weight ${percentText(effectiveWeight)} · coverage ${percentText(row.coverage)} · weighted support ${percentText(contribution)}`,
+        detail: `Effective weight ${percentText(effectiveWeight)}`,
         matches,
       },
       contribution,
@@ -154,7 +153,7 @@ function groupDiscoveryChannels(
 
     ranked.push({
       label:
-        `${channelLabel(channel.evidence_id, channel.label)} · ${percentText(averageEffectiveWeight)} effective weight`,
+        `${channelLabel(channel.evidence_id, channel.label)} · ${percentText(averageEffectiveWeight)}`,
       contribution: averageContribution,
     });
   }
@@ -263,6 +262,7 @@ export function useRecommendationSource(): RecommendationSource {
           : "No learned update yet"
       }`,
       "Membership similarity includes matched-tag coverage. It is not a probability of correctness.",
+      "Displayed evidence percentages are normalized over channels available for that comparison; unavailable channels such as a warming time-series window are excluded.",
     ];
 
     if (result.model.evaluation) {
