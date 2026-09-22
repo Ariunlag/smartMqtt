@@ -153,6 +153,16 @@ def test_system_candidates_merge_independent_channel_reasons_and_keep_pair_evide
     assert candidate.member_topics == ("a", "b")
     assert candidate.anchor_topic == "a"
     assert candidate.discovery_channels == ("key", "schema", "stream_context")
+    assert tuple(item.evidence_id for item in candidate.discovery_support) == (
+        "key",
+        "schema",
+        "stream_context",
+    )
+    assert {
+        item.topic
+        for support in candidate.discovery_support
+        for item in support.items
+    } == {"a", "b"}
     assert len(candidate.evidence) == 1
 
     evidence = candidate.evidence[0]
