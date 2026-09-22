@@ -494,15 +494,16 @@ class RecommendedClassDiscovery:
         strategy_id: str,
         discovery_channels: tuple[str, ...],
     ) -> str:
-        """Stable identity for one strategy/evidence/member set.
+        """Stable identity for one strategy/member set.
 
-        The independent strategy merges only exact topic memberships and records every
-        evidence space that found that membership. If one topic differs, the membership
-        tuple differs and therefore remains a separate candidate.
+        Exact topic membership is the candidate identity. Discovery evidence is
+        versioned inside the snapshot instead: if the same members are later found by
+        another evidence channel, that becomes a new version of the same candidate.
+        If even one topic differs, it remains a separate candidate.
         """
+        del discovery_channels
         payload = {
             "strategy": strategy_id,
-            "discovery_evidence": list(discovery_channels),
             "members": list(members),
         }
         fingerprint = hashlib.sha256(
