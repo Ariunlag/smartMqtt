@@ -202,6 +202,8 @@ it("explains the method and states that viewing a graph is not feedback", () => 
 it("invites a selection when the method returns no groups", () => {
   render(<RecommendationsPanel source={makeSource({ groups: [] })} />);
 
-  expect(screen.getByText(/No groups yet/)).toBeInTheDocument();
+  expect(
+    screen.getByText("No candidate groups in the current evidence snapshot."),
+  ).toBeInTheDocument();
   expect(screen.getByText("Select a recommended group to review it.")).toBeInTheDocument();
 });
