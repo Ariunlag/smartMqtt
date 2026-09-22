@@ -12,7 +12,7 @@ from services.database.postgres import postgres_client
 
 logger = logging.getLogger(__name__)
 
-TOPIC_FEEDBACK_ACTIONS = frozenset({"KEEP_TOPIC", "REMOVE_TOPIC"})
+TOPIC_FEEDBACK_ACTIONS = frozenset({"KEEP_TOPIC", "ADD_TOPIC", "REMOVE_TOPIC"})
 CANDIDATE_FEEDBACK_ACTIONS = frozenset({"ACCEPT_CANDIDATE", "DISMISS_CANDIDATE"})
 FEEDBACK_ACTIONS = TOPIC_FEEDBACK_ACTIONS | CANDIDATE_FEEDBACK_ACTIONS
 
@@ -227,6 +227,7 @@ class RecommendedCandidateStore:
         topic: str | None = None,
         shadow_run_id: str | None = None,
         live_run_id: str | None = None,
+        topic_evidence: dict | None = None,
     ) -> dict:
         if action_type not in FEEDBACK_ACTIONS:
             raise ValueError(f"Unknown recommendation feedback action: {action_type}")
@@ -240,8 +241,16 @@ class RecommendedCandidateStore:
             raise LookupError("Recommended candidate snapshot was not found")
 
         members = tuple(snapshot["member_topics"])
-        if action_type in TOPIC_FEEDBACK_ACTIONS and topic not in members:
-            raise ValueError("Topic feedback must reference a member of this candidate version")
+        if action_type == "ADD_TOPIC" and topic in members:
+            raise ValueError("ADD_TOPIC must reference a topic outside this candidate version")
+        if (
+            action_type in TOPIC_FEEDBACK_ACTIONS
+            and topic not in members
+            and topic_evidence is None
+        ):
+            raise ValueError(
+                "Topic feedback outside the candidate requires server-computed evidence"
+            )
 
         shadow = self.shadow_observation_for_run(
             candidate_id=candidate_id,
@@ -256,6 +265,15 @@ class RecommendedCandidateStore:
         )
         live_observation_id = str(live["observation_id"]) if live else None
 
+        candidate_evidence = json.loads(_canonical_json(snapshot["evidence_snapshot"]))
+        if topic_evidence is not None:
+            existing = [
+                item
+                for item in candidate_evidence.get("topic_evidence", [])
+                if item.get("topic") != topic
+            ]
+            candidate_evidence["topic_evidence"] = [*existing, topic_evidence]
+
         evidence_snapshot = {
             "candidate_id": str(snapshot["candidate_id"]),
             "candidate_version": int(snapshot["candidate_version"]),
@@ -263,7 +281,7 @@ class RecommendedCandidateStore:
             "member_topics": list(members),
             "discovery_evidence": list(snapshot["discovery_evidence"]),
             "snapshot_fingerprint": snapshot["snapshot_fingerprint"],
-            "candidate_evidence": snapshot["evidence_snapshot"],
+            "candidate_evidence": candidate_evidence,
             "shadow_run_id": shadow_run_id,
             "shadow_observation_id": shadow_observation_id,
             "live_run_id": live_run_id,
