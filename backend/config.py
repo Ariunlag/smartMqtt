@@ -119,18 +119,34 @@ class Config:
         if self.SYSTEM_RECOMMENDATION_MIN_SAMPLES < 1:
             raise ValueError("SYSTEM_RECOMMENDATION_MIN_SAMPLES must be at least 1")
 
-        # Original tag-value centroid baseline, now exposed as a recommendation
-        # strategy over the same stored pair evidence.
-        self.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_THRESHOLD = self._ratio(
-            "SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_THRESHOLD", 0.85
+        # Moving-centroid recommendation baseline over the same independent
+        # evidence spaces as HDBSCAN. Legacy tag-value env names remain fallbacks
+        # so existing local Compose files continue to work.
+        legacy_centroid_threshold = float(
+            os.getenv("SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_THRESHOLD", "0.85")
         )
-        self.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS = int(
-            os.getenv("SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS", "2")
+        self.SYSTEM_RECOMMENDATION_CENTROID_THRESHOLD = self._ratio(
+            "SYSTEM_RECOMMENDATION_CENTROID_THRESHOLD",
+            legacy_centroid_threshold,
         )
-        if self.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS < 2:
-            raise ValueError(
-                "SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS must be at least 2"
+        self.SYSTEM_RECOMMENDATION_CENTROID_MIN_TOPICS = int(
+            os.getenv(
+                "SYSTEM_RECOMMENDATION_CENTROID_MIN_TOPICS",
+                os.getenv("SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS", "2"),
             )
+        )
+        if self.SYSTEM_RECOMMENDATION_CENTROID_MIN_TOPICS < 2:
+            raise ValueError(
+                "SYSTEM_RECOMMENDATION_CENTROID_MIN_TOPICS must be at least 2"
+            )
+
+        # Compatibility aliases for any external code still reading the old names.
+        self.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_THRESHOLD = (
+            self.SYSTEM_RECOMMENDATION_CENTROID_THRESHOLD
+        )
+        self.SYSTEM_RECOMMENDATION_TAG_VALUE_CENTROID_MIN_TOPICS = (
+            self.SYSTEM_RECOMMENDATION_CENTROID_MIN_TOPICS
+        )
 
     @staticmethod
     def _ratio(name: str, default: float) -> float:
