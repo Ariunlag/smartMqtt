@@ -18,6 +18,7 @@ from services.class_recommendation.candidate_feedback import recommended_candida
 from services.class_recommendation.discovery import (
     RecommendedClassDiscovery,
     RecommendedClassDiscoveryConfig,
+    TopicEvidenceMatcher,
 )
 from services.class_recommendation.live_ranking import recommendation_live_ranker
 from services.class_recommendation.shadow import recommendation_shadow_scorer
@@ -161,25 +162,109 @@ async def recommended_class_candidates(
     return payload
 
 
+def _stream_vector(row):
+    if row is None or row.get("embedding") is None:
+        return None
+    return tuple(float(value) for value in row["embedding"])
+
+
+def _feedback_topic_evidence(
+    request: Request,
+    candidate_id: str,
+    candidate_version: int,
+    topic: str,
+):
+    """Resolve exact server-side evidence for a topic feedback action.
+
+    Candidate snapshots intentionally contain only discovered members. When a user
+    adds an outside topic, or edits the anchor whose self-comparison is absent, we
+    compute the same pair/stream comparison at action time and persist it only with
+    that immutable feedback event.
+    """
+    snapshot = recommended_candidate_store.get_snapshot(candidate_id, candidate_version)
+    if snapshot is None:
+        raise LookupError("Recommended candidate snapshot was not found")
+
+    application = request.app.state.class_recommendation
+    canonical_topic = application.identity_store.resolve_canonical(topic)
+    candidate_snapshot = snapshot.get("evidence_snapshot") or {}
+    existing = next(
+        (
+            item
+            for item in candidate_snapshot.get("topic_evidence", ())
+            if item.get("topic") == canonical_topic
+        ),
+        None,
+    )
+    if existing is not None:
+        return canonical_topic, None
+
+    members = tuple(str(member) for member in snapshot.get("member_topics") or ())
+    anchor = str(candidate_snapshot.get("anchor_topic") or (members[0] if members else ""))
+    if not anchor:
+        raise ValueError("Candidate has no reference topic for feedback evidence")
+
+    reference_topic = anchor
+    if canonical_topic == anchor:
+        reference_topic = next((member for member in members if member != anchor), "")
+    if not reference_topic:
+        raise ValueError("At least two topics are required to score membership feedback")
+
+    candidate_pairs = tuple(application.pair_store.get_topic(canonical_topic))
+    reference_pairs = tuple(application.pair_store.get_topic(reference_topic))
+    candidate_stream = _stream_vector(application.topic_embedding_store.get(canonical_topic))
+    reference_stream = _stream_vector(application.topic_embedding_store.get(reference_topic))
+    if not candidate_pairs and candidate_stream is None:
+        raise ValueError("Topic evidence is not available yet")
+
+    duplicate_pending = (
+        application.dupe_store.has_pending(canonical_topic)
+        if hasattr(application.dupe_store, "has_pending")
+        else False
+    )
+    evidence = TopicEvidenceMatcher.compare(
+        candidate_topic=canonical_topic,
+        candidate_pairs=candidate_pairs,
+        candidate_stream=candidate_stream,
+        reference_topic=reference_topic,
+        reference_pairs=reference_pairs,
+        reference_stream=reference_stream,
+        duplicate_pending=duplicate_pending,
+    )
+    return canonical_topic, asdict(evidence)
+
+
 @router.post("/recommended-classes/{candidate_id}/feedback")
 async def recommended_class_feedback(
     candidate_id: UUID,
     payload: RecommendedClassFeedbackRequest,
+    request: Request,
 ):
     """Record an immutable label against an exact persistent candidate version."""
     try:
+        feedback_topic = payload.topic
+        topic_evidence = None
+        if payload.topic is not None:
+            feedback_topic, topic_evidence = await asyncio.to_thread(
+                _feedback_topic_evidence,
+                request,
+                str(candidate_id),
+                payload.candidate_version,
+                payload.topic,
+            )
         return await asyncio.to_thread(
             recommended_candidate_store.record_feedback,
             candidate_id=str(candidate_id),
             candidate_version=payload.candidate_version,
             action_type=payload.action,
-            topic=payload.topic,
+            topic=feedback_topic,
             shadow_run_id=(
                 str(payload.shadow_run_id) if payload.shadow_run_id is not None else None
             ),
             live_run_id=(
                 str(payload.live_run_id) if payload.live_run_id is not None else None
             ),
+            topic_evidence=topic_evidence,
         )
     except LookupError as exc:
         raise HTTPException(status_code=404, detail=str(exc)) from exc
